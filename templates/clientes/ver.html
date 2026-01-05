@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Ver Cliente - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/clientes.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow card-cliente">
+            <div class="card-header bg-info text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="fas fa-user-circle me-2"></i>Información del Cliente</h4>
+                    <div>
+                        <a href="{{ url_for('editar_cliente', id=cliente.id_cliente) }}" 
+                           class="btn btn-warning btn-sm btn-action"
+                           title="Editar cliente">
+                            <i class="fas fa-edit me-1"></i>Editar
+                        </a>
+                        <button class="btn btn-danger btn-sm ms-1 btn-action" 
+                                onclick="confirmarEliminacion({{ cliente.id_cliente }})"
+                                title="Eliminar cliente">
+                            <i class="fas fa-trash me-1"></i>Eliminar
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2 mb-3">Información Personal</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th width="40%">ID:</th>
+                                <td><span class="badge bg-secondary">{{ cliente.id_cliente }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>DNI:</th>
+                                <td>{{ cliente.dni or 'No registrado' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Nombre:</th>
+                                <td>{{ cliente.nombre }} {{ cliente.apellido }}</td>
+                            </tr>
+                            <tr>
+                                <th>Teléfono:</th>
+                                <td>
+                                    <a href="tel:{{ cliente.telefono }}" class="text-decoration-none">
+                                        <i class="fas fa-phone me-1 text-primary"></i>{{ cliente.telefono }}
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td>
+                                    {% if cliente.email %}
+                                    <a href="mailto:{{ cliente.email }}" class="text-decoration-none">
+                                        <i class="fas fa-envelope me-1 text-primary"></i>{{ cliente.email }}
+                                    </a>
+                                    {% else %}
+                                    No registrado
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Fecha Registro:</th>
+                                <td>{{ cliente.fecha_registro.strftime('%d/%m/%Y %H:%M') if cliente.fecha_registro else 'No disponible' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Puntos Fidelidad:</th>
+                                <td>
+                                    <span class="badge bg-success">{{ cliente.puntos_fidelidad or 0 }}</span>
+                                    puntos
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2 mb-3">Información Adicional</h5>
+                        {% if cliente.direccion %}
+                        <div class="mb-3">
+                            <strong><i class="fas fa-map-marker-alt me-1"></i>Dirección:</strong>
+                            <p class="mb-0 mt-1">{{ cliente.direccion }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if cliente.notas %}
+                        <div class="mb-3">
+                            <strong><i class="fas fa-sticky-note me-1"></i>Notas:</strong>
+                            <p class="mb-0 mt-1">{{ cliente.notas }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mascotas del cliente -->
+        <div class="card shadow mt-4">
+            <div class="card-header bg-success text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-paw me-2"></i>Mascotas ({{ mascotas|length }})</h5>
+                    <a href="#" class="btn btn-light btn-sm">
+                        <i class="fas fa-plus me-1"></i>Nueva Mascota
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if mascotas %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Especie</th>
+                                <th>Raza</th>
+                                <th>Tamaño</th>
+                                <th>Peso</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mascota in mascotas %}
+                            <tr>
+                                <td>{{ mascota.nombre }}</td>
+                                <td>
+                                    {% if mascota.especie == 'perro' %}
+                                        <i class="fas fa-dog text-primary"></i> Perro
+                                    {% elif mascota.especie == 'gato' %}
+                                        <i class="fas fa-cat text-warning"></i> Gato
+                                    {% else %}
+                                        <i class="fas fa-paw text-secondary"></i> Otro
+                                    {% endif %}
+                                </td>
+                                <td>{{ mascota.raza or '-' }}</td>
+                                <td>{{ mascota.tamano or '-' }}</td>
+                                <td>{{ mascota.peso or '0' }} kg</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info btn-action">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-warning btn-action">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-paw fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Este cliente no tiene mascotas registradas</p>
+                    <a href="#" class="btn btn-success">
+                        <i class="fas fa-plus me-1"></i>Registrar Primera Mascota
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Acciones rápidas -->
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="#" class="btn btn-success btn-action">
+                        <i class="fas fa-dog me-2"></i>Nueva Mascota
+                    </a>
+                    <a href="#" class="btn btn-info btn-action">
+                        <i class="fas fa-calendar-alt me-2"></i>Nueva Reserva
+                    </a>
+                    <a href="#" class="btn btn-warning btn-action">
+                        <i class="fas fa-cash-register me-2"></i>Nueva Venta
+                    </a>
+                    <a href="{{ url_for('clientes') }}" class="btn btn-secondary btn-action">
+                        <i class="fas fa-arrow-left me-2"></i>Volver a Clientes
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estadísticas -->
+        <div class="card shadow mt-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Resumen</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-paw fa-3x text-primary"></i>
+                    </div>
+                    <h4>{{ mascotas|length }}</h4>
+                    <p class="text-muted">Mascotas registradas</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
+{% endblock %}

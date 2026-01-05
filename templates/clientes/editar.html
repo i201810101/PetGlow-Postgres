@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Nuevo Cliente - PetGlow{% endblock %}
+{% block title %}Editar Cliente - PetGlow{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/clientes.css') }}">
@@ -10,17 +10,18 @@
 <div class="row justify-content-center">
     <div class="col-md-10">
         <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Nuevo Cliente</h4>
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Editar Cliente</h4>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('crear_cliente') }}" id="form-crear-cliente" class="needs-validation" novalidate>
+                <form method="POST" action="{{ url_for('editar_cliente', id=cliente.id_cliente) }}" id="form-editar-cliente" class="needs-validation" novalidate>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="dni" class="form-label">DNI / Carnet de Extranjería</label>
                             <input type="text" class="form-control" id="dni" name="dni" 
                                    pattern="\d{8,9}"
                                    maxlength="9"
+                                   value="{{ cliente.dni if cliente.dni else '' }}" 
                                    placeholder="Ej: 12345678 (DNI) o 123456789 (CE)">
                             <div class="form-text">8 dígitos para DNI peruano, 9 para Carnet de Extranjería</div>
                             <div class="invalid-feedback" id="dni-error">
@@ -34,7 +35,7 @@
                                    minlength="2"
                                    maxlength="50"
                                    pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
-                                   placeholder="Ej: Juan">
+                                   value="{{ cliente.nombre }}">
                             <div class="invalid-feedback" id="nombre-error">
                                 El nombre es obligatorio (solo letras, 2-50 caracteres)
                             </div>
@@ -49,7 +50,7 @@
                                    minlength="2"
                                    maxlength="50"
                                    pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
-                                   placeholder="Ej: Pérez">
+                                   value="{{ cliente.apellido }}">
                             <div class="invalid-feedback" id="apellido-error">
                                 El apellido es obligatorio (solo letras, 2-50 caracteres)
                             </div>
@@ -60,7 +61,7 @@
                                    required
                                    pattern="9\d{8}"
                                    maxlength="9"
-                                   placeholder="Ej: 987654321">
+                                   value="{{ cliente.telefono }}">
                             <div class="form-text">9 dígitos, debe empezar con 9</div>
                             <div class="invalid-feedback" id="telefono-error">
                                 Teléfono peruano: 9 dígitos, empezando con 9
@@ -72,6 +73,7 @@
                         <div class="col-md-6 mb-3">
                             <label for="email" class="form-label">Email</label>
                             <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ cliente.email if cliente.email else '' }}" 
                                    placeholder="ejemplo@email.com">
                             <div class="invalid-feedback" id="email-error">
                                 Por favor ingresa un email válido
@@ -80,34 +82,48 @@
                         <div class="col-md-6 mb-3">
                             <label for="direccion" class="form-label">Dirección</label>
                             <input type="text" class="form-control" id="direccion" name="direccion" 
+                                   value="{{ cliente.direccion if cliente.direccion else '' }}" 
                                    placeholder="Ej: Av. Principal 123">
                         </div>
                     </div>
                     
                     <div class="mb-3">
                         <label for="notas" class="form-label">Notas</label>
-                        <textarea class="form-control" id="notas" name="notas" rows="3" 
-                                  placeholder="Notas adicionales sobre el cliente"></textarea>
+                        <textarea class="form-control" id="notas" name="notas" rows="3">{{ cliente.notas if cliente.notas else '' }}</textarea>
                     </div>
                     
-                    <!-- Instrucciones -->
-                    <div class="alert alert-info mt-4">
-                        <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Instrucciones:</h6>
-                        <ul class="mb-0">
-                            <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
-                            <li><strong>DNI:</strong> 8 dígitos para DNI peruano</li>
-                            <li><strong>Carnet de Extranjería:</strong> 9 dígitos</li>
-                            <li><strong>Teléfono:</strong> 9 dígitos, debe empezar con 9 (formato peruano)</li>
-                            <li><strong>Nombre/Apellido:</strong> Solo letras y espacios, mínimo 2 caracteres</li>
-                        </ul>
+                    <!-- Información adicional del cliente -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-light border">
+                                <h6 class="alert-heading"><i class="fas fa-id-card me-2"></i>Información del Cliente</h6>
+                                <p class="mb-1"><strong>ID:</strong> {{ cliente.id_cliente }}</p>
+                                <p class="mb-1"><strong>Fecha Registro:</strong> {{ cliente.fecha_registro.strftime('%d/%m/%Y %H:%M') if cliente.fecha_registro else 'No disponible' }}</p>
+                                <p class="mb-0"><strong>Puntos Fidelidad:</strong> {{ cliente.puntos_fidelidad or 0 }} puntos</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Instrucciones:</h6>
+                                <ul class="mb-0">
+                                    <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
+                                    <li><strong>DNI:</strong> 8 dígitos para DNI peruano</li>
+                                    <li><strong>Carnet de Extranjería:</strong> 9 dígitos</li>
+                                    <li><strong>Teléfono:</strong> 9 dígitos, debe empezar con 9</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                         <a href="{{ url_for('clientes') }}" class="btn btn-secondary me-2">
                             <i class="fas fa-times me-1"></i>Cancelar
                         </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>Guardar Cliente
+                        <a href="{{ url_for('ver_cliente', id=cliente.id_cliente) }}" class="btn btn-info me-2">
+                            <i class="fas fa-eye me-1"></i>Ver Detalles
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Actualizar Cliente
                         </button>
                     </div>
                 </form>

@@ -1,0 +1,164 @@
+/* static/css/estilo.css */
+
+/* Estilos generales para PetGlow */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --info-color: #17a2b8;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+}
+
+body {
+    padding-top: 20px;
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Navbar personalizada */
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+    color: white !important;
+}
+
+.navbar-brand i {
+    margin-right: 8px;
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: #343a40;
+    color: white;
+    min-height: calc(100vh - 80px);
+    padding-top: 20px;
+}
+
+.sidebar a {
+    color: white;
+    padding: 10px 15px;
+    display: block;
+    text-decoration: none;
+    transition: background-color 0.3s;
+}
+
+.sidebar a:hover {
+    background-color: #495057;
+    color: white;
+}
+
+.sidebar a.active {
+    background-color: #007bff;
+}
+
+/* Contenido principal */
+.main-content {
+    padding: 20px;
+    background-color: white;
+    min-height: calc(100vh - 80px);
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.1);
+}
+
+/* Tarjetas de estadísticas */
+.stat-card {
+    transition: transform 0.3s, box-shadow 0.3s;
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-left: 4px solid;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+
+/* Tablas */
+.table-hover tbody tr:hover {
+    background-color: rgba(0,123,255,0.05);
+}
+
+/* Botones */
+.btn {
+    border-radius: 5px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Footer */
+.footer {
+    margin-top: 40px;
+    padding: 20px 0;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .main-content {
+        padding: 15px;
+    }
+    
+    .stat-card {
+        margin-bottom: 15px;
+    }
+}
+
+/* static/css/estilo.css - Agregar estas reglas al final */
+
+
+/* Clase para campos requeridos */
+.required:after {
+    content: " *";
+    color: #dc3545;
+}
+
+/* Mejoras para responsive */
+@media (max-width: 768px) {
+    .form-control, .form-select {
+        font-size: 16px; /* Previene zoom en iOS */
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .d-md-flex .btn {
+        width: auto;
+    }
+}
+
+/* Animaciones suaves */
+.form-control, .form-select, .btn {
+    transition: all 0.2s ease;
+}
+
+/* Estilos para alertas informativas */
+.alert-light.border {
+    border-color: #dee2e6 !important;
+}
+
+/* Espaciado mejorado */
+.mb-3 {
+    margin-bottom: 1.2rem !important;
+}
+
+/* Estilos para formularios en tarjetas */
+.card .form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.card .form-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}

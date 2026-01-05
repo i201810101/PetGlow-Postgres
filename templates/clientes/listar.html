@@ -2,21 +2,67 @@
 
 {% block title %}Clientes - PetGlow{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/clientes.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Clientes</h1>
+    <h1><i class="fas fa-users me-2"></i>Clientes</h1>
     <a href="{{ url_for('crear_cliente') }}" class="btn btn-primary">
         <i class="fas fa-plus me-2"></i>Nuevo Cliente
     </a>
 </div>
 
-<div class="card shadow">
+<!-- Tarjeta de búsqueda y filtros -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" id="buscador-clientes" class="form-control" 
+                           placeholder="Buscar por nombre, apellido, teléfono o email...">
+                    <button class="btn btn-outline-secondary" type="button" id="btn-limpiar-busqueda">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <select id="filtro-estado" class="form-select">
+                    <option value="todos">Todos los clientes</option>
+                    <option value="con-dni">Con DNI</option>
+                    <option value="sin-dni">Sin DNI</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <span id="total-clientes">{{ clientes|length }}</span> clientes encontrados
+                    </small>
+                    <button class="btn btn-sm btn-outline-primary" id="btn-exportar">
+                        <i class="fas fa-file-export me-1"></i>Exportar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de clientes -->
+<div class="card shadow card-cliente">
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover clientes-table" id="tabla-clientes">
                 <thead>
                     <tr>
                         <th>ID</th>
+                        <th>DNI</th>
                         <th>Nombre</th>
                         <th>Apellido</th>
                         <th>Teléfono</th>
@@ -25,35 +71,114 @@
                         <th>Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="cuerpo-tabla-clientes">
                     {% for cliente in clientes %}
-                    <tr>
+                    <tr data-id="{{ cliente.id_cliente }}" 
+                        data-dni="{{ cliente.dni or '' }}"
+                        data-nombre="{{ cliente.nombre.lower() }}"
+                        data-apellido="{{ cliente.apellido.lower() }}"
+                        data-telefono="{{ cliente.telefono }}"
+                        data-email="{{ cliente.email.lower() if cliente.email else '' }}">
                         <td>{{ cliente.id_cliente }}</td>
+                        <td>
+                            {% if cliente.dni %}
+                                <span class="badge bg-info">{{ cliente.dni }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Sin DNI</span>
+                            {% endif %}
+                        </td>
                         <td>{{ cliente.nombre }}</td>
                         <td>{{ cliente.apellido }}</td>
                         <td>{{ cliente.telefono }}</td>
                         <td>{{ cliente.email or '-' }}</td>
                         <td>{{ cliente.fecha_registro.strftime('%d/%m/%Y') if cliente.fecha_registro else '-' }}</td>
                         <td>
-                            <button class="btn btn-sm btn-info">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <button class="btn btn-sm btn-warning">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-danger">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('ver_cliente', id=cliente.id_cliente) }}" 
+                                   class="btn btn-sm btn-info btn-action" 
+                                   title="Ver detalles">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('editar_cliente', id=cliente.id_cliente) }}" 
+                                   class="btn btn-sm btn-warning btn-action" 
+                                   title="Editar cliente">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-danger btn-action eliminar-cliente" 
+                                        data-id="{{ cliente.id_cliente }}"
+                                        data-nombre="{{ cliente.nombre }} {{ cliente.apellido }}"
+                                        title="Eliminar cliente">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center">No hay clientes registrados</td>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-users fa-2x text-muted mb-3"></i>
+                            <p class="text-muted">No hay clientes registrados</p>
+                            <a href="{{ url_for('crear_cliente') }}" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Registrar primer cliente
+                            </a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        
+        <!-- Paginación (si implementas paginación en el backend) -->
+        <nav aria-label="Paginación de clientes" class="mt-3">
+            <ul class="pagination justify-content-center">
+                <li class="page-item disabled">
+                    <a class="page-link" href="#" tabindex="-1">Anterior</a>
+                </li>
+                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                <li class="page-item"><a class="page-link" href="#">2</a></li>
+                <li class="page-item"><a class="page-link" href="#">3</a></li>
+                <li class="page-item">
+                    <a class="page-link" href="#">Siguiente</a>
+                </li>
+            </ul>
+        </nav>
     </div>
 </div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal fade" id="modal-confirmar-eliminacion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar al cliente <strong id="nombre-cliente-eliminar"></strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Advertencia:</strong> Esta acción no se puede deshacer. Se eliminarán todos los datos asociados al cliente.
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
+                    <label class="form-check-label" for="confirmar-eliminacion">
+                        Confirmo que deseo eliminar este cliente permanentemente
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminacion" disabled>
+                    <i class="fas fa-trash me-1"></i>Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
 {% endblock %}

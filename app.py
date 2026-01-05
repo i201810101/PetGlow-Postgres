@@ -159,6 +159,141 @@ def crear_cliente():
     
     return render_template('clientes/crear.html')
 
+# Añade estas rutas después de la ruta crear_cliente en app.py
+
+@app.route('/clientes/editar/<int:id>', methods=['GET', 'POST'])
+def editar_cliente(id):
+    """Editar cliente existente"""
+    conn = get_db_connection()
+    cliente = None
+    
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('clientes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        if request.method == 'POST':
+            # Obtener datos del formulario
+            dni = request.form.get('dni', '').strip()
+            nombre = request.form.get('nombre', '').strip()
+            apellido = request.form.get('apellido', '').strip()
+            telefono = request.form.get('telefono', '').strip()
+            email = request.form.get('email', '').strip()
+            
+            if not nombre or not telefono:
+                flash('Nombre y teléfono son obligatorios.', 'danger')
+                return redirect(url_for('editar_cliente', id=id))
+            
+            # Actualizar cliente
+            cursor.execute("""
+                UPDATE clientes 
+                SET dni = %s, nombre = %s, apellido = %s, 
+                    telefono = %s, email = %s
+                WHERE id_cliente = %s
+            """, (dni or None, nombre, apellido, telefono, email or None, id))
+            conn.commit()
+            
+            flash(f'Cliente {nombre} {apellido} actualizado exitosamente.', 'success')
+            return redirect(url_for('clientes'))
+        
+        # Obtener datos del cliente para mostrar en el formulario
+        cursor.execute("SELECT * FROM clientes WHERE id_cliente = %s", (id,))
+        cliente = cursor.fetchone()
+        
+        if not cliente:
+            flash('Cliente no encontrado.', 'danger')
+            return redirect(url_for('clientes'))
+        
+    except Error as e:
+        flash(f'Error editando cliente: {e}', 'danger')
+        return redirect(url_for('clientes'))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+    
+    return render_template('clientes/editar.html', cliente=cliente)
+
+@app.route('/clientes/eliminar/<int:id>', methods=['POST'])
+def eliminar_cliente(id):
+    """Eliminar cliente (soft delete o hard delete)"""
+    conn = get_db_connection()
+    
+    if not conn:
+        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el cliente tiene mascotas asociadas
+        cursor.execute("SELECT COUNT(*) as total FROM mascotas WHERE id_cliente = %s", (id,))
+        result = cursor.fetchone()
+        
+        if result and result['total'] > 0:
+            return jsonify({
+                'success': False, 
+                'message': f'No se puede eliminar el cliente porque tiene {result["total"]} mascota(s) asociada(s). Primero elimina o transfiere las mascotas.'
+            })
+        
+        # Si no tiene mascotas, proceder con eliminación
+        cursor.execute("DELETE FROM clientes WHERE id_cliente = %s", (id,))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            return jsonify({'success': True, 'message': 'Cliente eliminado exitosamente.'})
+        else:
+            return jsonify({'success': False, 'message': 'Cliente no encontrado.'}), 404
+            
+    except Error as e:
+        return jsonify({'success': False, 'message': f'Error eliminando cliente: {str(e)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# También puedes agregar una ruta para ver detalles del cliente
+@app.route('/clientes/ver/<int:id>')
+def ver_cliente(id):
+    """Ver detalles del cliente"""
+    conn = get_db_connection()
+    cliente = None
+    mascotas = []
+    
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('clientes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener datos del cliente
+        cursor.execute("SELECT * FROM clientes WHERE id_cliente = %s", (id,))
+        cliente = cursor.fetchone()
+        
+        if not cliente:
+            flash('Cliente no encontrado.', 'danger')
+            return redirect(url_for('clientes'))
+        
+        # Obtener mascotas del cliente
+        cursor.execute("SELECT * FROM mascotas WHERE id_cliente = %s", (id,))
+        mascotas = cursor.fetchall()
+        
+    except Error as e:
+        flash(f'Error obteniendo datos del cliente: {e}', 'danger')
+        return redirect(url_for('clientes'))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+    
+    return render_template('clientes/ver.html', cliente=cliente, mascotas=mascotas)
+
+
 @app.route('/mascotas')
 def mascotas():
     """Listar mascotas"""

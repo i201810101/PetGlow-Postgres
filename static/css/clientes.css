@@ -1,0 +1,276 @@
+/* static/css/clientes.css - Versión completa corregida */
+
+/* Estilos específicos para clientes */
+.clientes-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.clientes-table td {
+    vertical-align: middle;
+}
+
+/* Botones de acciones */
+.btn-group .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 4px;
+}
+
+/* Tarjetas específicas para clientes */
+.card-cliente {
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+}
+
+.card-cliente:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.card-cliente .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Botones con animación */
+.btn-action {
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-action.btn-info:hover {
+    background-color: #0dcaf0;
+    border-color: #0dcaf0;
+}
+
+.btn-action.btn-warning:hover {
+    background-color: #ffca2c;
+    border-color: #ffca2c;
+}
+
+.btn-action.btn-danger:hover {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* Estilos para búsqueda */
+#buscador-clientes {
+    border-radius: 5px 0 0 5px;
+    border-right: 0;
+}
+
+#btn-limpiar-busqueda {
+    border-radius: 0 5px 5px 0;
+    border-left: 0;
+}
+
+/* Estilos para badges de DNI */
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+/* Estilos para formularios de cliente */
+.form-cliente .required:after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* MEJORAS PARA VALIDACIÓN - SOLUCIONAN EL PROBLEMA DE MULTIPLES CHECKS */
+.form-control {
+    padding-right: 2.5rem !important; /* Espacio para el icono de validación */
+}
+
+/* Solo un check por campo cuando es válido */
+.form-control.is-valid {
+    border-color: #28a745;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Solo un icono de error por campo cuando es inválido */
+.form-control.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Remover estilos de validación por defecto que causan duplicación */
+.was-validated .form-control:valid,
+.was-validated .form-control:invalid {
+    background-image: none !important;
+}
+
+/* Mensajes de error */
+.invalid-feedback {
+    display: block;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Texto de ayuda debajo de los campos */
+.form-text {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+/* Campos requeridos */
+.form-label.required:after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Estilos para notificaciones personalizadas */
+.notificacion-personalizada {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideInRight 0.3s ease-out;
+    border: none;
+    border-left: 4px solid;
+}
+
+.notificacion-personalizada.alert-success {
+    border-left-color: #28a745;
+}
+
+.notificacion-personalizada.alert-danger {
+    border-left-color: #dc3545;
+}
+
+.notificacion-personalizada.alert-warning {
+    border-left-color: #ffc107;
+}
+
+.notificacion-personalizada.alert-info {
+    border-left-color: #17a2b8;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Estilos para modal de confirmación */
+.modal-header.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.modal-header .btn-close-white {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Estilos para filtros */
+#filtro-estado {
+    cursor: pointer;
+}
+
+/* Responsive para tabla de clientes */
+@media (max-width: 768px) {
+    .clientes-table {
+        display: block;
+        overflow-x: auto;
+        font-size: 0.9rem;
+    }
+    
+    .clientes-table thead {
+        display: none;
+    }
+    
+    .clientes-table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.5rem;
+    }
+    
+    .clientes-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        border: none;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .clientes-table tbody td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #495057;
+        width: 40%;
+    }
+    
+    .clientes-table tbody td:last-child {
+        border-bottom: none;
+        justify-content: center;
+    }
+    
+    .btn-group {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .btn-group .btn-sm {
+        margin: 0.125rem;
+    }
+}
+
+/* Estilos para paginación */
+.pagination .page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.pagination .page-link {
+    color: #007bff;
+    border-radius: 4px;
+    margin: 0 2px;
+}
+
+.pagination .page-link:hover {
+    background-color: #e9ecef;
+    color: #0056b3;
+}
+
+/* Estilos específicos para evitar problemas de validación duplicada */
+.form-control:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control.is-valid:focus {
+    box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25);
+    border-color: #28a745;
+}
+
+.form-control.is-invalid:focus {
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+    border-color: #dc3545;
+}
