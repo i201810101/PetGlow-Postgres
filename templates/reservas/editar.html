@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Reserva - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Editar Reserva</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" 
+                      id="form-editar-reserva" class="needs-validation" novalidate>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_mascota" class="form-label required">Mascota *</label>
+                            <select class="form-select" id="id_mascota" name="id_mascota" required>
+                                <option value="">Seleccionar mascota...</option>
+                                {% for mascota in mascotas %}
+                                <option value="{{ mascota.id_mascota }}" 
+                                        {% if mascota.id_mascota == reserva.id_mascota %}selected{% endif %}>
+                                    {{ mascota.mascota_nombre }} ({{ mascota.cliente_nombre }} {{ mascota.cliente_apellido }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback" id="id_mascota-error">
+                                Debes seleccionar una mascota
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="id_empleado" class="form-label required">Empleado *</label>
+                            <select class="form-select" id="id_empleado" name="id_empleado" required>
+                                <option value="">Seleccionar empleado...</option>
+                                {% for empleado in empleados %}
+                                <option value="{{ empleado.id_empleado }}" 
+                                        {% if empleado.id_empleado == reserva.id_empleado %}selected{% endif %}>
+                                    {{ empleado.nombre }} {{ empleado.apellido }} ({{ empleado.especialidad|capitalize }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback" id="id_empleado-error">
+                                Debes seleccionar un empleado
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_reserva" class="form-label required">Fecha *</label>
+                            <input type="date" class="form-control" id="fecha_reserva" name="fecha_reserva" 
+                                   required
+                                   value="{{ reserva.fecha_str }}">
+                            <div class="invalid-feedback" id="fecha_reserva-error">
+                                La fecha es obligatoria
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="hora_reserva" class="form-label required">Hora *</label>
+                            <input type="time" class="form-control" id="hora_reserva" name="hora_reserva" 
+                                   required
+                                   step="1800"
+                                   value="{{ reserva.hora_str }}">
+                            <div class="form-text">Horario de atención: 9:00 AM - 6:00 PM</div>
+                            <div class="invalid-feedback" id="hora_reserva-error">
+                                La hora es obligatoria
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Selección de servicios -->
+                    <div class="mb-4">
+                        <label class="form-label required">Servicios *</label>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Selecciona al menos un servicio para la reserva
+                        </div>
+                        
+                        <div id="lista-servicios" class="row">
+                            {% for categoria, servicios_cat in servicios_por_categoria.items() %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">{{ categoria|capitalize }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        {% for servicio in servicios_cat %}
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input servicio-checkbox" 
+                                                   type="checkbox" 
+                                                   name="servicios[]" 
+                                                   value="{{ servicio.id_servicio }}"
+                                                   id="servicio-{{ servicio.id_servicio }}"
+                                                   data-precio="{{ servicio.precio }}"
+                                                   data-duracion="{{ servicio.duracion_min }}"
+                                                   {% if servicio.id_servicio|string in servicios_ids %}checked{% endif %}>
+                                            <label class="form-check-label w-100" for="servicio-{{ servicio.id_servicio }}">
+                                                <div class="d-flex justify-content-between">
+                                                    <span>{{ servicio.nombre }}</span>
+                                                    <span class="text-success">S/ {{ "%.2f"|format(servicio.precio) }}</span>
+                                                </div>
+                                                <small class="text-muted d-block">{{ servicio.duracion_min }} min</small>
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="invalid-feedback" id="servicios-error">
+                            Debes seleccionar al menos un servicio
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="estado" class="form-label">Estado</label>
+                            <select class="form-select" id="estado" name="estado">
+                                <option value="pendiente" {% if reserva.estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                                <option value="confirmada" {% if reserva.estado == 'confirmada' %}selected{% endif %}>Confirmada</option>
+                                <option value="en_proceso" {% if reserva.estado == 'en_proceso' %}selected{% endif %}>En Proceso</option>
+                                <option value="completada" {% if reserva.estado == 'completada' %}selected{% endif %}>Completada</option>
+                                <option value="cancelada" {% if reserva.estado == 'cancelada' %}selected{% endif %}>Cancelada</option>
+                                <option value="no_show" {% if reserva.estado == 'no_show' %}selected{% endif %}>No Show</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="notas" class="form-label">Notas Adicionales</label>
+                            <textarea class="form-control" id="notas" name="notas" 
+                                      rows="3" placeholder="Instrucciones especiales, alergias, comportamiento, etc.">{{ reserva.notas or '' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Resumen de la reserva -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Resumen de la Reserva</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="detalle-reserva">
+                                <table class="table table-sm">
+                                    <tbody id="detalle-servicios">
+                                        <!-- Servicios se agregarán aquí -->
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th>TOTAL</th>
+                                            <th class="text-end" id="total-reserva">S/ 0.00</th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Información de la reserva -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-light border">
+                                <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Información de la Reserva</h6>
+                                <p class="mb-1"><strong>Código:</strong> {{ reserva.codigo_reserva }}</p>
+                                <p class="mb-1"><strong>ID:</strong> {{ reserva.id_reserva }}</p>
+                                <p class="mb-1"><strong>Creada:</strong> {{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</p>
+                                <p class="mb-0"><strong>Última modificación:</strong> {{ reserva.fecha_modificacion.strftime('%d/%m/%Y %H:%M') }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Instrucciones:</h6>
+                                <ul class="mb-0">
+                                    <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
+                                    <li>Al cambiar servicios, se actualizarán los precios</li>
+                                    <li>Verifica disponibilidad antes de cambiar fecha/hora</li>
+                                    <li>Notifica al cliente de cambios importantes</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{{ url_for('reservas') }}" class="btn btn-secondary me-2">
+                            <i class="fas fa-times me-1"></i>Cancelar
+                        </a>
+                        <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" class="btn btn-info me-2">
+                            <i class="fas fa-eye me-1"></i>Ver Detalles
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Actualizar Reserva
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Información de la mascota -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-paw me-2"></i>Mascota</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} fa-4x text-info"></i>
+                </div>
+                <h5 class="text-center">{{ reserva.mascota_nombre }}</h5>
+                <div class="text-center mb-3">
+                    <span class="badge {{ 'bg-info' if reserva.especie == 'perro' else 'bg-warning' if reserva.especie == 'gato' else 'bg-secondary' }}">
+                        {{ reserva.especie|capitalize }}
+                    </span>
+                    {% if reserva.raza %}
+                    <span class="badge bg-light text-dark">{{ reserva.raza }}</span>
+                    {% endif %}
+                </div>
+                
+                <p class="text-center mb-0">
+                    <a href="{{ url_for('ver_mascota', id=reserva.id_mascota) }}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-external-link-alt me-1"></i>Ver ficha
+                    </a>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Historial de cambios -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Historial</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="fas fa-calendar-plus text-primary me-2"></i>
+                        <strong>Reserva creada:</strong>
+                        <br>
+                        <small class="text-muted">{{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-edit text-warning me-2"></i>
+                        <strong>Última modificación:</strong>
+                        <br>
+                        <small class="text-muted">{{ reserva.fecha_modificacion.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </li>
+                    <li>
+                        <i class="fas fa-exchange-alt text-info me-2"></i>
+                        <strong>Estado actual:</strong>
+                        <br>
+                        <span class="badge {{ 'bg-warning' if reserva.estado == 'pendiente' else 'bg-info' if reserva.estado == 'confirmada' else 'bg-primary' if reserva.estado == 'en_proceso' else 'bg-success' if reserva.estado == 'completada' else 'bg-danger' if reserva.estado == 'cancelada' else 'bg-secondary' }}">
+                            {{ reserva.estado.replace('_', ' ').title() }}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+<script>
+// Cálculo en tiempo real del total
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.servicio-checkbox');
+    const detalleServicios = document.getElementById('detalle-servicios');
+    const totalElement = document.getElementById('total-reserva');
+    
+    function actualizarResumen() {
+        const serviciosSeleccionados = Array.from(checkboxes).filter(cb => cb.checked);
+        
+        // Limpiar tabla
+        detalleServicios.innerHTML = '';
+        
+        let total = 0;
+        let duracionTotal = 0;
+        
+        serviciosSeleccionados.forEach(checkbox => {
+            const precio = parseFloat(checkbox.getAttribute('data-precio')) || 0;
+            const duracion = parseInt(checkbox.getAttribute('data-duracion')) || 0;
+            const label = checkbox.nextElementSibling;
+            const nombre = label.querySelector('span:first-child').textContent;
+            
+            total += precio;
+            duracionTotal += duracion;
+            
+            const fila = document.createElement('tr');
+            fila.innerHTML = `
+                <td>${nombre}</td>
+                <td class="text-end">S/ ${precio.toFixed(2)}</td>
+            `;
+            detalleServicios.appendChild(fila);
+        });
+        
+        // Agregar fila de duración
+        if (serviciosSeleccionados.length > 0) {
+            const filaDuracion = document.createElement('tr');
+            filaDuracion.innerHTML = `
+                <td><small class="text-muted">Duración total:</small></td>
+                <td class="text-end"><small class="text-muted">${duracionTotal} min</small></td>
+            `;
+            detalleServicios.appendChild(filaDuracion);
+        }
+        
+        totalElement.textContent = `S/ ${total.toFixed(2)}`;
+    }
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', actualizarResumen);
+    });
+    
+    // Actualizar al cargar
+    actualizarResumen();
+});
+</script>
+{% endblock %}

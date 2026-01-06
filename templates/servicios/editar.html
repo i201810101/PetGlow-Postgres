@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Servicio - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/servicios.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Editar Servicio</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('editar_servicio', id=servicio.id_servicio) }}" 
+                      id="form-editar-servicio" class="needs-validation" novalidate>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="codigo" class="form-label required">Código *</label>
+                            <input type="text" class="form-control" id="codigo" name="codigo" 
+                                   required
+                                   maxlength="20"
+                                   value="{{ servicio.codigo }}"
+                                   placeholder="Ej: SER-001, BAÑO-01">
+                            <div class="form-text">Código único para identificar el servicio</div>
+                            <div class="invalid-feedback" id="codigo-error">
+                                El código es obligatorio
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label required">Nombre *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   required
+                                   minlength="3"
+                                   maxlength="100"
+                                   value="{{ servicio.nombre }}"
+                                   placeholder="Ej: Baño Básico, Corte Premium">
+                            <div class="invalid-feedback" id="nombre-error">
+                                El nombre es obligatorio (3-100 caracteres)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="categoria" class="form-label required">Categoría *</label>
+                            <select class="form-select" id="categoria" name="categoria" required>
+                                <option value="baño" {% if servicio.categoria == 'baño' %}selected{% endif %}>Baño</option>
+                                <option value="corte" {% if servicio.categoria == 'corte' %}selected{% endif %}>Corte</option>
+                                <option value="spa" {% if servicio.categoria == 'spa' %}selected{% endif %}>Spa</option>
+                                <option value="estetica" {% if servicio.categoria == 'estetica' %}selected{% endif %}>Estética</option>
+                                <option value="salud" {% if servicio.categoria == 'salud' %}selected{% endif %}>Salud</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="duracion_min" class="form-label required">Duración (minutos) *</label>
+                            <input type="number" class="form-control" id="duracion_min" name="duracion_min" 
+                                   required
+                                   min="15"
+                                   max="300"
+                                   step="15"
+                                   value="{{ servicio.duracion_min }}">
+                            <div class="form-text">Tiempo estimado para realizar el servicio</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="costo" class="form-label required">Costo (S/) *</label>
+                            <input type="number" class="form-control" id="costo" name="costo" 
+                                   required
+                                   min="0"
+                                   step="0.01"
+                                   value="{{ servicio.costo }}">
+                            <div class="form-text">Costo para nosotros</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="precio" class="form-label required">Precio de Venta (S/) *</label>
+                            <input type="number" class="form-control" id="precio" name="precio" 
+                                   required
+                                   min="0.01"
+                                   step="0.01"
+                                   value="{{ servicio.precio }}">
+                            <div class="form-text">Precio al cliente</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descripcion" class="form-label">Descripción</label>
+                        <textarea class="form-control" id="descripcion" name="descripcion" 
+                                  rows="3" placeholder="Describe el servicio, incluye detalles importantes...">{{ servicio.descripcion or '' }}</textarea>
+                    </div>
+                    
+                    <!-- Información del margen -->
+                    <div class="alert alert-info mt-3">
+                        <h6 class="alert-heading"><i class="fas fa-chart-line me-2"></i>Análisis del Servicio</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Costo:</strong> S/ {{ "%.2f"|format(servicio.costo) }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Precio:</strong> S/ {{ "%.2f"|format(servicio.precio) }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Margen Actual:</strong> 
+                                    <span class="badge {{ 'bg-success' if servicio.margen > 100 else 'bg-warning' if servicio.margen > 50 else 'bg-info' }}">
+                                        {{ "%.1f"|format(servicio.margen) }}%
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <p class="mb-0 mt-2">
+                            <small>
+                                Utilidad por servicio: S/ {{ "%.2f"|format(servicio.precio - servicio.costo) }} | 
+                                {% if servicio.margen > 100 %}
+                                <span class="text-success">Excelente margen</span>
+                                {% elif servicio.margen > 50 %}
+                                <span class="text-warning">Margen aceptable</span>
+                                {% else %}
+                                <span class="text-danger">Margen bajo</span>
+                                {% endif %}
+                            </small>
+                        </p>
+                    </div>
+                    
+                    <!-- Información adicional -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-light border">
+                                <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Información del Servicio</h6>
+                                <p class="mb-1"><strong>ID:</strong> {{ servicio.id_servicio }}</p>
+                                <p class="mb-1"><strong>Estado:</strong> 
+                                    <span class="badge {{ 'bg-success' if servicio.activo else 'bg-secondary' }}">
+                                        {{ 'Activo' if servicio.activo else 'Inactivo' }}
+                                    </span>
+                                </p>
+                                {% if servicio.total_reservas is defined %}
+                                <p class="mb-1"><strong>Total Reservas:</strong> {{ servicio.total_reservas or 0 }}</p>
+                                <p class="mb-0"><strong>Ingresos Totales:</strong> S/ {{ "%.2f"|format(servicio.total_ingresos or 0) }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Recomendaciones:</h6>
+                                <ul class="mb-0">
+                                    <li>Mantén el margen por encima del 100%</li>
+                                    <li>Considera aumentos periódicos según inflación</li>
+                                    <li>Verifica que el precio sea competitivo</li>
+                                    <li>No elimines servicios con reservas activas</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{{ url_for('servicios') }}" class="btn btn-secondary me-2">
+                            <i class="fas fa-times me-1"></i>Cancelar
+                        </a>
+                        <a href="{{ url_for('ver_servicio', id=servicio.id_servicio) }}" class="btn btn-info me-2">
+                            <i class="fas fa-eye me-1"></i>Ver Detalles
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Actualizar Servicio
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/servicios.js') }}"></script>
+<script>
+// Cálculo en tiempo real del margen para edición
+document.addEventListener('DOMContentLoaded', function() {
+    const costoInput = document.getElementById('costo');
+    const precioInput = document.getElementById('precio');
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'alert alert-info mt-3';
+    previewDiv.innerHTML = `
+        <h6 class="alert-heading"><i class="fas fa-calculator me-2"></i>Previsualización del Nuevo Margen</h6>
+        <div class="row">
+            <div class="col-md-4">
+                <p class="mb-1"><strong>Costo:</strong> S/ <span id="preview-costo">0.00</span></p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1"><strong>Precio:</strong> S/ <span id="preview-precio">0.00</span></p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1"><strong>Nuevo Margen:</strong> <span id="preview-porcentaje" class="badge bg-success">0%</span></p>
+            </div>
+        </div>
+        <p class="mb-0 mt-2"><small>Utilidad: S/ <span id="preview-utilidad">0.00</span></small></p>
+    `;
+    
+    if (costoInput && precioInput) {
+        costoInput.parentNode.parentNode.parentNode.insertBefore(previewDiv, costoInput.parentNode.parentNode.nextSibling);
+        previewDiv.style.display = 'none';
+        
+        function calcularMargen() {
+            const costo = parseFloat(costoInput.value) || 0;
+            const precio = parseFloat(precioInput.value) || 0;
+            
+            if (costo > 0 && precio > 0) {
+                const utilidad = precio - costo;
+                const margen = (utilidad / costo) * 100;
+                
+                document.getElementById('preview-costo').textContent = costo.toFixed(2);
+                document.getElementById('preview-precio').textContent = precio.toFixed(2);
+                document.getElementById('preview-utilidad').textContent = utilidad.toFixed(2);
+                document.getElementById('preview-porcentaje').textContent = margen.toFixed(1) + '%';
+                
+                const badge = document.getElementById('preview-porcentaje');
+                badge.className = 'badge ' + (margen > 100 ? 'bg-success' : margen > 50 ? 'bg-warning' : 'bg-danger');
+                
+                previewDiv.style.display = 'block';
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        }
+        
+        costoInput.addEventListener('input', calcularMargen);
+        precioInput.addEventListener('input', calcularMargen);
+        
+        // Calcular al cargar
+        calcularMargen();
+    }
+});
+</script>
+{% endblock %}

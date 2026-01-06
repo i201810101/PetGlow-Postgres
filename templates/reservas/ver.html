@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}{{ reserva.codigo_reserva }} - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header {{ 'bg-info' if reserva.estado == 'confirmada' else 'bg-warning' if reserva.estado == 'pendiente' else 'bg-primary' if reserva.estado == 'en_proceso' else 'bg-success' if reserva.estado == 'completada' else 'bg-danger' if reserva.estado == 'cancelada' else 'bg-secondary' }} text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-calendar-check me-2"></i>
+                        Reserva {{ reserva.codigo_reserva }}
+                    </h4>
+                    <div>
+                        <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" class="btn btn-light btn-sm me-2">
+                            <i class="fas fa-edit me-1"></i>Editar
+                        </a>
+                        <a href="{{ url_for('reservas') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2 mb-3">Información General</h5>
+                        <p><strong>Fecha y Hora:</strong> {{ reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Estado:</strong> 
+                            <span class="badge {{ 'bg-info' if reserva.estado == 'confirmada' else 'bg-warning' if reserva.estado == 'pendiente' else 'bg-primary' if reserva.estado == 'en_proceso' else 'bg-success' if reserva.estado == 'completada' else 'bg-danger' if reserva.estado == 'cancelada' else 'bg-secondary' }}">
+                                {{ reserva.estado.replace('_', ' ').title() }}
+                            </span>
+                            {% if reserva.estado == 'pendiente' and reserva.tiempo_restante %}
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-clock"></i> Tiempo restante: {{ reserva.tiempo_restante }}
+                            </small>
+                            {% endif %}
+                        </p>
+                        <p><strong>Notas:</strong> {{ reserva.notas or 'Sin notas' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2 mb-3">Registro</h5>
+                        <p><strong>Creada:</strong> {{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Modificada:</strong> {{ reserva.fecha_modificacion.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Código:</strong> {{ reserva.codigo_reserva }}</p>
+                        <p><strong>ID:</strong> {{ reserva.id_reserva }}</p>
+                    </div>
+                </div>
+                
+                <h5 class="border-bottom pb-2 mb-3">Servicios</h5>
+                {% if reserva.servicios %}
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Servicio</th>
+                                <th>Categoría</th>
+                                <th>Duración</th>
+                                <th>Precio Unitario</th>
+                                <th>Cantidad</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for servicio in reserva.servicios %}
+                            <tr>
+                                <td>{{ servicio.nombre }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark">{{ servicio.categoria|capitalize }}</span>
+                                </td>
+                                <td>{{ servicio.duracion_min }} min</td>
+                                <td>S/ {{ "%.2f"|format(servicio.precio_unitario) }}</td>
+                                <td>{{ servicio.cantidad }}</td>
+                                <td>S/ {{ "%.2f"|format(servicio.subtotal) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="5" class="text-end">TOTAL:</th>
+                                <th>S/ {{ "%.2f"|format(reserva.total) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No hay servicios registrados para esta reserva.</p>
+                {% endif %}
+                
+                {% if reserva.factura %}
+                <h5 class="border-bottom pb-2 mb-3">Facturación</h5>
+                <div class="alert alert-success">
+                    <i class="fas fa-file-invoice-dollar me-2"></i>
+                    <strong>Facturada</strong> - 
+                    N° {{ reserva.factura.numero }} - 
+                    S/ {{ "%.2f"|format(reserva.factura.total) }} - 
+                    Estado: {{ reserva.factura.estado|capitalize }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Información de la mascota -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-paw me-2"></i>Mascota</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <div class="mascota-icono-placeholder mb-3">
+                        <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} fa-3x"></i>
+                    </div>
+                    <h5>{{ reserva.mascota_nombre }}</h5>
+                    <div class="mb-3">
+                        <span class="badge {{ 'bg-info' if reserva.especie == 'perro' else 'bg-warning' if reserva.especie == 'gato' else 'bg-secondary' }}">
+                            {{ reserva.especie|capitalize }}
+                        </span>
+                        {% if reserva.raza %}
+                        <span class="badge bg-light text-dark">{{ reserva.raza }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('ver_mascota', id=reserva.id_mascota) }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-1"></i>Ver ficha de la mascota
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Información del cliente -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Cliente</h5>
+            </div>
+            <div class="card-body">
+                <h5 class="text-center">{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</h5>
+                
+                <div class="mt-3">
+                    <p><i class="fas fa-phone me-2 text-muted"></i> 
+                        <strong>Teléfono:</strong> {{ reserva.cliente_telefono or 'No registrado' }}</p>
+                    <p><i class="fas fa-envelope me-2 text-muted"></i> 
+                        <strong>Email:</strong> {{ reserva.cliente_email or 'No registrado' }}</p>
+                </div>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ url_for('ver_cliente', id=reserva.id_cliente) }}" class="btn btn-outline-info">
+                        <i class="fas fa-external-link-alt me-1"></i>Ver perfil del cliente
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Información del empleado -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-user-tie me-2"></i>Empleado Asignado</h5>
+            </div>
+            <div class="card-body">
+                <h5 class="text-center">{{ reserva.empleado_nombre }} {{ reserva.empleado_apellido }}</h5>
+                
+                <div class="text-center mb-3">
+                    <span class="badge bg-light text-dark">{{ reserva.empleado_especialidad|capitalize }}</span>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="#" class="btn btn-outline-success">
+                        <i class="fas fa-calendar-alt me-1"></i>Ver agenda del empleado
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Acciones rápidas -->
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if reserva.estado == 'pendiente' %}
+                    <button class="btn btn-success cambiar-estado-detalle" data-estado="confirmada">
+                        <i class="fas fa-check-circle me-1"></i>Confirmar Reserva
+                    </button>
+                    {% elif reserva.estado == 'confirmada' %}
+                    <button class="btn btn-primary cambiar-estado-detalle" data-estado="en_proceso">
+                        <i class="fas fa-play-circle me-1"></i>Iniciar Servicio
+                    </button>
+                    {% elif reserva.estado == 'en_proceso' %}
+                    <button class="btn btn-success cambiar-estado-detalle" data-estado="completada">
+                        <i class="fas fa-check-double me-1"></i>Completar Servicio
+                    </button>
+                    {% endif %}
+                    
+                    {% if reserva.estado in ['pendiente', 'confirmada'] %}
+                    <button class="btn btn-danger cambiar-estado-detalle" data-estado="cancelada">
+                        <i class="fas fa-times-circle me-1"></i>Cancelar Reserva
+                    </button>
+                    {% endif %}
+                    
+                    {% if not reserva.factura and reserva.estado == 'completada' %}
+                    <a href="#" class="btn btn-warning">
+                        <i class="fas fa-file-invoice-dollar me-1"></i>Generar Factura
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" class="btn btn-outline-warning">
+                        <i class="fas fa-edit me-1"></i>Editar Reserva
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+<script>
+// Cambiar estado desde la vista detalle
+document.addEventListener('DOMContentLoaded', function() {
+    const botonesEstado = document.querySelectorAll('.cambiar-estado-detalle');
+    const reservaId = {{ reserva.id_reserva }};
+    
+    botonesEstado.forEach(boton => {
+        boton.addEventListener('click', function() {
+            const nuevoEstado = this.getAttribute('data-estado');
+            const estadoTextos = {
+                'pendiente': 'Pendiente',
+                'confirmada': 'Confirmada',
+                'en_proceso': 'En Proceso',
+                'completada': 'Completada',
+                'cancelada': 'Cancelada',
+                'no_show': 'No Show'
+            };
+            
+            if (confirm(`¿Cambiar estado de la reserva a "${estadoTextos[nuevoEstado]}"?`)) {
+                fetch(`/reservas/cambiar-estado/${reservaId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ estado: nuevoEstado })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al cambiar el estado');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

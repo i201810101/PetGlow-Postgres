@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}{{ mascota.nombre }} - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mascotas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header {{ 'bg-info' if mascota.especie == 'perro' else 'bg-warning' if mascota.especie == 'gato' else 'bg-secondary' }} text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas {{ 'fa-dog' if mascota.especie == 'perro' else 'fa-cat' if mascota.especie == 'gato' else 'fa-paw' }} me-2"></i>
+                        {{ mascota.nombre }}
+                    </h4>
+                    <div>
+                        <a href="{{ url_for('editar_mascota', id=mascota.id_mascota) }}" class="btn btn-light btn-sm me-2">
+                            <i class="fas fa-edit me-1"></i>Editar
+                        </a>
+                        <a href="{{ url_for('mascotas') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <!-- Foto de la mascota -->
+                        <div class="text-center mb-4">
+                            <div class="mascota-foto-placeholder">
+                                <i class="fas {{ 'fa-dog' if mascota.especie == 'perro' else 'fa-cat' if mascota.especie == 'gato' else 'fa-paw' }} fa-5x"></i>
+                            </div>
+                            <small class="text-muted">Sin foto</small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <h5 class="border-bottom pb-2 mb-3">Información Básica</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <p><strong>Especie:</strong> 
+                                    <span class="badge {{ 'bg-info' if mascota.especie == 'perro' else 'bg-warning' if mascota.especie == 'gato' else 'bg-secondary' }}">
+                                        {{ mascota.especie|capitalize }}
+                                    </span>
+                                </p>
+                                <p><strong>Raza:</strong> {{ mascota.raza or 'No especificada' }}</p>
+                                <p><strong>Tamaño:</strong> {{ mascota.tamano|capitalize if mascota.tamano else 'No especificado' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Color:</strong> {{ mascota.color or 'No especificado' }}</p>
+                                <p><strong>Peso:</strong> {{ mascota.peso or 'No registrado' }} kg</p>
+                                <p><strong>Fecha Nacimiento:</strong> 
+                                    {% if mascota.fecha_nacimiento %}
+                                        {{ mascota.fecha_nacimiento.strftime('%d/%m/%Y') }}
+                                        {% if mascota.edad_anios %}
+                                            ({{ mascota.edad_anios }} años, {{ mascota.edad_meses }} meses)
+                                        {% endif %}
+                                    {% else %}
+                                        No registrada
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <h5 class="border-bottom pb-2 mb-3">Características y Salud</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <p><strong>Características:</strong></p>
+                                <p class="text-muted">{{ mascota.caracteristicas or 'Sin características registradas' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Alergias / Condiciones:</strong></p>
+                                <p class="text-muted">{{ mascota.alergias or 'Sin alergias registradas' }}</p>
+                            </div>
+                        </div>
+                        
+                        <h5 class="border-bottom pb-2 mb-3">Información de Registro</h5>
+                        <p><strong>ID:</strong> {{ mascota.id_mascota }}</p>
+                        <p><strong>Fecha Registro:</strong> {{ mascota.fecha_registro.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Estado:</strong> 
+                            <span class="badge {{ 'bg-success' if mascota.activo else 'bg-secondary' }}">
+                                {{ 'Activa' if mascota.activo else 'Inactiva' }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Historial de reservas -->
+        <div class="card shadow mt-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Historial de Reservas</h5>
+            </div>
+            <div class="card-body">
+                {% if reservas %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Servicio</th>
+                                <th>Empleado</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for reserva in reservas %}
+                            <tr>
+                                <td>{{ reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ reserva.servicio_nombre }}</td>
+                                <td>{{ reserva.empleado_nombre }} {{ reserva.empleado_apellido }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if reserva.estado == 'completada' %}bg-success
+                                        {% elif reserva.estado == 'pendiente' %}bg-warning
+                                        {% elif reserva.estado == 'cancelada' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ reserva.estado|replace('_', ' ')|title }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">No hay reservas registradas para esta mascota.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Información del dueño -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Dueño</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <i class="fas fa-user-circle fa-4x text-primary"></i>
+                </div>
+                <h5 class="text-center">{{ mascota.cliente_nombre }} {{ mascota.cliente_apellido }}</h5>
+                
+                <div class="mt-3">
+                    <p><i class="fas fa-id-card me-2 text-muted"></i> 
+                        <strong>ID:</strong> {{ mascota.id_cliente }}</p>
+                    <p><i class="fas fa-phone me-2 text-muted"></i> 
+                        <strong>Teléfono:</strong> {{ mascota.cliente_telefono or 'No registrado' }}</p>
+                    <p><i class="fas fa-envelope me-2 text-muted"></i> 
+                        <strong>Email:</strong> {{ mascota.cliente_email or 'No registrado' }}</p>
+                </div>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ url_for('ver_cliente', id=mascota.id_cliente) }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-1"></i>Ver perfil del cliente
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Acciones rápidas -->
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('reservas') }}" class="btn btn-outline-success">
+                        <i class="fas fa-calendar-plus me-1"></i>Nueva Reserva
+                    </a>
+                    <a href="{{ url_for('editar_mascota', id=mascota.id_mascota) }}" class="btn btn-outline-warning">
+                        <i class="fas fa-edit me-1"></i>Editar Mascota
+                    </a>
+                    <button class="btn btn-outline-danger eliminar-mascota-detalle" 
+                            data-id="{{ mascota.id_mascota }}"
+                            data-nombre="{{ mascota.nombre }}">
+                        <i class="fas fa-trash me-1"></i>Eliminar Mascota
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/mascotas.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Mascotas - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mascotas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2><i class="fas fa-paw me-2"></i>Mascotas</h2>
+        <p class="text-muted">Gestiona las mascotas registradas en el sistema</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('crear_mascota') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Nueva Mascota
+        </a>
+        <button class="btn btn-outline-secondary" id="btn-exportar">
+            <i class="fas fa-download me-1"></i>Exportar
+        </button>
+    </div>
+</div>
+
+<!-- Filtros y búsqueda -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="buscador-mascotas" 
+                           placeholder="Buscar mascota por nombre, raza...">
+                    <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <select class="form-select" id="filtro-especie">
+                    <option value="">Todas las especies</option>
+                    <option value="perro">Perros</option>
+                    <option value="gato">Gatos</option>
+                    <option value="otro">Otros</option>
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <select class="form-select" id="filtro-cliente">
+                    <option value="">Todos los clientes</option>
+                    {% for cliente in clientes %}
+                    <option value="{{ cliente.id_cliente }}">{{ cliente.nombre }} {{ cliente.apellido }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de mascotas -->
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Lista de Mascotas</h5>
+        <span class="badge bg-primary" id="total-mascotas">{{ mascotas|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 mascotas-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Especie</th>
+                        <th>Raza</th>
+                        <th>Tamaño</th>
+                        <th>Dueño</th>
+                        <th>Registro</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="cuerpo-tabla-mascotas">
+                    {% if mascotas %}
+                        {% for mascota in mascotas %}
+                        <tr data-id="{{ mascota.id_mascota }}"
+                            data-nombre="{{ mascota.nombre|lower }}"
+                            data-especie="{{ mascota.especie|lower }}"
+                            data-raza="{{ mascota.raza|lower if mascota.raza else '' }}"
+                            data-tamano="{{ mascota.tamano|lower if mascota.tamano else '' }}"
+                            data-cliente="{{ mascota.cliente_nombre|lower if mascota.cliente_nombre else '' }} {{ mascota.cliente_apellido|lower if mascota.cliente_apellido else '' }}">
+                            <td class="fw-semibold">{{ mascota.id_mascota }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas {{ 'fa-dog' if mascota.especie == 'perro' else 'fa-cat' if mascota.especie == 'gato' else 'fa-paw' }} me-2"></i>
+                                    <strong>{{ mascota.nombre }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge {{ 'bg-info' if mascota.especie == 'perro' else 'bg-warning' if mascota.especie == 'gato' else 'bg-secondary' }}">
+                                    {{ mascota.especie|capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ mascota.raza or 'Sin especificar' }}</td>
+                            <td>
+                                {% if mascota.tamano %}
+                                <span class="badge bg-light text-dark border">
+                                    {{ mascota.tamano|capitalize }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if mascota.cliente_nombre %}
+                                <a href="{{ url_for('ver_cliente', id=mascota.id_cliente) }}" class="text-decoration-none">
+                                    {{ mascota.cliente_nombre }} {{ mascota.cliente_apellido }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">Cliente no encontrado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ mascota.fecha_registro.strftime('%d/%m/%Y') }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('ver_mascota', id=mascota.id_mascota) }}" 
+                                       class="btn btn-info btn-action" 
+                                       title="Ver detalles">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('editar_mascota', id=mascota.id_mascota) }}" 
+                                       class="btn btn-warning btn-action" 
+                                       title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-danger eliminar-mascota btn-action" 
+                                            data-id="{{ mascota.id_mascota }}"
+                                            data-nombre="{{ mascota.nombre }}"
+                                            title="Eliminar">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr id="sin-resultados">
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-paw fa-2x text-muted mb-3"></i>
+                                <p class="text-muted">No hay mascotas registradas</p>
+                                <a href="{{ url_for('crear_mascota') }}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-1"></i>Registrar primera mascota
+                                </a>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal fade" id="modal-confirmar-eliminacion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar la mascota <strong id="nombre-mascota-eliminar">[Nombre]</strong>?</p>
+                <p class="text-danger"><small>Esta acción no se puede deshacer. La mascota se marcará como inactiva.</small></p>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
+                    <label class="form-check-label" for="confirmar-eliminacion">
+                        Confirmo que deseo eliminar esta mascota
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminacion" disabled>
+                    <i class="fas fa-trash me-1"></i>Eliminar Mascota
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/mascotas.js') }}"></script>
+{% endblock %}

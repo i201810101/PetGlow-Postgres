@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Mascota - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mascotas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Editar Mascota</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('editar_mascota', id=mascota.id_mascota) }}" 
+                      id="form-editar-mascota" class="needs-validation" novalidate>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label required">Nombre de la Mascota *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   required
+                                   minlength="2"
+                                   maxlength="100"
+                                   value="{{ mascota.nombre }}"
+                                   placeholder="Ej: Max, Luna">
+                            <div class="invalid-feedback" id="nombre-error">
+                                El nombre es obligatorio (2-100 caracteres)
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="id_cliente" class="form-label required">Dueño *</label>
+                            <select class="form-select" id="id_cliente" name="id_cliente" required>
+                                <option value="">Seleccionar cliente...</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id_cliente }}" 
+                                        {% if cliente.id_cliente == mascota.id_cliente %}selected{% endif %}>
+                                    {{ cliente.nombre }} {{ cliente.apellido }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback" id="id_cliente-error">
+                                Debes seleccionar un dueño
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="especie" class="form-label required">Especie *</label>
+                            <select class="form-select" id="especie" name="especie" required>
+                                <option value="perro" {% if mascota.especie == 'perro' %}selected{% endif %}>Perro</option>
+                                <option value="gato" {% if mascota.especie == 'gato' %}selected{% endif %}>Gato</option>
+                                <option value="otro" {% if mascota.especie == 'otro' %}selected{% endif %}>Otra especie</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="raza" class="form-label">Raza</label>
+                            <input type="text" class="form-control" id="raza" name="raza" 
+                                   value="{{ mascota.raza or '' }}"
+                                   placeholder="Ej: Labrador, Siamés">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="tamano" class="form-label">Tamaño</label>
+                            <select class="form-select" id="tamano" name="tamano">
+                                <option value="">Seleccionar...</option>
+                                <option value="pequeño" {% if mascota.tamano == 'pequeño' %}selected{% endif %}>Pequeño</option>
+                                <option value="mediano" {% if mascota.tamano == 'mediano' %}selected{% endif %}>Mediano</option>
+                                <option value="grande" {% if mascota.tamano == 'grande' %}selected{% endif %}>Grande</option>
+                                <option value="gigante" {% if mascota.tamano == 'gigante' %}selected{% endif %}>Gigante</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
+                            <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento"
+                                   value="{{ mascota.fecha_nacimiento_str }}">
+                            <div class="form-text">Aproximada si no se conoce exacta</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="peso" class="form-label">Peso (kg)</label>
+                            <input type="number" class="form-control" id="peso" name="peso" 
+                                   step="0.1"
+                                   min="0.1"
+                                   max="200"
+                                   value="{{ mascota.peso or '' }}"
+                                   placeholder="Ej: 15.5">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="color" class="form-label">Color</label>
+                            <input type="text" class="form-control" id="color" name="color" 
+                                   value="{{ mascota.color or '' }}"
+                                   placeholder="Ej: Dorado, Negro">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="caracteristicas" class="form-label">Características</label>
+                            <textarea class="form-control" id="caracteristicas" name="caracteristicas" 
+                                      rows="3" placeholder="Marcas, comportamiento especial, etc.">{{ mascota.caracteristicas or '' }}</textarea>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="alergias" class="form-label">Alergias / Condiciones</label>
+                            <textarea class="form-control" id="alergias" name="alergias" 
+                                      rows="3" placeholder="Alergias conocidas, medicamentos, etc.">{{ mascota.alergias or '' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Información adicional -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-light border">
+                                <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Información de la Mascota</h6>
+                                <p class="mb-1"><strong>ID:</strong> {{ mascota.id_mascota }}</p>
+                                <p class="mb-1"><strong>Fecha Registro:</strong> {{ mascota.fecha_registro.strftime('%d/%m/%Y %H:%M') }}</p>
+                                <p class="mb-1"><strong>Estado:</strong> 
+                                    <span class="badge {{ 'bg-success' if mascota.activo else 'bg-secondary' }}">
+                                        {{ 'Activa' if mascota.activo else 'Inactiva' }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Instrucciones:</h6>
+                                <ul class="mb-0">
+                                    <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
+                                    <li><strong>Nombre:</strong> Mínimo 2 caracteres, máximo 100</li>
+                                    <li><strong>Dueño:</strong> Selecciona el cliente dueño de la mascota</li>
+                                    <li><strong>Peso:</strong> En kilogramos, usar punto decimal (ej: 15.5)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{{ url_for('mascotas') }}" class="btn btn-secondary me-2">
+                            <i class="fas fa-times me-1"></i>Cancelar
+                        </a>
+                        <a href="{{ url_for('ver_mascota', id=mascota.id_mascota) }}" class="btn btn-info me-2">
+                            <i class="fas fa-eye me-1"></i>Ver Detalles
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Actualizar Mascota
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/mascotas.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Reservas - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2><i class="fas fa-calendar-alt me-2"></i>Reservas</h2>
+        <p class="text-muted">Gestiona las reservas de servicios para mascotas</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('crear_reserva') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Nueva Reserva
+        </a>
+        <div class="btn-group ms-2">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="fas fa-filter me-1"></i>Filtrar
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" data-filtro="hoy">Hoy</a></li>
+                <li><a class="dropdown-item" href="#" data-filtro="semana">Esta semana</a></li>
+                <li><a class="dropdown-item" href="#" data-filtro="mes">Este mes</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" data-filtro="pendientes">Pendientes</a></li>
+                <li><a class="dropdown-item" href="#" data-filtro="completadas">Completadas</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros y búsqueda -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="buscador-reservas" 
+                           placeholder="Buscar por código, mascota, cliente...">
+                    <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <select class="form-select" id="filtro-estado">
+                    <option value="">Todos los estados</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="en_proceso">En Proceso</option>
+                    <option value="completada">Completada</option>
+                    <option value="cancelada">Cancelada</option>
+                    <option value="no_show">No Show</option>
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <input type="date" class="form-control" id="filtro-fecha" 
+                       value="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary active" data-vista="lista">
+                        <i class="fas fa-list"></i> Lista
+                    </button>
+                    <button class="btn btn-outline-primary" data-vista="calendario">
+                        <i class="fas fa-calendar"></i> Calendario
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vista de lista -->
+<div id="vista-lista">
+    <!-- Resumen rápido -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Hoy</h6>
+                            <h4 class="mb-0" id="total-hoy">0</h4>
+                        </div>
+                        <i class="fas fa-calendar-day fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Pendientes</h6>
+                            <h4 class="mb-0" id="total-pendientes">0</h4>
+                        </div>
+                        <i class="fas fa-clock fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Completadas</h6>
+                            <h4 class="mb-0" id="total-completadas">0</h4>
+                        </div>
+                        <i class="fas fa-check-circle fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Canceladas</h6>
+                            <h4 class="mb-0" id="total-canceladas">0</h4>
+                        </div>
+                        <i class="fas fa-times-circle fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de reservas -->
+    <div class="card">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Lista de Reservas</h5>
+            <span class="badge bg-primary" id="total-reservas">{{ reservas|length }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 reservas-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Fecha/Hora</th>
+                            <th>Mascota</th>
+                            <th>Cliente</th>
+                            <th>Empleado</th>
+                            <th>Servicios</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cuerpo-tabla-reservas">
+                        {% if reservas %}
+                            {% for reserva in reservas %}
+                            <tr data-id="{{ reserva.id_reserva }}"
+                                data-codigo="{{ reserva.codigo_reserva|lower }}"
+                                data-mascota="{{ reserva.mascota_nombre|lower }}"
+                                data-cliente="{{ reserva.cliente_nombre|lower }} {{ reserva.cliente_apellido|lower }}"
+                                data-estado="{{ reserva.estado }}"
+                                data-fecha="{{ reserva.fecha_reserva.strftime('%Y-%m-%d') }}"
+                                class="{% if reserva.vencida %}table-danger{% endif %}">
+                                <td class="fw-semibold">
+                                    <span class="badge bg-dark">{{ reserva.codigo_reserva }}</span>
+                                </td>
+                                <td>
+                                    <strong>{{ reserva.fecha_reserva.strftime('%d/%m') }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ reserva.fecha_reserva.strftime('%H:%M') }}</small>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} me-2"></i>
+                                        <strong>{{ reserva.mascota_nombre }}</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    {{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}
+                                </td>
+                                <td>
+                                    {{ reserva.empleado_nombre }} {{ reserva.empleado_apellido }}
+                                </td>
+                                <td>
+                                    <small>{{ reserva.servicios_nombres|truncate(30) }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge {{ reserva.estado_clase }}">
+                                        {{ reserva.estado_texto }}
+                                    </span>
+                                    {% if reserva.vencida %}
+                                    <br>
+                                    <small class="text-danger">
+                                        <i class="fas fa-exclamation-triangle"></i> Vencida
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" 
+                                           class="btn btn-info btn-action" 
+                                           title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" 
+                                           class="btn btn-warning btn-action" 
+                                           title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <div class="dropdown">
+                                            <button class="btn btn-secondary dropdown-toggle btn-action" 
+                                                    type="button" 
+                                                    data-bs-toggle="dropdown"
+                                                    title="Cambiar estado">
+                                                <i class="fas fa-exchange-alt"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><h6 class="dropdown-header">Cambiar estado a:</h6></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="confirmada">Confirmada</a></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="en_proceso">En Proceso</a></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="completada">Completada</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item cambiar-estado text-danger" href="#" data-estado="cancelada">Cancelar</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id="sin-resultados">
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-calendar-alt fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">No hay reservas registradas</p>
+                                    <a href="{{ url_for('crear_reserva') }}" class="btn btn-primary">
+                                        <i class="fas fa-plus me-1"></i>Crear primera reserva
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vista de calendario (inicialmente oculta) -->
+<div id="vista-calendario" class="d-none">
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Calendario de Reservas</h5>
+        </div>
+        <div class="card-body">
+            <div id="calendario-reservas"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de cambio de estado -->
+<div class="modal fade" id="modal-cambio-estado" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Cambiar Estado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas cambiar el estado de la reserva <strong id="codigo-reserva-cambio">[Código]</strong> a <strong id="nuevo-estado-texto">[Estado]</strong>?</p>
+                <div id="mensaje-confirmacion">
+                    <p class="text-muted">Esta acción actualizará el estado de la reserva en el sistema.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-cambio">
+                    <i class="fas fa-check me-1"></i>Confirmar Cambio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal fade" id="modal-confirmar-eliminacion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar la reserva <strong id="codigo-reserva-eliminar">[Código]</strong>?</p>
+                <p class="text-danger"><small>Esta acción no se puede deshacer. Se eliminarán todos los servicios asociados.</small></p>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
+                    <label class="form-check-label" for="confirmar-eliminacion">
+                        Confirmo que deseo eliminar esta reserva
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminacion" disabled>
+                    <i class="fas fa-trash me-1"></i>Eliminar Reserva
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+<!-- FullCalendar (opcional, para vista calendario) -->
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.global.min.js'></script>
+{% endblock %}

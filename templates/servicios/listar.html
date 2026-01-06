@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Servicios - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/servicios.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2><i class="fas fa-concierge-bell me-2"></i>Servicios</h2>
+        <p class="text-muted">Gestiona los servicios ofrecidos por PetGlow</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('crear_servicio') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Nuevo Servicio
+        </a>
+        <button class="btn btn-outline-secondary" id="btn-exportar">
+            <i class="fas fa-download me-1"></i>Exportar
+        </button>
+    </div>
+</div>
+
+<!-- Filtros y búsqueda -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="buscador-servicios" 
+                           placeholder="Buscar servicio por nombre, código...">
+                    <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <select class="form-select" id="filtro-categoria">
+                    <option value="">Todas las categorías</option>
+                    <option value="baño">Baño</option>
+                    <option value="corte">Corte</option>
+                    <option value="spa">Spa</option>
+                    <option value="estetica">Estética</option>
+                    <option value="salud">Salud</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de servicios -->
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Catálogo de Servicios</h5>
+        <span class="badge bg-primary" id="total-servicios">{{ servicios|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 servicios-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Duración</th>
+                        <th>Costo</th>
+                        <th>Precio</th>
+                        <th>Margen</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="cuerpo-tabla-servicios">
+                    {% if servicios %}
+                        {% for servicio in servicios %}
+                        <tr data-id="{{ servicio.id_servicio }}"
+                            data-nombre="{{ servicio.nombre|lower }}"
+                            data-codigo="{{ servicio.codigo|lower if servicio.codigo else '' }}"
+                            data-categoria="{{ servicio.categoria|lower }}">
+                            <td class="fw-semibold">
+                                <span class="badge bg-dark">{{ servicio.codigo or 'SIN-COD' }}</span>
+                            </td>
+                            <td>
+                                <strong>{{ servicio.nombre }}</strong>
+                                {% if servicio.descripcion %}
+                                <small class="d-block text-muted">{{ servicio.descripcion|truncate(50) }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {{ 'bg-info' if servicio.categoria == 'baño' else 'bg-warning' if servicio.categoria == 'corte' else 'bg-success' if servicio.categoria == 'spa' else 'bg-primary' if servicio.categoria == 'estetica' else 'bg-danger' }}">
+                                    {{ servicio.categoria|capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ servicio.duracion_min }} min</td>
+                            <td>
+                                <span class="text-muted">S/</span>
+                                <span class="fw-semibold">{{ "%.2f"|format(servicio.costo) }}</span>
+                            </td>
+                            <td>
+                                <span class="text-success">S/</span>
+                                <strong class="text-success">{{ "%.2f"|format(servicio.precio) }}</strong>
+                            </td>
+                            <td>
+                                <span class="badge {{ 'bg-success' if servicio.margen > 100 else 'bg-warning' if servicio.margen > 50 else 'bg-info' }}">
+                                    {{ "%.1f"|format(servicio.margen) }}%
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('ver_servicio', id=servicio.id_servicio) }}" 
+                                       class="btn btn-info btn-action" 
+                                       title="Ver detalles">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('editar_servicio', id=servicio.id_servicio) }}" 
+                                       class="btn btn-warning btn-action" 
+                                       title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-danger eliminar-servicio btn-action" 
+                                            data-id="{{ servicio.id_servicio }}"
+                                            data-nombre="{{ servicio.nombre }}"
+                                            title="Eliminar">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr id="sin-resultados">
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-concierge-bell fa-2x text-muted mb-3"></i>
+                                <p class="text-muted">No hay servicios registrados</p>
+                                <a href="{{ url_for('crear_servicio') }}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-1"></i>Crear primer servicio
+                                </a>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación de eliminación -->
+<div class="modal fade" id="modal-confirmar-eliminacion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar el servicio <strong id="nombre-servicio-eliminar">[Nombre]</strong>?</p>
+                <p class="text-danger"><small>Esta acción no se puede deshacer. El servicio se marcará como inactivo.</small></p>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
+                    <label class="form-check-label" for="confirmar-eliminacion">
+                        Confirmo que deseo eliminar este servicio
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminacion" disabled>
+                    <i class="fas fa-trash me-1"></i>Eliminar Servicio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/servicios.js') }}"></script>
+{% endblock %}

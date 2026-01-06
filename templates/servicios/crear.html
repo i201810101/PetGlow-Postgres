@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Servicio - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/servicios.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Nuevo Servicio</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('crear_servicio') }}" id="form-crear-servicio" class="needs-validation" novalidate>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="codigo" class="form-label required">Código *</label>
+                            <input type="text" class="form-control" id="codigo" name="codigo" 
+                                   required
+                                   maxlength="20"
+                                   placeholder="Ej: SER-001, BAÑO-01">
+                            <div class="form-text">Código único para identificar el servicio</div>
+                            <div class="invalid-feedback" id="codigo-error">
+                                El código es obligatorio
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label required">Nombre *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   required
+                                   minlength="3"
+                                   maxlength="100"
+                                   placeholder="Ej: Baño Básico, Corte Premium">
+                            <div class="invalid-feedback" id="nombre-error">
+                                El nombre es obligatorio (3-100 caracteres)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="categoria" class="form-label required">Categoría *</label>
+                            <select class="form-select" id="categoria" name="categoria" required>
+                                <option value="baño" selected>Baño</option>
+                                <option value="corte">Corte</option>
+                                <option value="spa">Spa</option>
+                                <option value="estetica">Estética</option>
+                                <option value="salud">Salud</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="duracion_min" class="form-label required">Duración (minutos) *</label>
+                            <input type="number" class="form-control" id="duracion_min" name="duracion_min" 
+                                   required
+                                   min="15"
+                                   max="300"
+                                   step="15"
+                                   value="60">
+                            <div class="form-text">Tiempo estimado para realizar el servicio</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="costo" class="form-label required">Costo (S/) *</label>
+                            <input type="number" class="form-control" id="costo" name="costo" 
+                                   required
+                                   min="0"
+                                   step="0.01"
+                                   placeholder="0.00">
+                            <div class="form-text">Costo para nosotros</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="precio" class="form-label required">Precio de Venta (S/) *</label>
+                            <input type="number" class="form-control" id="precio" name="precio" 
+                                   required
+                                   min="0.01"
+                                   step="0.01"
+                                   placeholder="0.00">
+                            <div class="form-text">Precio al cliente</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descripcion" class="form-label">Descripción</label>
+                        <textarea class="form-control" id="descripcion" name="descripcion" 
+                                  rows="3" placeholder="Describe el servicio, incluye detalles importantes..."></textarea>
+                    </div>
+                    
+                    <!-- Vista previa del margen -->
+                    <div class="alert alert-info mt-3" id="preview-margen" style="display: none;">
+                        <h6 class="alert-heading"><i class="fas fa-calculator me-2"></i>Previsualización del Margen</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Costo:</strong> S/ <span id="preview-costo">0.00</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Precio:</strong> S/ <span id="preview-precio">0.00</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Margen:</strong> <span id="preview-porcentaje" class="badge bg-success">0%</span></p>
+                            </div>
+                        </div>
+                        <p class="mb-0 mt-2"><small>Utilidad: S/ <span id="preview-utilidad">0.00</span></small></p>
+                    </div>
+                    
+                    <!-- Instrucciones -->
+                    <div class="alert alert-warning mt-4">
+                        <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Instrucciones:</h6>
+                        <ul class="mb-0">
+                            <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
+                            <li><strong>Código:</strong> Debe ser único para cada servicio</li>
+                            <li><strong>Costo:</strong> Lo que nos cuesta realizar el servicio</li>
+                            <li><strong>Precio:</strong> Lo que cobramos al cliente</li>
+                            <li><strong>Margen:</strong> Se calcula automáticamente como ((Precio - Costo) / Costo) * 100</li>
+                            <li>Un margen recomendado es entre 100% y 200%</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{{ url_for('servicios') }}" class="btn btn-secondary me-2">
+                            <i class="fas fa-times me-1"></i>Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Guardar Servicio
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/servicios.js') }}"></script>
+<script>
+// Cálculo en tiempo real del margen
+document.addEventListener('DOMContentLoaded', function() {
+    const costoInput = document.getElementById('costo');
+    const precioInput = document.getElementById('precio');
+    const previewDiv = document.getElementById('preview-margen');
+    
+    function calcularMargen() {
+        const costo = parseFloat(costoInput.value) || 0;
+        const precio = parseFloat(precioInput.value) || 0;
+        
+        if (costo > 0 && precio > 0) {
+            const utilidad = precio - costo;
+            const margen = (utilidad / costo) * 100;
+            
+            document.getElementById('preview-costo').textContent = costo.toFixed(2);
+            document.getElementById('preview-precio').textContent = precio.toFixed(2);
+            document.getElementById('preview-utilidad').textContent = utilidad.toFixed(2);
+            document.getElementById('preview-porcentaje').textContent = margen.toFixed(1) + '%';
+            
+            // Cambiar color según margen
+            const badge = document.getElementById('preview-porcentaje');
+            badge.className = 'badge ' + (margen > 100 ? 'bg-success' : margen > 50 ? 'bg-warning' : 'bg-danger');
+            
+            previewDiv.style.display = 'block';
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    }
+    
+    if (costoInput && precioInput) {
+        costoInput.addEventListener('input', calcularMargen);
+        precioInput.addEventListener('input', calcularMargen);
+        
+        // Calcular al cargar si hay valores
+        calcularMargen();
+    }
+});
+</script>
+{% endblock %}

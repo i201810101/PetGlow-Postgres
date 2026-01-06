@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}{{ servicio.nombre }} - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/servicios.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header {{ 'bg-info' if servicio.categoria == 'baño' else 'bg-warning' if servicio.categoria == 'corte' else 'bg-success' if servicio.categoria == 'spa' else 'bg-primary' if servicio.categoria == 'estetica' else 'bg-danger' }} text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas {{ 'fa-shower' if servicio.categoria == 'baño' else 'fa-cut' if servicio.categoria == 'corte' else 'fa-spa' if servicio.categoria == 'spa' else 'fa-hand-sparkles' if servicio.categoria == 'estetica' else 'fa-heartbeat' }} me-2"></i>
+                        {{ servicio.nombre }}
+                    </h4>
+                    <div>
+                        <a href="{{ url_for('editar_servicio', id=servicio.id_servicio) }}" class="btn btn-light btn-sm me-2">
+                            <i class="fas fa-edit me-1"></i>Editar
+                        </a>
+                        <a href="{{ url_for('servicios') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <!-- Icono del servicio -->
+                        <div class="text-center mb-4">
+                            <div class="servicio-icono-placeholder">
+                                <i class="fas {{ 'fa-shower' if servicio.categoria == 'baño' else 'fa-cut' if servicio.categoria == 'corte' else 'fa-spa' if servicio.categoria == 'spa' else 'fa-hand-sparkles' if servicio.categoria == 'estetica' else 'fa-heartbeat' }} fa-5x"></i>
+                            </div>
+                            <span class="badge bg-dark mt-2">{{ servicio.codigo }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <h5 class="border-bottom pb-2 mb-3">Información del Servicio</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <p><strong>Categoría:</strong> 
+                                    <span class="badge {{ 'bg-info' if servicio.categoria == 'baño' else 'bg-warning' if servicio.categoria == 'corte' else 'bg-success' if servicio.categoria == 'spa' else 'bg-primary' if servicio.categoria == 'estetica' else 'bg-danger' }}">
+                                        {{ servicio.categoria|capitalize }}
+                                    </span>
+                                </p>
+                                <p><strong>Duración:</strong> {{ servicio.duracion_min }} minutos</p>
+                                <p><strong>Descripción:</strong></p>
+                                <p class="text-muted">{{ servicio.descripcion or 'Sin descripción' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Costo:</strong> 
+                                    <span class="text-muted">S/</span>
+                                    <span class="fw-semibold">{{ "%.2f"|format(servicio.costo) }}</span>
+                                </p>
+                                <p><strong>Precio de Venta:</strong> 
+                                    <span class="text-success">S/</span>
+                                    <strong class="text-success">{{ "%.2f"|format(servicio.precio) }}</strong>
+                                </p>
+                                <p><strong>Margen de Ganancia:</strong> 
+                                    <span class="badge {{ 'bg-success' if servicio.margen > 100 else 'bg-warning' if servicio.margen > 50 else 'bg-info' }}">
+                                        {{ "%.1f"|format(servicio.margen) }}%
+                                    </span>
+                                </p>
+                                <p><strong>Utilidad por Servicio:</strong> 
+                                    <span class="text-success">S/ {{ "%.2f"|format(servicio.precio - servicio.costo) }}</span>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {% if servicio.total_reservas is defined %}
+                        <h5 class="border-bottom pb-2 mb-3">Estadísticas de Uso</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-center">
+                                <div class="p-3 bg-light rounded">
+                                    <h3 class="text-primary">{{ servicio.total_reservas }}</h3>
+                                    <p class="mb-0 text-muted">Total Reservas</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="p-3 bg-light rounded">
+                                    <h3 class="text-success">{{ servicio.total_veces }}</h3>
+                                    <p class="mb-0 text-muted">Veces Solicitado</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="p-3 bg-light rounded">
+                                    <h3 class="text-warning">S/ {{ "%.2f"|format(servicio.total_ingresos) }}</h3>
+                                    <p class="mb-0 text-muted">Ingresos Totales</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <h5 class="border-bottom pb-2 mb-3">Información Adicional</h5>
+                        <p><strong>ID:</strong> {{ servicio.id_servicio }}</p>
+                        <p><strong>Estado:</strong> 
+                            <span class="badge {{ 'bg-success' if servicio.activo else 'bg-secondary' }}">
+                                {{ 'Activo' if servicio.activo else 'Inactivo' }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Análisis Financiero -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Análisis Financiero</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Relación Precio/Costo:</strong></p>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" 
+                             style="width: {{ (servicio.costo / servicio.precio * 100) if servicio.precio > 0 else 0 }}%">
+                            Costo: {{ "%.0f"|format((servicio.costo / servicio.precio * 100) if servicio.precio > 0 else 0) }}%
+                        </div>
+                        <div class="progress-bar bg-primary" 
+                             style="width: {{ ((servicio.precio - servicio.costo) / servicio.precio * 100) if servicio.precio > 0 else 0 }}%">
+                            Utilidad: {{ "%.0f"|format(((servicio.precio - servicio.costo) / servicio.precio * 100) if servicio.precio > 0 else 0) }}%
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <p><strong>Evaluación del Margen:</strong></p>
+                    {% if servicio.margen > 150 %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Excelente!</strong> El margen es muy bueno.
+                    </div>
+                    {% elif servicio.margen > 100 %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-thumbs-up me-2"></i>
+                        <strong>Bueno</strong> El margen es adecuado.
+                    </div>
+                    {% elif servicio.margen > 50 %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Aceptable</strong> Considera aumentar el precio.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <strong>Crítico</strong> El margen es muy bajo.
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <p class="text-center mb-0">
+                    <small class="text-muted">
+                        <i class="fas fa-lightbulb me-1"></i>
+                        Para 10 servicios vendidos: S/ {{ "%.2f"|format((servicio.precio - servicio.costo) * 10) }} de utilidad
+                    </small>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Acciones Rápidas -->
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('editar_servicio', id=servicio.id_servicio) }}" class="btn btn-warning">
+                        <i class="fas fa-edit me-1"></i>Editar Servicio
+                    </a>
+                    <button class="btn btn-outline-danger eliminar-servicio-detalle" 
+                            data-id="{{ servicio.id_servicio }}"
+                            data-nombre="{{ servicio.nombre }}">
+                        <i class="fas fa-trash me-1"></i>Eliminar Servicio
+                    </button>
+                    <a href="{{ url_for('servicios') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-list me-1"></i>Ver Todos los Servicios
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/servicios.js') }}"></script>
+{% endblock %}

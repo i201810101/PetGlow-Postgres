@@ -113,9 +113,12 @@ function mostrarModalEliminacion(clienteId, nombreCliente) {
     }
 }
 
-// Función para validar campo individual
+// Función mejorada para validar campo individual
 function validarCampoIndividual(campo) {
     const valor = campo.value.trim();
+    
+    // Agregar clase para identificar que es validado por JS
+    campo.classList.add('js-validated');
     
     // Remover estados previos
     campo.classList.remove('is-invalid', 'is-valid');

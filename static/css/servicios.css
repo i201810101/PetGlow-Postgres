@@ -1,0 +1,251 @@
+/* static/css/servicios.css - Estilos específicos para servicios */
+
+/* Estilos para tabla de servicios */
+.servicios-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.servicios-table td {
+    vertical-align: middle;
+}
+
+/* Badges para categorías */
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.badge.bg-primary {
+    background-color: #0d6efd !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-dark {
+    background-color: #212529 !important;
+}
+
+/* Botones de acciones */
+.btn-group .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 4px;
+}
+
+.btn-action {
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Placeholder para icono de servicio */
+.servicio-icono-placeholder {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin: 0 auto;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Estilos para filtros */
+#buscador-servicios {
+    border-radius: 5px 0 0 5px;
+    border-right: 0;
+}
+
+#btn-limpiar-busqueda {
+    border-radius: 0 5px 5px 0;
+    border-left: 0;
+}
+
+/* Estilos para formularios */
+.form-label.required:after {
+    content: " *";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Validación específica para servicios */
+.form-control.is-valid,
+.form-control.is-invalid,
+.form-select.is-valid,
+.form-select.is-invalid {
+    padding-right: 2.5rem !important;
+}
+
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: #28a745;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right calc(.375em + .1875rem) center !important;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem) !important;
+}
+
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right calc(.375em + .1875rem) center !important;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem) !important;
+}
+
+/* Deshabilitar validación Bootstrap duplicada */
+.was-validated .form-control:valid,
+.was-validated .form-control:invalid,
+.was-validated .form-select:valid,
+.was-validated .form-select:invalid {
+    background-image: none !important;
+}
+
+/* Estilos para análisis financiero */
+.progress {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Notificaciones personalizadas */
+.notificacion-personalizada {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideInRight 0.3s ease-out;
+    border: none;
+    border-left: 4px solid;
+}
+
+.notificacion-personalizada.alert-success {
+    border-left-color: #28a745;
+}
+
+.notificacion-personalizada.alert-danger {
+    border-left-color: #dc3545;
+}
+
+.notificacion-personalizada.alert-warning {
+    border-left-color: #ffc107;
+}
+
+.notificacion-personalizada.alert-info {
+    border-left-color: #17a2b8;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Estilos para tarjetas de estadísticas */
+.bg-light.rounded {
+    transition: transform 0.3s;
+}
+
+.bg-light.rounded:hover {
+    transform: translateY(-5px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .servicios-table {
+        display: block;
+        overflow-x: auto;
+        font-size: 0.9rem;
+    }
+    
+    .servicios-table thead {
+        display: none;
+    }
+    
+    .servicios-table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.5rem;
+    }
+    
+    .servicios-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        border: none;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .servicios-table tbody td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #495057;
+        width: 40%;
+    }
+    
+    .servicios-table tbody td:last-child {
+        border-bottom: none;
+        justify-content: center;
+    }
+    
+    .servicio-icono-placeholder {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .btn-group {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .btn-group .btn-sm {
+        margin: 0.125rem;
+    }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.card {
+    animation: fadeIn 0.3s ease-out;
+}
