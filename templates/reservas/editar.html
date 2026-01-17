@@ -60,7 +60,7 @@
                                 La fecha es obligatoria
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6 mb-3">
                             <label for="hora_reserva" class="form-label required">Hora *</label>
                             <input type="time" class="form-control" id="hora_reserva" name="hora_reserva" 
@@ -265,30 +265,29 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+
 <script>
-// Cálculo en tiempo real del total
+// Script específico para la página de edición
 document.addEventListener('DOMContentLoaded', function() {
-    const checkboxes = document.querySelectorAll('.servicio-checkbox');
-    const detalleServicios = document.getElementById('detalle-servicios');
-    const totalElement = document.getElementById('total-reserva');
+    // Inicializar resumen de servicios
+    actualizarResumenServicios();
     
-    function actualizarResumen() {
-        const serviciosSeleccionados = Array.from(checkboxes).filter(cb => cb.checked);
+    // Evento para checkboxes de servicios
+    document.querySelectorAll('.servicio-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', actualizarResumenServicios);
+    });
+    
+    function actualizarResumenServicios() {
+        const serviciosSeleccionados = document.querySelectorAll('.servicio-checkbox:checked');
+        const detalleServicios = document.getElementById('detalle-servicios');
+        let total = 0;
         
-        // Limpiar tabla
         detalleServicios.innerHTML = '';
         
-        let total = 0;
-        let duracionTotal = 0;
-        
-        serviciosSeleccionados.forEach(checkbox => {
-            const precio = parseFloat(checkbox.getAttribute('data-precio')) || 0;
-            const duracion = parseInt(checkbox.getAttribute('data-duracion')) || 0;
-            const label = checkbox.nextElementSibling;
-            const nombre = label.querySelector('span:first-child').textContent;
-            
+        serviciosSeleccionados.forEach(servicio => {
+            const precio = parseFloat(servicio.getAttribute('data-precio'));
+            const nombre = servicio.nextElementSibling.querySelector('span').textContent;
             total += precio;
-            duracionTotal += duracion;
             
             const fila = document.createElement('tr');
             fila.innerHTML = `
@@ -298,25 +297,100 @@ document.addEventListener('DOMContentLoaded', function() {
             detalleServicios.appendChild(fila);
         });
         
-        // Agregar fila de duración
-        if (serviciosSeleccionados.length > 0) {
-            const filaDuracion = document.createElement('tr');
-            filaDuracion.innerHTML = `
-                <td><small class="text-muted">Duración total:</small></td>
-                <td class="text-end"><small class="text-muted">${duracionTotal} min</small></td>
-            `;
-            detalleServicios.appendChild(filaDuracion);
-        }
+        document.getElementById('total-reserva').textContent = `S/ ${total.toFixed(2)}`;
         
-        totalElement.textContent = `S/ ${total.toFixed(2)}`;
+        // Validar que al menos un servicio esté seleccionado
+        const errorElement = document.getElementById('servicios-error');
+        if (serviciosSeleccionados.length === 0) {
+            errorElement.style.display = 'block';
+        } else {
+            errorElement.style.display = 'none';
+        }
     }
     
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', actualizarResumen);
+    // Validación del formulario
+    const form = document.getElementById('form-editar-reserva');
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        let isValid = true;
+        const errores = [];
+        
+        // Validar mascota
+        const idMascota = document.getElementById('id_mascota');
+        if (!idMascota.value) {
+            idMascota.classList.add('is-invalid');
+            errores.push('Debes seleccionar una mascota');
+            isValid = false;
+        } else {
+            idMascota.classList.remove('is-invalid');
+            idMascota.classList.add('is-valid');
+        }
+        
+        // Validar empleado
+        const idEmpleado = document.getElementById('id_empleado');
+        if (!idEmpleado.value) {
+            idEmpleado.classList.add('is-invalid');
+            errores.push('Debes seleccionar un empleado');
+            isValid = false;
+        } else {
+            idEmpleado.classList.remove('is-invalid');
+            idEmpleado.classList.add('is-valid');
+        }
+        
+        // Validar fecha
+        const fechaReserva = document.getElementById('fecha_reserva');
+        if (!fechaReserva.value) {
+            fechaReserva.classList.add('is-invalid');
+            errores.push('La fecha es obligatoria');
+            isValid = false;
+        } else {
+            const hoy = new Date().toISOString().split('T')[0];
+            if (fechaReserva.value < hoy) {
+                fechaReserva.classList.add('is-invalid');
+                errores.push('No se pueden crear reservas en fechas pasadas');
+                isValid = false;
+            } else {
+                fechaReserva.classList.remove('is-invalid');
+                fechaReserva.classList.add('is-valid');
+            }
+        }
+        
+        // Validar hora
+        const horaReserva = document.getElementById('hora_reserva');
+        if (!horaReserva.value) {
+            horaReserva.classList.add('is-invalid');
+            errores.push('La hora es obligatoria');
+            isValid = false;
+        } else {
+            horaReserva.classList.remove('is-invalid');
+            horaReserva.classList.add('is-valid');
+        }
+        
+        // Validar servicios
+        const serviciosSeleccionados = document.querySelectorAll('.servicio-checkbox:checked');
+        if (serviciosSeleccionados.length === 0) {
+            document.getElementById('servicios-error').style.display = 'block';
+            errores.push('Debes seleccionar al menos un servicio');
+            isValid = false;
+        } else {
+            document.getElementById('servicios-error').style.display = 'none';
+        }
+        
+        if (!isValid) {
+            // Mostrar notificación de errores
+            if (typeof mostrarNotificacion === 'function') {
+                mostrarNotificacion('Corrige los siguientes errores:', 'error', errores);
+            } else {
+                alert('Corrige los siguientes errores:\n' + errores.join('\n'));
+            }
+            return false;
+        }
+        
+        // Si todo está bien, enviar el formulario
+        form.submit();
+        return true;
     });
-    
-    // Actualizar al cargar
-    actualizarResumen();
 });
 </script>
 {% endblock %}

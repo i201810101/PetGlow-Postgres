@@ -207,9 +207,14 @@
                     </button>
                     {% endif %}
                     
+                    <!-- BOTÓN DE FACTURACIÓN CORREGIDO -->
                     {% if not reserva.factura and reserva.estado == 'completada' %}
-                    <a href="#" class="btn btn-warning">
-                        <i class="fas fa-file-invoice-dollar me-1"></i>Generar Factura
+                    <a href="{{ url_for('facturar_reserva', id=reserva.id_reserva) }}" class="btn btn-warning btn-facturar">
+                        <i class="fas fa-file-invoice-dollar me-1"></i>Generar Factura/Boleta
+                    </a>
+                    {% elif reserva.factura %}
+                    <a href="{{ url_for('ver_factura', id=reserva.factura.id_factura) }}" class="btn btn-success">
+                        <i class="fas fa-file-invoice me-1"></i>Ver Factura {{ reserva.factura.numero }}
                     </a>
                     {% endif %}
                     

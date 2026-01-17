@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Apertura de Caja - PetGlow{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-lock-open me-2"></i>Apertura de Caja</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('apertura_caja') }}">
+                    <div class="mb-3">
+                        <label for="monto_apertura" class="form-label">Monto de Apertura *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_apertura" 
+                                   name="monto_apertura" step="0.01" min="0" required
+                                   placeholder="0.00" value="100.00">
+                        </div>
+                        <div class="form-text">Monto con el que inicia la caja del día</div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Información</h6>
+                        <ul class="mb-0">
+                            <li><strong>Fecha:</strong> {{ date_now.strftime('%d/%m/%Y') }}</li>
+                            <li><strong>Cajero:</strong> {{ session.nombre }}</li>
+                            <li>Solo puedes tener una caja abierta por día</li>
+                            <li>Recomendado: S/ 100.00 como monto inicial</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-lock-open me-2"></i>Abrir Caja
+                        </button>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

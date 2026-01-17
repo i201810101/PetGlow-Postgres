@@ -104,18 +104,19 @@
                         </a>
                         <p class="mt-2">Nuevo Cliente</p>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
-                        <a href="#" class="btn btn-success btn-lg p-3 rounded-circle">
-                            <i class="fas fa-dog fa-2x"></i>
-                        </a>
-                        <p class="mt-2">Nueva Mascota</p>
-                    </div>
-                    <div class="col-md-2 col-6 mb-3">
-                        <a href="#" class="btn btn-info btn-lg p-3 rounded-circle">
-                            <i class="fas fa-calendar-plus fa-2x"></i>
-                        </a>
-                        <p class="mt-2">Nueva Reserva</p>
-                    </div>
+                    <!-- Corregir estos botones: -->
+<div class="col-md-2 col-6 mb-3">
+    <a href="{{ url_for('crear_mascota') }}" class="btn btn-success btn-lg p-3 rounded-circle">
+        <i class="fas fa-dog fa-2x"></i>
+    </a>
+    <p class="mt-2">Nueva Mascota</p>
+</div>
+<div class="col-md-2 col-6 mb-3">
+    <a href="{{ url_for('crear_reserva') }}" class="btn btn-info btn-lg p-3 rounded-circle">
+        <i class="fas fa-calendar-plus fa-2x"></i>
+    </a>
+    <p class="mt-2">Nueva Reserva</p>
+</div>
                     <div class="col-md-2 col-6 mb-3">
                         <a href="{{ url_for('ventas') }}" class="btn btn-warning btn-lg p-3 rounded-circle">
                             <i class="fas fa-cash-register fa-2x"></i>
@@ -149,6 +150,7 @@
                 <a href="{{ url_for('reservas') }}" class="btn btn-sm btn-primary">Ver todas</a>
             </div>
             <div class="card-body">
+                {% if ultimas_reservas %}
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -162,23 +164,57 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for i in range(5) %}
+                            {% for reserva in ultimas_reservas %}
                             <tr>
-                                <td>{{ now.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>Cliente {{ i+1 }}</td>
-                                <td>Mascota {{ i+1 }}</td>
-                                <td>Baño completo</td>
-                                <td><span class="badge bg-success">Completado</span></td>
+                                <td>{{ reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</td>
+                                <td>{{ reserva.mascota_nombre }}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-info">
+                                    {% if reserva.servicios_nombres %}
+                                        {% set servicios = reserva.servicios_nombres.split(',') %}
+                                        {% for servicio in servicios[:1] %}
+                                            {{ servicio|trim }}
+                                        {% endfor %}
+                                        {% if servicios|length > 1 %}
+                                            <span class="badge bg-secondary">+{{ servicios|length - 1 }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Sin servicios</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if reserva.estado == 'pendiente' %}
+                                        <span class="badge bg-warning">Pendiente</span>
+                                    {% elif reserva.estado == 'confirmada' %}
+                                        <span class="badge bg-info">Confirmada</span>
+                                    {% elif reserva.estado == 'en_proceso' %}
+                                        <span class="badge bg-primary">En Proceso</span>
+                                    {% elif reserva.estado == 'completada' %}
+                                        <span class="badge bg-success">Completada</span>
+                                    {% elif reserva.estado == 'cancelada' %}
+                                        <span class="badge bg-danger">Cancelada</span>
+                                    {% elif reserva.estado == 'no_show' %}
+                                        <span class="badge bg-secondary">No Show</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ reserva.estado }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" class="btn btn-sm btn-info">
                                         <i class="fas fa-eye"></i>
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No hay reservas recientes. <a href="{{ url_for('crear_reserva') }}" class="alert-link">Crear primera reserva</a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

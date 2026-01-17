@@ -4,10 +4,32 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+<style>
+    /* FIX PARA COLUMNA DERECHA EN NUEVA RESERVA */
+    .row > .col-md-4 {
+        position: sticky;
+        top: 20px;
+        height: fit-content;
+        align-self: flex-start;
+    }
+
+    .row > .col-md-8 {
+        overflow: visible;
+    }
+
+    /* Para pantallas pequeñas */
+    @media (max-width: 768px) {
+        .row > .col-md-4 {
+            position: static;
+            margin-top: 30px;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="row">
+    <!-- COLUMNA IZQUIERDA: FORMULARIO -->
     <div class="col-md-8">
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
@@ -15,6 +37,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('crear_reserva') }}" id="form-crear-reserva" class="needs-validation" novalidate>
+                    <!-- Fila 1: Mascota y Empleado -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="id_mascota" class="form-label required">Mascota *</label>
@@ -36,7 +59,8 @@
                             <select class="form-select" id="id_empleado" name="id_empleado" required>
                                 <option value="">Seleccionar empleado...</option>
                                 {% for empleado in empleados %}
-                                <option value="{{ empleado.id_empleado }}">
+                                <option value="{{ empleado.id_empleado }}" 
+                                        {% if empleado_admin_id and empleado.id_empleado == empleado_admin_id %}selected{% endif %}>
                                     {{ empleado.nombre }} {{ empleado.apellido }} ({{ empleado.especialidad|capitalize }})
                                 </option>
                                 {% endfor %}
@@ -47,6 +71,7 @@
                         </div>
                     </div>
                     
+                    <!-- Fila 2: Fecha y Hora -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="fecha_reserva" class="form-label required">Fecha *</label>
@@ -63,12 +88,82 @@
                             <label for="hora_reserva" class="form-label required">Hora *</label>
                             <input type="time" class="form-control" id="hora_reserva" name="hora_reserva" 
                                    required
-                                   min="{{ hora_minima }}"
-                                   step="1800" <!-- 30 minutos -->
-                                   value="09:00">
-                            <div class="form-text">Horario de atención: 9:00 AM - 6:00 PM</div>
+                                   min="09:00"
+                                   max="18:00"
+                                   value="{{ hora_minima }}">
+                            <div class="form-text">Horario de atención: Lunes a Domingo de 9:00 AM a 6:00 PM</div>
                             <div class="invalid-feedback" id="hora_reserva-error">
                                 La hora es obligatoria
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- INFORMACIÓN DE LA MASCOTA -->
+                    <div id="info-mascota-container" class="d-none">
+                        <div class="card mb-4 info-mascota-card">
+                            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0"><i class="fas fa-paw me-2"></i>Información de la Mascota</h5>
+                                <button type="button" class="btn btn-light btn-sm" onclick="mostrarModalActualizarMascota()">
+                                    <i class="fas fa-edit me-1"></i>Actualizar Datos
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <!-- Columna izquierda: Información básica -->
+                                    <div class="col-md-6">
+                                        <h6 class="border-bottom pb-2 mb-3">Información Básica</h6>
+                                        <div class="mascota-info-field">
+                                            <strong>Raza:</strong> 
+                                            <span id="mascota-raza" class="editable-field" data-field="raza">Cargando...</span>
+                                        </div>
+                                        <div class="mascota-info-field">
+                                            <strong>Color:</strong> 
+                                            <span id="mascota-color" class="editable-field" data-field="color">Cargando...</span>
+                                        </div>
+                                        <div class="mascota-info-field">
+                                            <strong>Tipo de Corte:</strong> 
+                                            <span id="mascota-corte" class="editable-field" data-field="corte">Cargando...</span>
+                                        </div>
+                                        <div class="mascota-info-field">
+                                            <strong>Tamaño:</strong> 
+                                            <span id="mascota-tamano" class="editable-field" data-field="tamano">Cargando...</span>
+                                        </div>
+                                        <div class="mascota-info-field">
+                                            <strong>Peso:</strong> 
+                                            <span id="mascota-peso" class="editable-field" data-field="peso">Cargando...</span> kg
+                                        </div>
+                                        <div class="mascota-info-field">
+                                            <strong>Edad:</strong> 
+                                            <span id="mascota-edad">Cargando...</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Columna derecha: Características y salud -->
+                                    <div class="col-md-6">
+                                        <h6 class="border-bottom pb-2 mb-3">Características y Salud</h6>
+                                        <div class="mb-3">
+                                            <strong>Características:</strong>
+                                            <p id="mascota-caracteristicas" class="editable-field" data-field="caracteristicas" style="min-height: 40px;">Cargando...</p>
+                                        </div>
+                                        <div class="mb-3">
+                                            <strong>Alergias / Condiciones:</strong>
+                                            <p id="mascota-alergias" class="editable-field" data-field="alergias" style="min-height: 40px;">Cargando...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Información del dueño -->
+                                <div class="mt-3 pt-3 border-top">
+                                    <h6><i class="fas fa-user me-2"></i>Información del Dueño</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Nombre:</strong> <span id="cliente-nombre">Cargando...</span>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Teléfono:</strong> <span id="cliente-telefono">Cargando...</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -117,8 +212,9 @@
                         </div>
                     </div>
                     
+                    <!-- Notas adicionales -->
                     <div class="mb-3">
-                        <label for="notas" class="form-label">Notas Adicionales</label>
+                        <label for="notas" class="form-label">OBSERVACIONES</label>
                         <textarea class="form-control" id="notas" name="notas" 
                                   rows="3" placeholder="Instrucciones especiales, alergias, comportamiento, etc."></textarea>
                     </div>
@@ -155,12 +251,13 @@
                             <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
                             <li><strong>Mascota:</strong> Selecciona la mascota que recibirá el servicio</li>
                             <li><strong>Empleado:</strong> Asigna un empleado disponible</li>
-                            <li><strong>Fecha y Hora:</strong> Verifica disponibilidad del empleado</li>
+                            <li><strong>Fecha y Hora:</strong> Horario de atención: 9:00 AM - 6:00 PM (todos los días)</li>
                             <li><strong>Servicios:</strong> Selecciona al menos un servicio</li>
                             <li>Los precios mostrados son los actuales, pueden cambiar</li>
                         </ul>
                     </div>
                     
+                    <!-- Botones -->
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                         <a href="{{ url_for('reservas') }}" class="btn btn-secondary me-2">
                             <i class="fas fa-times me-1"></i>Cancelar
@@ -174,6 +271,7 @@
         </div>
     </div>
     
+    <!-- COLUMNA DERECHA: SIDEBAR (STICKY) -->
     <div class="col-md-4">
         <!-- Información de disponibilidad -->
         <div class="card shadow mb-4">
@@ -183,9 +281,8 @@
             <div class="card-body">
                 <p><strong>Horario de Atención:</strong></p>
                 <ul class="mb-3">
-                    <li>Lunes a Viernes: 9:00 AM - 6:00 PM</li>
-                    <li>Sábados: 9:00 AM - 2:00 PM</li>
-                    <li>Domingos: Cerrado</li>
+                    <li>Lunes a Domingo: 9:00 AM - 6:00 PM</li>
+                    <li>Abierto todos los días</li>
                 </ul>
                 
                 <div id="info-disponibilidad">
@@ -194,7 +291,21 @@
             </div>
         </div>
         
-        <!-- Resumen rápido -->
+        <!-- Historial de cortes de la mascota -->
+        <div id="historial-cortes-container" class="d-none">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0"><i class="fas fa-cut me-2"></i>Historial de Cortes</h5>
+                </div>
+                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                    <div id="historial-cortes-content">
+                        <p class="text-muted text-center py-3">Selecciona una mascota para ver su historial</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Consejos -->
         <div class="card shadow">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Consejos</h5>
@@ -205,9 +316,73 @@
                     <li>Considera el tiempo entre reservas (15 min)</li>
                     <li>Verifica alergias de la mascota</li>
                     <li>Registra instrucciones especiales</li>
-                    <li>Programa recordatorio 24h antes</li>
+                    <li>Programa recordatorio 30m antes</li>
                 </ul>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA ACTUALIZAR DATOS DE MASCOTA -->
+<div class="modal fade" id="modalActualizarMascota" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Actualizar Datos de la Mascota</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="form-actualizar-mascota">
+                <div class="modal-body">
+                    <input type="hidden" id="mascota_id_actualizar" name="mascota_id">
+                    
+                    <div class="mb-3">
+                        <label for="raza_actualizar" class="form-label">Raza</label>
+                        <input type="text" class="form-control" id="raza_actualizar" name="raza">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="color_actualizar" class="form-label">Color</label>
+                        <input type="text" class="form-control" id="color_actualizar" name="color">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="corte_actualizar" class="form-label">Tipo de Corte</label>
+                        <input type="text" class="form-control" id="corte_actualizar" name="corte" placeholder="Ej: Corto, Largo, Ras, Mediano">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="tamano_actualizar" class="form-label">Tamaño</label>
+                        <select class="form-select" id="tamano_actualizar" name="tamano">
+                            <option value="">Seleccionar...</option>
+                            <option value="pequeño">Pequeño</option>
+                            <option value="mediano">Mediano</option>
+                            <option value="grande">Grande</option>
+                            <option value="gigante">Gigante</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="peso_actualizar" class="form-label">Peso (kg)</label>
+                        <input type="number" class="form-control" id="peso_actualizar" name="peso" step="0.1" min="0.1">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="caracteristicas_actualizar" class="form-label">Características</label>
+                        <textarea class="form-control" id="caracteristicas_actualizar" name="caracteristicas" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="alergias_actualizar" class="form-label">Alergias / Condiciones</label>
+                        <textarea class="form-control" id="alergias_actualizar" name="alergias" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-info">
+                        <i class="fas fa-save me-1"></i>Guardar Cambios
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -215,9 +390,10 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+<script src="{{ url_for('static', filename='js/reservas_mascota.js') }}"></script>
 <script>
-// Cálculo en tiempo real del total
 document.addEventListener('DOMContentLoaded', function() {
+    // ========== CÁLCULO DEL TOTAL DE SERVICIOS ==========
     const checkboxes = document.querySelectorAll('.servicio-checkbox');
     const detalleReserva = document.getElementById('detalle-reserva');
     const detalleServicios = document.getElementById('detalle-servicios');
@@ -236,7 +412,6 @@ document.addEventListener('DOMContentLoaded', function() {
         resumenElement.classList.add('d-none');
         detalleReserva.classList.remove('d-none');
         
-        // Limpiar tabla
         detalleServicios.innerHTML = '';
         
         let total = 0;
@@ -259,7 +434,6 @@ document.addEventListener('DOMContentLoaded', function() {
             detalleServicios.appendChild(fila);
         });
         
-        // Agregar fila de duración
         const filaDuracion = document.createElement('tr');
         filaDuracion.innerHTML = `
             <td><small class="text-muted">Duración total:</small></td>
@@ -274,8 +448,116 @@ document.addEventListener('DOMContentLoaded', function() {
         checkbox.addEventListener('change', actualizarResumen);
     });
     
-    // Actualizar al cargar si hay checkboxes seleccionados
     actualizarResumen();
+    
+    // ========== VALIDACIÓN DE HORA MÍNIMA DINÁMICA ==========
+    const fechaInput = document.getElementById('fecha_reserva');
+    const horaInput = document.getElementById('hora_reserva');
+    
+    if (fechaInput && horaInput) {
+        // Actualizar hora mínima cuando cambia la fecha
+        fechaInput.addEventListener('change', function() {
+            const fechaSeleccionada = this.value;
+            const hoy = new Date().toISOString().split('T')[0];
+            
+            if (fechaSeleccionada === hoy) {
+                // Si es hoy, calcular hora mínima actual
+                const ahora = new Date();
+                const horaActual = ahora.getHours().toString().padStart(2, '0');
+                const minutosActuales = ahora.getMinutes().toString().padStart(2, '0');
+                
+                const horaMinima = `${horaActual}:${minutosActuales}`;
+                horaInput.min = horaMinima;
+                
+                if (horaInput.value < horaMinima) {
+                    horaInput.value = horaMinima;
+                }
+                
+                console.log('Hoy - Hora mínima:', horaMinima);
+            } else {
+                // Para fechas futuras, desde las 9:00 AM
+                horaInput.min = "09:00";
+                console.log('Fecha futura - Hora mínima: 09:00');
+            }
+            
+            // Todos los días hasta las 18:00
+            horaInput.disabled = false;
+            horaInput.max = "18:00";
+            console.log('Horario: 9:00 - 18:00 todos los días');
+        });
+        
+        // Inicializar validación
+        fechaInput.dispatchEvent(new Event('change'));
+    }
+    
+    // ========== VALIDACIÓN DE DISPONIBILIDAD ==========
+    function validarDisponibilidad() {
+        const fecha = document.getElementById('fecha_reserva')?.value;
+        const hora = document.getElementById('hora_reserva')?.value;
+        const empleadoId = document.getElementById('id_empleado')?.value;
+        const infoElement = document.getElementById('info-disponibilidad');
+        
+        if (!infoElement) return;
+        
+        if (!empleadoId || !fecha || !hora) {
+            if (fecha && hora) {
+                infoElement.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Horario disponible</strong>
+                        <div class="small">Completa los datos para ver disponibilidad del empleado</div>
+                    </div>
+                `;
+            } else {
+                infoElement.innerHTML = '<p class="text-muted">Selecciona fecha y hora para ver disponibilidad</p>';
+            }
+            return;
+        }
+        
+        // Mostrar carga
+        infoElement.innerHTML = '<p class="text-info"><i class="fas fa-spinner fa-spin me-1"></i>Verificando disponibilidad...</p>';
+        
+        // Verificar disponibilidad del empleado
+        fetch(`/api/empleado/${empleadoId}/disponibilidad?fecha=${fecha}&hora=${hora}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.disponible) {
+                    infoElement.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Empleado disponible</strong>
+                            <div class="small">El empleado está libre en este horario</div>
+                        </div>
+                    `;
+                } else {
+                    infoElement.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Empleado no disponible</strong>
+                            <div class="small">${data.mensaje || 'Ya tiene una reserva en este horario'}</div>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                infoElement.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <strong>Error al verificar disponibilidad</strong>
+                    </div>
+                `;
+            });
+    }
+    
+    // Escuchar cambios en fecha, hora y empleado
+    if (fechaInput) fechaInput.addEventListener('change', validarDisponibilidad);
+    if (horaInput) horaInput.addEventListener('change', validarDisponibilidad);
+    const empleadoSelect = document.getElementById('id_empleado');
+    if (empleadoSelect) empleadoSelect.addEventListener('change', validarDisponibilidad);
+    
+    // Inicializar validación
+    setTimeout(validarDisponibilidad, 500);
 });
 </script>
 {% endblock %}

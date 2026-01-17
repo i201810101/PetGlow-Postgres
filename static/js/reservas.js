@@ -1,21 +1,19 @@
 // static/js/reservas.js - CRUD completo para reservas
 
 // Variables globales
-let reservaAEliminar = null;
 let reservaCambioEstado = { id: null, estado: null };
+let paginaActual = 1;
+const registrosPorPagina = 10;
 
-// Función para buscar reservas
+// ================= FUNCIONES PRINCIPALES =================
+
 function buscarReservas() {
     const busqueda = document.getElementById('buscador-reservas')?.value.toLowerCase() || '';
     const filtroEstado = document.getElementById('filtro-estado')?.value || '';
     const filtroFecha = document.getElementById('filtro-fecha')?.value || '';
-    const filas = document.querySelectorAll('#cuerpo-tabla-reservas tr');
+    const filas = document.querySelectorAll('#cuerpo-tabla-reservas .reserva-fila');
     
-    let encontrados = 0;
-    let hoy = 0;
-    let pendientes = 0;
-    let completadas = 0;
-    let canceladas = 0;
+    let encontrados = 0, hoy = 0, pendientes = 0, completadas = 0;
     const fechaHoy = new Date().toISOString().split('T')[0];
     
     filas.forEach(fila => {
@@ -28,23 +26,10 @@ function buscarReservas() {
         const fecha = fila.getAttribute('data-fecha') || '';
         
         // Aplicar filtros
-        let pasaFiltroEstado = true;
-        if (filtroEstado && estado !== filtroEstado) {
-            pasaFiltroEstado = false;
-        }
-        
-        let pasaFiltroFecha = true;
-        if (filtroFecha && fecha !== filtroFecha) {
-            pasaFiltroFecha = false;
-        }
-        
-        // Aplicar búsqueda
-        let pasaBusqueda = true;
-        if (busqueda) {
-            pasaBusqueda = codigo.includes(busqueda) || 
-                          mascota.includes(busqueda) || 
-                          cliente.includes(busqueda);
-        }
+        const pasaFiltroEstado = !filtroEstado || estado === filtroEstado;
+        const pasaFiltroFecha = !filtroFecha || fecha === filtroFecha;
+        const pasaBusqueda = !busqueda || codigo.includes(busqueda) || 
+                              mascota.includes(busqueda) || cliente.includes(busqueda);
         
         // Mostrar/ocultar fila
         if (pasaFiltroEstado && pasaFiltroFecha && pasaBusqueda) {
@@ -54,7 +39,6 @@ function buscarReservas() {
             // Contar estadísticas
             if (estado === 'pendiente') pendientes++;
             if (estado === 'completada') completadas++;
-            if (estado === 'cancelada') canceladas++;
             if (fecha === fechaHoy) hoy++;
         } else {
             fila.style.display = 'none';
@@ -62,47 +46,18 @@ function buscarReservas() {
     });
     
     // Actualizar contadores
-    document.getElementById('total-reservas').textContent = encontrados;
-    document.getElementById('total-hoy').textContent = hoy;
-    document.getElementById('total-pendientes').textContent = pendientes;
-    document.getElementById('total-completadas').textContent = completadas;
-    document.getElementById('total-canceladas').textContent = canceladas;
+    updateCounter('total-reservas', encontrados);
+    updateCounter('total-hoy', hoy);
+    updateCounter('total-pendientes', pendientes);
+    updateCounter('total-completadas', completadas);
     
-    // Mostrar mensaje si no hay resultados
-    const cuerpoTabla = document.getElementById('cuerpo-tabla-reservas');
-    if (encontrados === 0 && filas.length > 0) {
-        if (!document.getElementById('sin-resultados')) {
-            const mensaje = document.createElement('tr');
-            mensaje.id = 'sin-resultados';
-            mensaje.innerHTML = `
-                <td colspan="8" class="text-center py-4">
-                    <i class="fas fa-search fa-2x text-muted mb-3"></i>
-                    <p class="text-muted">No se encontraron reservas con los criterios de búsqueda</p>
-                    <button class="btn btn-sm btn-outline-secondary" id="btn-limpiar-filtros">
-                        <i class="fas fa-times me-1"></i>Limpiar filtros
-                    </button>
-                </td>
-            `;
-            cuerpoTabla.appendChild(mensaje);
-            
-            document.getElementById('btn-limpiar-filtros').addEventListener('click', function() {
-                document.getElementById('buscador-reservas').value = '';
-                document.getElementById('filtro-estado').value = '';
-                document.getElementById('filtro-fecha').value = '';
-                buscarReservas();
-            });
-        }
-    } else {
-        const mensaje = document.getElementById('sin-resultados');
-        if (mensaje) mensaje.remove();
-    }
+    // Manejar resultados
+    manejarSinResultados(encontrados, filas.length);
+    configurarPaginacion();
 }
 
-// Función para mostrar modal de cambio de estado
 function mostrarModalCambioEstado(reservaId, codigoReserva, nuevoEstado) {
     reservaCambioEstado = { id: reservaId, estado: nuevoEstado };
-    
-    document.getElementById('codigo-reserva-cambio').textContent = codigoReserva;
     
     const estadoTextos = {
         'pendiente': 'Pendiente',
@@ -113,31 +68,18 @@ function mostrarModalCambioEstado(reservaId, codigoReserva, nuevoEstado) {
         'no_show': 'No Show'
     };
     
+    document.getElementById('codigo-reserva-cambio').textContent = codigoReserva;
     document.getElementById('nuevo-estado-texto').textContent = estadoTextos[nuevoEstado] || nuevoEstado;
     
-    // Mensaje especial para cancelación
     const mensajeConfirmacion = document.getElementById('mensaje-confirmacion');
-    if (nuevoEstado === 'cancelada') {
-        mensajeConfirmacion.innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>Atención:</strong> Esta acción enviará una notificación al cliente.
-            </div>
-        `;
-    } else {
-        mensajeConfirmacion.innerHTML = `
-            <p class="text-muted">Esta acción actualizará el estado de la reserva en el sistema.</p>
-        `;
-    }
+    mensajeConfirmacion.innerHTML = nuevoEstado === 'cancelada' ? 
+        '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i><strong>Atención:</strong> Esta acción enviará una notificación al cliente.</div>' :
+        '<p class="text-muted">Esta acción actualizará el estado de la reserva en el sistema.</p>';
     
-    const modalElement = document.getElementById('modal-cambio-estado');
-    if (modalElement) {
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('modal-cambio-estado'));
+    modal.show();
 }
 
-// Función para cambiar estado de reserva
 function cambiarEstadoReserva() {
     if (!reservaCambioEstado.id || !reservaCambioEstado.estado) {
         mostrarNotificacion('Error', 'error', 'Datos de reserva no válidos');
@@ -146,119 +88,294 @@ function cambiarEstadoReserva() {
     
     fetch(`/reservas/cambiar-estado/${reservaCambioEstado.id}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: reservaCambioEstado.estado })
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Error en la respuesta del servidor');
-        }
-        return response.json();
-    })
+    .then(response => response.ok ? response.json() : Promise.reject('Error'))
     .then(data => {
         if (data.success) {
             mostrarNotificacion('Éxito', 'success', data.message);
-            // Cerrar modal
-            const modalElement = document.getElementById('modal-cambio-estado');
-            if (modalElement) {
-                const modal = bootstrap.Modal.getInstance(modalElement);
-                if (modal) modal.hide();
-            }
-            // Recargar después de 1.5 segundos
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            bootstrap.Modal.getInstance(document.getElementById('modal-cambio-estado')).hide();
+            setTimeout(() => window.location.reload(), 1500);
         } else {
             mostrarNotificacion('Error', 'error', data.message);
         }
     })
-    .catch(error => {
-        console.error('Error:', error);
-        mostrarNotificacion('Error', 'error', 'Error al cambiar el estado de la reserva');
-    });
+    .catch(() => mostrarNotificacion('Error', 'error', 'Error al cambiar el estado'));
 }
 
-// Función para validar formulario de reserva
+// ================= FUNCIONES PARA VALIDACIÓN DE NUEVA RESERVA =================
+
+// Validar formulario completo de nueva reserva
 function validarFormularioReserva() {
-    const form = event.target;
-    const idMascota = form.querySelector('#id_mascota');
-    const idEmpleado = form.querySelector('#id_empleado');
-    const fechaReserva = form.querySelector('#fecha_reserva');
-    const horaReserva = form.querySelector('#hora_reserva');
-    const serviciosCheckboxes = form.querySelectorAll('input[name="servicios[]"]:checked');
+    let valido = true;
     
-    let errores = [];
-    
-    // Validar mascota
-    if (!idMascota.value) {
-        errores.push('Debes seleccionar una mascota');
-        idMascota.classList.add('is-invalid');
+    // Validar mascota (sigue siendo obligatorio)
+    const mascotaSelect = document.getElementById('id_mascota');
+    if (!mascotaSelect || !mascotaSelect.value) {
+        mostrarErrorCampo(mascotaSelect, 'Debes seleccionar una mascota');
+        valido = false;
     } else {
-        idMascota.classList.remove('is-invalid');
-        idMascota.classList.add('is-valid');
+        limpiarErrorCampo(mascotaSelect);
     }
     
-    // Validar empleado
-    if (!idEmpleado.value) {
-        errores.push('Debes seleccionar un empleado');
-        idEmpleado.classList.add('is-invalid');
-    } else {
-        idEmpleado.classList.remove('is-invalid');
-        idEmpleado.classList.add('is-valid');
-    }
+    // NOTA: Empleado ahora es opcional, se remueve esta validación
     
     // Validar fecha
-    if (!fechaReserva.value) {
-        errores.push('La fecha es obligatoria');
-        fechaReserva.classList.add('is-invalid');
+    const fechaInput = document.getElementById('fecha_reserva');
+    if (!fechaInput || !fechaInput.value) {
+        mostrarErrorCampo(fechaInput, 'La fecha es obligatoria');
+        valido = false;
     } else {
-        // Validar que no sea fecha pasada
-        const fechaSeleccionada = new Date(fechaReserva.value);
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        
-        if (fechaSeleccionada < hoy) {
-            errores.push('No se pueden crear reservas en fechas pasadas');
-            fechaReserva.classList.add('is-invalid');
-        } else {
-            fechaReserva.classList.remove('is-invalid');
-            fechaReserva.classList.add('is-valid');
-        }
+        limpiarErrorCampo(fechaInput);
     }
     
     // Validar hora
-    if (!horaReserva.value) {
-        errores.push('La hora es obligatoria');
-        horaReserva.classList.add('is-invalid');
+    const horaInput = document.getElementById('hora_reserva');
+    if (!horaInput || !horaInput.value) {
+        mostrarErrorCampo(horaInput, 'La hora es obligatoria');
+        valido = false;
     } else {
-        horaReserva.classList.remove('is-invalid');
-        horaReserva.classList.add('is-valid');
+        limpiarErrorCampo(horaInput);
     }
     
     // Validar servicios
-    if (serviciosCheckboxes.length === 0) {
-        errores.push('Debes seleccionar al menos un servicio');
-        document.getElementById('servicios-error').style.display = 'block';
-    } else {
-        document.getElementById('servicios-error').style.display = 'none';
+    const serviciosValidos = validarServicios();
+    if (!serviciosValidos) {
+        valido = false;
     }
     
-    // Mostrar errores si los hay
-    if (errores.length > 0) {
-        mostrarNotificacion('Corrige los siguientes errores:', 'error', errores);
-        event.preventDefault();
-        return false;
-    }
-    
-    return true;
+    return valido;
 }
 
-// Función para mostrar notificaciones
+// Validar que se haya seleccionado al menos un servicio
+function validarServicios() {
+    const checkboxes = document.querySelectorAll('.servicio-checkbox');
+    if (checkboxes.length === 0) return true; // Si no hay checkboxes, no validar
+    
+    const seleccionados = Array.from(checkboxes).filter(cb => cb.checked);
+    const errorElement = document.getElementById('servicios-error');
+    
+    if (seleccionados.length === 0) {
+        if (errorElement) {
+            errorElement.style.display = 'block';
+        }
+        return false;
+    } else {
+        if (errorElement) {
+            errorElement.style.display = 'none';
+        }
+        return true;
+    }
+}
+
+// Validar disponibilidad del empleado
+function validarDisponibilidad() {
+    const fecha = document.getElementById('fecha_reserva')?.value;
+    const hora = document.getElementById('hora_reserva')?.value;
+    const empleadoId = document.getElementById('id_empleado')?.value;
+    const infoElement = document.getElementById('info-disponibilidad');
+    
+    if (!infoElement) return;
+    
+    // Solo verificar disponibilidad si se seleccionó un empleado
+    if (!empleadoId || !fecha || !hora) {
+        if (fecha && hora) {
+            infoElement.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Horario disponible</strong>
+                    <div class="small">Sin empleado asignado - puede reservar</div>
+                </div>
+            `;
+        } else {
+            infoElement.innerHTML = '<p class="text-muted">Completa fecha y hora para ver disponibilidad</p>';
+        }
+        return;
+    }
+    
+    // Mostrar estado de carga
+    infoElement.innerHTML = '<p class="text-info"><i class="fas fa-spinner fa-spin me-1"></i>Verificando disponibilidad...</p>';
+    
+    // Hacer petición al servidor para verificar disponibilidad
+    fetch(`/api/empleado/${empleadoId}/disponibilidad?fecha=${fecha}&hora=${hora}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.disponible) {
+                infoElement.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Empleado disponible</strong>
+                        <div class="small">El empleado está libre en este horario</div>
+                    </div>
+                `;
+            } else {
+                infoElement.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Empleado no disponible</strong>
+                        <div class="small">${data.mensaje || 'Ya tiene una reserva en este horario'}</div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error al verificar disponibilidad:', error);
+            infoElement.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Error al verificar disponibilidad</strong>
+                </div>
+            `;
+        });
+}
+
+// Funciones auxiliares para manejo de errores
+function mostrarErrorCampo(elemento, mensaje) {
+    if (!elemento) return;
+    
+    elemento.classList.add('is-invalid');
+    const errorElement = document.getElementById(`${elemento.id}-error`);
+    if (errorElement) {
+        errorElement.textContent = mensaje;
+        errorElement.style.display = 'block';
+    }
+}
+
+function limpiarErrorCampo(elemento) {
+    if (!elemento) return;
+    
+    elemento.classList.remove('is-invalid');
+    const errorElement = document.getElementById(`${elemento.id}-error`);
+    if (errorElement) {
+        errorElement.style.display = 'none';
+    }
+}
+
+// ================= PAGINACIÓN =================
+
+function configurarPaginacion() {
+    const filasVisibles = Array.from(document.querySelectorAll('.reserva-fila'))
+        .filter(fila => fila.style.display !== 'none' && fila.id !== 'sin-resultados-filtro');
+    
+    const totalFilas = filasVisibles.length;
+    const paginacionContainer = document.getElementById('paginacion-reservas')?.parentElement?.parentElement;
+    
+    if (!paginacionContainer) return;
+    
+    if (totalFilas <= registrosPorPagina) {
+        paginacionContainer.classList.add('d-none');
+        mostrarTodasLasFilas(filasVisibles);
+        return;
+    }
+    
+    paginacionContainer.classList.remove('d-none');
+    const totalPaginas = Math.ceil(totalFilas / registrosPorPagina);
+    const paginacion = document.getElementById('paginacion-reservas');
+    
+    if (!paginacion) return;
+    
+    paginacion.innerHTML = `
+        <li class="page-item"><a class="page-link" href="#" id="pagina-anterior">&laquo;</a></li>
+        ${Array.from({length: totalPaginas}, (_, i) => i + 1).map(pagina => `
+            <li class="page-item ${pagina === paginaActual ? 'active' : ''}">
+                <a class="page-link" href="#" data-pagina="${pagina}">${pagina}</a>
+            </li>
+        `).join('')}
+        <li class="page-item"><a class="page-link" href="#" id="pagina-siguiente">&raquo;</a></li>
+    `;
+    
+    mostrarPagina(paginaActual, filasVisibles);
+}
+
+function mostrarPagina(pagina, filasVisibles) {
+    const inicio = (pagina - 1) * registrosPorPagina;
+    const fin = Math.min(inicio + registrosPorPagina, filasVisibles.length);
+    
+    // Ocultar todas
+    document.querySelectorAll('.reserva-fila').forEach(fila => {
+        if (fila.id !== 'sin-resultados-filtro') fila.style.display = 'none';
+    });
+    
+    // Mostrar página actual
+    for (let i = inicio; i < fin && i < filasVisibles.length; i++) {
+        filasVisibles[i].style.display = '';
+    }
+    
+    // Actualizar texto
+    const registrosMostrados = document.getElementById('registros-mostrados');
+    const totalFiltradas = document.getElementById('total-filtradas');
+    if (registrosMostrados) registrosMostrados.textContent = `${inicio + 1}-${fin}`;
+    if (totalFiltradas) totalFiltradas.textContent = filasVisibles.length;
+}
+
+function cambiarPagina(pagina) {
+    const filasVisibles = Array.from(document.querySelectorAll('.reserva-fila'))
+        .filter(fila => fila.style.display !== 'none' && fila.id !== 'sin-resultados-filtro');
+    
+    const totalPaginas = Math.ceil(filasVisibles.length / registrosPorPagina);
+    if (pagina < 1) pagina = 1;
+    if (pagina > totalPaginas) pagina = totalPaginas;
+    
+    paginaActual = pagina;
+    mostrarPagina(pagina, filasVisibles);
+    
+    // Actualizar botones activos
+    document.querySelectorAll('.page-item').forEach(item => item.classList.remove('active'));
+    document.querySelectorAll(`.page-link[data-pagina="${pagina}"]`).forEach(boton => {
+        boton.parentElement.classList.add('active');
+    });
+}
+
+function mostrarTodasLasFilas(filasVisibles) {
+    filasVisibles.forEach(fila => fila.style.display = '');
+    const registrosMostrados = document.getElementById('registros-mostrados');
+    if (registrosMostrados) registrosMostrados.textContent = `1-${filasVisibles.length}`;
+}
+
+// ================= UTILIDADES =================
+
+function manejarSinResultados(encontrados, totalFilas) {
+    const cuerpoTabla = document.getElementById('cuerpo-tabla-reservas');
+    let mensaje = document.getElementById('sin-resultados-filtro');
+    
+    if (encontrados === 0 && totalFilas > 0) {
+        if (!mensaje) {
+            mensaje = document.createElement('tr');
+            mensaje.id = 'sin-resultados-filtro';
+            mensaje.innerHTML = `
+                <td colspan="8" class="text-center py-5">
+                    <div class="py-4">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted mb-3">No se encontraron reservas</h5>
+                        <button class="btn btn-outline-primary" id="btn-limpiar-filtros">
+                            <i class="fas fa-times me-1"></i>Limpiar filtros
+                        </button>
+                    </div>
+                </td>
+            `;
+            cuerpoTabla.appendChild(mensaje);
+            
+            document.getElementById('btn-limpiar-filtros').addEventListener('click', () => {
+                document.getElementById('buscador-reservas').value = '';
+                document.getElementById('filtro-estado').value = '';
+                document.getElementById('filtro-fecha').value = '';
+                buscarReservas();
+            });
+        }
+    } else if (mensaje) {
+        mensaje.remove();
+    }
+}
+
+function updateCounter(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+}
+
 function mostrarNotificacion(titulo, tipo, mensajes) {
-    const notificacionesPrevias = document.querySelectorAll('.notificacion-personalizada');
-    notificacionesPrevias.forEach(n => n.remove());
+    // Eliminar notificaciones previas
+    document.querySelectorAll('.notificacion-personalizada').forEach(n => n.remove());
     
     const tipos = {
         'success': 'alert-success',
@@ -269,200 +386,83 @@ function mostrarNotificacion(titulo, tipo, mensajes) {
     
     const alerta = document.createElement('div');
     alerta.className = `alert ${tipos[tipo]} alert-dismissible fade show notificacion-personalizada`;
-    alerta.style.position = 'fixed';
-    alerta.style.top = '80px';
-    alerta.style.right = '20px';
-    alerta.style.zIndex = '1050';
-    alerta.style.minWidth = '300px';
-    alerta.style.maxWidth = '400px';
+    alerta.style.cssText = 'position:fixed; top:80px; right:20px; z-index:1050; min-width:300px; max-width:400px';
     
     let contenido = `<strong>${titulo}</strong>`;
     if (Array.isArray(mensajes)) {
-        contenido += '<ul class="mb-0 mt-2" style="padding-left: 20px;">';
-        mensajes.forEach(mensaje => {
-            contenido += `<li style="margin-bottom: 5px;">${mensaje}</li>`;
-        });
-        contenido += '</ul>';
+        contenido += '<ul class="mb-0 mt-2" style="padding-left:20px;">' + 
+                    mensajes.map(m => `<li style="margin-bottom:5px;">${m}</li>`).join('') + 
+                    '</ul>';
     } else {
         contenido += `<p class="mb-0 mt-2">${mensajes}</p>`;
     }
     
-    alerta.innerHTML = `
-        ${contenido}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
+    alerta.innerHTML = `${contenido}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
     document.body.appendChild(alerta);
     
-    setTimeout(() => {
-        if (alerta.parentNode) {
-            alerta.remove();
-        }
-    }, tipo === 'error' ? 8000 : 5000);
+    setTimeout(() => alerta.parentNode && alerta.remove(), tipo === 'error' ? 8000 : 5000);
 }
 
-// Función para alternar entre vistas (lista/calendario)
-function alternarVista(vista) {
-    const vistaLista = document.getElementById('vista-lista');
-    const vistaCalendario = document.getElementById('vista-calendario');
-    const botonesVista = document.querySelectorAll('[data-vista]');
-    
-    botonesVista.forEach(boton => {
-        boton.classList.remove('active');
-        if (boton.getAttribute('data-vista') === vista) {
-            boton.classList.add('active');
-        }
-    });
-    
-    if (vista === 'lista') {
-        vistaLista.classList.remove('d-none');
-        vistaCalendario.classList.add('d-none');
-    } else {
-        vistaLista.classList.add('d-none');
-        vistaCalendario.classList.remove('d-none');
-        inicializarCalendario();
-    }
+function inicializarTooltips() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(tooltipTriggerEl => 
+        new bootstrap.Tooltip(tooltipTriggerEl, { container: 'body' })
+    );
 }
 
-// Función para inicializar calendario (opcional)
-function inicializarCalendario() {
-    const calendarioEl = document.getElementById('calendario-reservas');
-    if (!calendarioEl) return;
-    
-    // Limpiar calendario existente
-    calendarioEl.innerHTML = '';
-    
-    // Obtener reservas de la tabla
-    const eventos = [];
-    const filas = document.querySelectorAll('#cuerpo-tabla-reservas tr');
-    
-    filas.forEach(fila => {
-        if (fila.style.display === 'none') return;
-        
-        const id = fila.getAttribute('data-id');
-        const codigo = fila.getAttribute('data-codigo');
-        const mascota = fila.querySelector('td:nth-child(3) strong').textContent;
-        const fecha = fila.getAttribute('data-fecha');
-        const hora = fila.querySelector('td:nth-child(2) small').textContent;
-        const estado = fila.getAttribute('data-estado');
-        
-        // Mapear estados a colores
-        const colores = {
-            'pendiente': '#ffc107',
-            'confirmada': '#0dcaf0',
-            'en_proceso': '#0d6efd',
-            'completada': '#198754',
-            'cancelada': '#dc3545',
-            'no_show': '#6c757d'
-        };
-        
-        const evento = {
-            id: id,
-            title: `${mascota} - ${codigo}`,
-            start: `${fecha}T${hora}:00`,
-            color: colores[estado] || '#6c757d',
-            extendedProps: {
-                codigo: codigo,
-                estado: estado
-            }
-        };
-        
-        eventos.push(evento);
-    });
-    
-    // Inicializar FullCalendar si está disponible
-    if (typeof FullCalendar !== 'undefined') {
-        const calendar = new FullCalendar.Calendar(calendarioEl, {
-            initialView: 'dayGridMonth',
-            locale: 'es',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            events: eventos,
-            eventClick: function(info) {
-                window.location.href = `/reservas/ver/${info.event.id}`;
-            }
-        });
-        calendar.render();
-    } else {
-        calendarioEl.innerHTML = `
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                La vista de calendario requiere la librería FullCalendar.
-                <a href="https://fullcalendar.io/" target="_blank">Instalar FullCalendar</a>
-            </div>
-        `;
-    }
-}
+// ================= INICIALIZACIÓN =================
 
-// Inicialización cuando el DOM está listo
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Reservas JS cargado correctamente');
+    // Inicializar tooltips
+    inicializarTooltips();
     
-    // Inicializar buscador
-    const buscador = document.getElementById('buscador-reservas');
-    const filtroEstado = document.getElementById('filtro-estado');
-    const filtroFecha = document.getElementById('filtro-fecha');
-    const btnLimpiar = document.getElementById('btn-limpiar-busqueda');
-    
-    if (buscador) {
-        buscador.addEventListener('input', buscarReservas);
-    }
-    
-    if (filtroEstado) {
-        filtroEstado.addEventListener('change', buscarReservas);
-    }
-    
-    if (filtroFecha) {
-        filtroFecha.addEventListener('change', buscarReservas);
-    }
-    
-    if (btnLimpiar) {
-        btnLimpiar.addEventListener('click', function() {
-            if (buscador) {
-                buscador.value = '';
-                buscarReservas();
-            }
+    // Eventos de búsqueda
+    ['input', 'change'].forEach(evento => {
+        ['buscador-reservas', 'filtro-estado', 'filtro-fecha'].forEach(id => {
+            document.getElementById(id)?.addEventListener(evento, buscarReservas);
         });
-    }
+    });
+    
+    // Botón limpiar búsqueda
+    document.getElementById('btn-limpiar-busqueda')?.addEventListener('click', () => {
+        document.getElementById('buscador-reservas').value = '';
+        buscarReservas();
+    });
     
     // Botones de filtros rápidos
     document.querySelectorAll('[data-filtro]').forEach(boton => {
         boton.addEventListener('click', function(e) {
             e.preventDefault();
             const filtro = this.getAttribute('data-filtro');
-            
             const hoy = new Date();
-            switch(filtro) {
-                case 'hoy':
-                    document.getElementById('filtro-fecha').value = hoy.toISOString().split('T')[0];
-                    break;
-                case 'semana':
-                    // Lógica para esta semana
-                    break;
-                case 'mes':
-                    // Lógica para este mes
-                    break;
-                case 'pendientes':
-                    document.getElementById('filtro-estado').value = 'pendiente';
-                    break;
-                case 'completadas':
-                    document.getElementById('filtro-estado').value = 'completada';
-                    break;
+            
+            if (filtro === 'hoy') {
+                document.getElementById('filtro-fecha').value = hoy.toISOString().split('T')[0];
+            } else if (filtro === 'pendientes') {
+                document.getElementById('filtro-estado').value = 'pendiente';
+            } else if (filtro === 'completadas') {
+                document.getElementById('filtro-estado').value = 'completada';
             }
             
             buscarReservas();
         });
     });
     
-    // Botones de cambio de vista
-    document.querySelectorAll('[data-vista]').forEach(boton => {
-        boton.addEventListener('click', function() {
-            const vista = this.getAttribute('data-vista');
-            alternarVista(vista);
+    // Botón resetear filtros
+    document.getElementById('btn-reset-filtros')?.addEventListener('click', () => {
+        ['buscador-reservas', 'filtro-estado', 'filtro-fecha'].forEach(id => {
+            document.getElementById(id).value = '';
         });
+        buscarReservas();
+    });
+    
+    // Botón limpiar todos los filtros
+    document.getElementById('btn-limpiar-todo-filtros')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        ['buscador-reservas', 'filtro-estado', 'filtro-fecha'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        buscarReservas();
     });
     
     // Botones de cambio de estado
@@ -473,76 +473,73 @@ document.addEventListener('DOMContentLoaded', function() {
             const reservaId = fila.getAttribute('data-id');
             const codigoReserva = fila.querySelector('.badge.bg-dark').textContent;
             const nuevoEstado = this.getAttribute('data-estado');
-            
             mostrarModalCambioEstado(reservaId, codigoReserva, nuevoEstado);
         });
     });
     
     // Confirmar cambio de estado
-    const btnConfirmarCambio = document.getElementById('btn-confirmar-cambio');
-    if (btnConfirmarCambio) {
-        btnConfirmarCambio.addEventListener('click', cambiarEstadoReserva);
-    }
+    document.getElementById('btn-confirmar-cambio')?.addEventListener('click', cambiarEstadoReserva);
     
-    // Agregar validación a formularios de reserva
-    const forms = document.querySelectorAll('form[action*="reserva"]');
-    forms.forEach(form => {
-        form.addEventListener('submit', validarFormularioReserva);
-        
-        // Validación en tiempo real para fechas
-        const fechaInput = form.querySelector('#fecha_reserva');
-        const horaInput = form.querySelector('#hora_reserva');
-        
-        if (fechaInput) {
-            fechaInput.addEventListener('change', function() {
-                const hoy = new Date();
-                hoy.setHours(0, 0, 0, 0);
-                const fechaSeleccionada = new Date(this.value);
-                
-                if (fechaSeleccionada < hoy) {
-                    this.classList.add('is-invalid');
-                    mostrarNotificacion('Error', 'error', 'No se pueden seleccionar fechas pasadas');
-                } else {
-                    this.classList.remove('is-invalid');
-                    this.classList.add('is-valid');
-                }
-            });
-        }
-        
-        if (horaInput) {
-            horaInput.addEventListener('change', function() {
-                const hora = this.value;
-                const [horas, minutos] = hora.split(':').map(Number);
-                
-                // Validar horario de atención (9:00 - 18:00)
-                if (horas < 9 || horas > 18 || (horas === 18 && minutos > 0)) {
-                    this.classList.add('is-invalid');
-                    mostrarNotificacion('Error', 'error', 'Horario fuera de atención (9:00 AM - 6:00 PM)');
-                } else {
-                    this.classList.remove('is-invalid');
-                    this.classList.add('is-valid');
-                }
-            });
+    // Paginación - eventos delegados
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('#pagina-anterior')) {
+            e.preventDefault();
+            if (paginaActual > 1) cambiarPagina(paginaActual - 1);
+        } else if (e.target.closest('#pagina-siguiente')) {
+            e.preventDefault();
+            const filasVisibles = Array.from(document.querySelectorAll('.reserva-fila'))
+                .filter(fila => fila.style.display !== 'none' && fila.id !== 'sin-resultados-filtro');
+            const totalPaginas = Math.ceil(filasVisibles.length / registrosPorPagina);
+            if (paginaActual < totalPaginas) cambiarPagina(paginaActual + 1);
+        } else if (e.target.closest('.page-link[data-pagina]')) {
+            e.preventDefault();
+            const pagina = parseInt(e.target.closest('.page-link[data-pagina]').getAttribute('data-pagina'));
+            cambiarPagina(pagina);
         }
     });
     
-    // Ejecutar búsqueda inicial
+    // ================= VALIDACIÓN DE FORMULARIO DE NUEVA RESERVA =================
+    const formCrearReserva = document.getElementById('form-crear-reserva');
+    if (formCrearReserva) {
+        // Validación en tiempo real
+        formCrearReserva.addEventListener('submit', function(e) {
+            if (!validarFormularioReserva()) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+        
+        // Validar disponibilidad cuando cambia fecha/hora/empleado
+        const fechaInput = document.getElementById('fecha_reserva');
+        const horaInput = document.getElementById('hora_reserva');
+        const empleadoSelect = document.getElementById('id_empleado');
+        
+        if (fechaInput && horaInput) {
+            fechaInput.addEventListener('change', validarDisponibilidad);
+            horaInput.addEventListener('change', validarDisponibilidad);
+        }
+        
+        if (empleadoSelect) {
+            empleadoSelect.addEventListener('change', validarDisponibilidad);
+        }
+        
+        // Validación de servicios
+        const checkboxes = document.querySelectorAll('.servicio-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', validarServicios);
+        });
+        
+        // Inicializar validación
+        validarServicios();
+        
+        // Inicializar validación de disponibilidad si hay valores por defecto
+        if (fechaInput && fechaInput.value && horaInput && horaInput.value) {
+            setTimeout(validarDisponibilidad, 500);
+        }
+    }
+    
+    // Ejecutar búsqueda inicial en tabla de reservas
     if (document.getElementById('cuerpo-tabla-reservas')) {
         buscarReservas();
     }
-    
-    // Inicializar validación en tiempo real para checkboxes de servicios
-    const serviciosCheckboxes = document.querySelectorAll('.servicio-checkbox');
-    serviciosCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const serviciosSeleccionados = document.querySelectorAll('.servicio-checkbox:checked');
-            const errorElement = document.getElementById('servicios-error');
-            
-            if (serviciosSeleccionados.length === 0) {
-                errorElement.style.display = 'block';
-            } else {
-                errorElement.style.display = 'none';
-            }
-        });
-    });
 });

@@ -1,0 +1,372 @@
+/* ============================================
+   FACTURAS.CSS
+   Estilos para módulo de facturación
+   ============================================ */
+
+/* Header del comprobante */
+.comprobante-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px 10px 0 0;
+    padding: 20px;
+}
+
+.comprobante-body {
+    border: 2px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    background-color: white;
+}
+
+/* Caja de totales */
+.total-box {
+    background-color: #f8f9fa;
+    border: 2px solid #28a745;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.total-box .row {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.total-box .row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Estados de factura */
+.estado-badge {
+    font-size: 1.1em;
+    padding: 8px 15px;
+    border-radius: 20px;
+}
+
+.estado-pagada {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    border: 1px solid #badbcc;
+}
+
+.estado-pendiente {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffecb5;
+}
+
+.estado-anulada {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
+}
+
+.estado-credito {
+    background-color: #cff4fc;
+    color: #055160;
+    border: 1px solid #b6effb;
+}
+
+/* Tablas de detalle */
+.table-factura {
+    border: 1px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.table-factura thead {
+    background-color: #f8f9fa;
+}
+
+.table-factura th {
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    letter-spacing: 0.5px;
+    padding: 12px 8px;
+}
+
+.table-factura tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.table-factura td {
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+/* Encabezado de empresa */
+.empresa-header {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.empresa-logo {
+    font-size: 2.5rem;
+    color: #667eea;
+}
+
+.empresa-info h3 {
+    color: white;
+    margin-bottom: 5px;
+    font-weight: 700;
+}
+
+.empresa-info p {
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 2px;
+    font-size: 0.9em;
+}
+
+/* Modal de pago */
+.modal-pago .modal-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+}
+
+.modal-pago-parcial .modal-header {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    color: white;
+}
+
+/* Botones específicos */
+.btn-facturar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.btn-facturar:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-imprimir {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    border: none;
+}
+
+.btn-imprimir:hover {
+    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+/* Estilos para impresión */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .comprobante-header {
+        background: #667eea !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color: white !important;
+    }
+    
+    .total-box {
+        border: 2px solid #28a745 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    body {
+        font-size: 12pt;
+        background: white !important;
+    }
+    
+    .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+    
+    .row {
+        margin: 0 !important;
+        display: block !important;
+    }
+    
+    .col-lg-8, .col-lg-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        float: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .comprobante-body {
+        border: 1px solid #ccc !important;
+    }
+    
+    /* Ocultar elementos no necesarios en impresión */
+    .modal-backdrop, .modal,
+    .navbar, .sidebar,
+    footer, .btn,
+    .dropdown, .badge {
+        display: none !important;
+    }
+}
+
+/* Lista de pagos */
+.lista-pagos {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.pago-item {
+    border-left: 4px solid #28a745;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.pago-item.efectivo {
+    border-left-color: #28a745;
+}
+
+.pago-item.tarjeta {
+    border-left-color: #17a2b8;
+}
+
+.pago-item.yape, .pago-item.plin, .pago-item.transferencia {
+    border-left-color: #6f42c1;
+}
+
+.pago-item .badge {
+    font-size: 0.75em;
+}
+
+/* Información de cliente */
+.cliente-card {
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+    padding: 15px;
+    border-radius: 0 8px 8px 0;
+    height: 100%;
+}
+
+.cliente-card h5 {
+    color: #495057;
+    font-size: 1.1em;
+}
+
+/* Spinner de carga */
+#cargando-spinner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 99999;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .comprobante-header {
+        text-align: center;
+        padding: 15px;
+    }
+    
+    .empresa-info h3 {
+        font-size: 1.5em;
+    }
+    
+    .empresa-info p {
+        font-size: 0.8em;
+    }
+    
+    .total-box {
+        padding: 15px;
+        font-size: 0.9em;
+    }
+    
+    .table-factura {
+        font-size: 0.8em;
+    }
+    
+    .table-factura th,
+    .table-factura td {
+        padding: 6px 4px;
+    }
+    
+    .estado-badge {
+        font-size: 0.9em;
+        padding: 5px 10px;
+    }
+    
+    .cliente-card,
+    .pago-item {
+        padding: 10px;
+        font-size: 0.9em;
+    }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.comprobante-header, .comprobante-body {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Mejoras visuales */
+.table-factura tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.table-factura tbody tr:hover {
+    background-color: #e9ecef;
+}
+
+.comprobante-header h2, .comprobante-header h3 {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.total-box h5 {
+    color: #28a745;
+    font-weight: 700;
+}
+
+/* Scroll personalizado */
+.lista-pagos::-webkit-scrollbar {
+    width: 6px;
+}
+
+.lista-pagos::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.lista-pagos::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.lista-pagos::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

@@ -27,6 +27,8 @@
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="#" data-filtro="pendientes">Pendientes</a></li>
                 <li><a class="dropdown-item" href="#" data-filtro="completadas">Completadas</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" id="btn-limpiar-todo-filtros">Limpiar todos los filtros</a></li>
             </ul>
         </div>
     </div>
@@ -35,20 +37,20 @@
 <!-- Filtros y búsqueda -->
 <div class="card mb-4">
     <div class="card-body">
-        <div class="row">
-            <div class="col-md-4 mb-3">
+        <div class="row g-3">
+            <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-search"></i></span>
                     <input type="text" class="form-control" id="buscador-reservas" 
                            placeholder="Buscar por código, mascota, cliente...">
-                    <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button">
+                    <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button" title="Limpiar búsqueda">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-4">
                 <select class="form-select" id="filtro-estado">
-                    <option value="">Todos los estados</option>
+                    <option value="" selected>Todos los estados</option>
                     <option value="pendiente">Pendiente</option>
                     <option value="confirmada">Confirmada</option>
                     <option value="en_proceso">En Proceso</option>
@@ -57,12 +59,12 @@
                     <option value="no_show">No Show</option>
                 </select>
             </div>
-            <div class="col-md-4 mb-3">
+            <div class="col-md-4">
                 <input type="date" class="form-control" id="filtro-fecha" 
-                       value="{{ now.strftime('%Y-%m-%d') }}">
+                       placeholder="Filtrar por fecha...">
             </div>
         </div>
-        <div class="row mt-2">
+        <div class="row mt-3">
             <div class="col-12">
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-primary active" data-vista="lista">
@@ -72,6 +74,9 @@
                         <i class="fas fa-calendar"></i> Calendario
                     </button>
                 </div>
+                <button class="btn btn-sm btn-outline-secondary ms-2" id="btn-reset-filtros">
+                    <i class="fas fa-redo me-1"></i>Restablecer
+                </button>
             </div>
         </div>
     </div>
@@ -81,8 +86,21 @@
 <div id="vista-lista">
     <!-- Resumen rápido -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card bg-primary text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">Total Reservas</h6>
+                            <h4 class="mb-0" id="total-reservas">0</h4>
+                        </div>
+                        <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card bg-info text-white">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -94,7 +112,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card bg-warning text-white">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
@@ -107,7 +125,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card bg-success text-white">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
@@ -120,31 +138,18 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-danger text-white">
-                <div class="card-body py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-0">Canceladas</h6>
-                            <h4 class="mb-0" id="total-canceladas">0</h4>
-                        </div>
-                        <i class="fas fa-times-circle fa-2x opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Tabla de reservas -->
     <div class="card">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Lista de Reservas</h5>
-            <span class="badge bg-primary" id="total-reservas">{{ reservas|length }}</span>
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Lista de Reservas</h5>
+            <span class="badge bg-dark" id="total-registros">{{ reservas|length }}</span>
         </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-container">
                 <table class="table table-hover table-striped mb-0 reservas-table">
-                    <thead>
+                    <thead class="table-light">
                         <tr>
                             <th>Código</th>
                             <th>Fecha/Hora</th>
@@ -153,7 +158,7 @@
                             <th>Empleado</th>
                             <th>Servicios</th>
                             <th>Estado</th>
-                            <th>Acciones</th>
+                            <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="cuerpo-tabla-reservas">
@@ -165,55 +170,71 @@
                                 data-cliente="{{ reserva.cliente_nombre|lower }} {{ reserva.cliente_apellido|lower }}"
                                 data-estado="{{ reserva.estado }}"
                                 data-fecha="{{ reserva.fecha_reserva.strftime('%Y-%m-%d') }}"
-                                class="{% if reserva.vencida %}table-danger{% endif %}">
+                                class="reserva-fila">
                                 <td class="fw-semibold">
                                     <span class="badge bg-dark">{{ reserva.codigo_reserva }}</span>
                                 </td>
                                 <td>
-                                    <strong>{{ reserva.fecha_reserva.strftime('%d/%m') }}</strong>
-                                    <br>
+                                    <strong class="d-block">{{ reserva.fecha_reserva.strftime('%d/%m/%Y') }}</strong>
                                     <small class="text-muted">{{ reserva.fecha_reserva.strftime('%H:%M') }}</small>
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} me-2"></i>
-                                        <strong>{{ reserva.mascota_nombre }}</strong>
+                                        <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} me-2 text-primary"></i>
+                                        <div>
+                                            <strong class="d-block">{{ reserva.mascota_nombre }}</strong>
+                                            <small class="text-muted">{{ reserva.especie|capitalize }}</small>
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
-                                    {{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}
+                                    <strong class="d-block">{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</strong>
                                 </td>
                                 <td>
                                     {{ reserva.empleado_nombre }} {{ reserva.empleado_apellido }}
                                 </td>
                                 <td>
-                                    <small>{{ reserva.servicios_nombres|truncate(30) }}</small>
+                                    {% if reserva.servicios_nombres %}
+                                        <div class="servicios-contenedor">
+                                            {% set servicios_list = reserva.servicios_nombres.split(',') %}
+                                            {% for servicio in servicios_list[:2] %}
+                                                <span class="badge-servicio">{{ servicio|trim }}</span>
+                                            {% endfor %}
+                                            {% if servicios_list|length > 2 %}
+                                                <small class="text-muted">+{{ servicios_list|length - 2 }} más</small>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <small class="text-muted">Sin servicios</small>
+                                    {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge {{ reserva.estado_clase }}">
+                                    <span class="badge {{ reserva.estado_clase }} rounded-pill">
                                         {{ reserva.estado_texto }}
                                     </span>
                                     {% if reserva.vencida %}
                                     <br>
-                                    <small class="text-danger">
-                                        <i class="fas fa-exclamation-triangle"></i> Vencida
+                                    <small class="text-danger mt-1 d-block">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> Vencida
                                     </small>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
+                                <td class="text-center">
+                                    <div class="btn-action-group">
                                         <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" 
-                                           class="btn btn-info btn-action" 
-                                           title="Ver detalles">
+                                           class="btn btn-sm btn-info btn-action" 
+                                           title="Ver detalles"
+                                           data-bs-toggle="tooltip">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" 
-                                           class="btn btn-warning btn-action" 
-                                           title="Editar">
+                                           class="btn btn-sm btn-warning btn-action" 
+                                           title="Editar"
+                                           data-bs-toggle="tooltip">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                         <div class="dropdown">
-                                            <button class="btn btn-secondary dropdown-toggle btn-action" 
+                                            <button class="btn btn-sm btn-secondary btn-action dropdown-toggle" 
                                                     type="button" 
                                                     data-bs-toggle="dropdown"
                                                     title="Cambiar estado">
@@ -221,11 +242,19 @@
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li><h6 class="dropdown-header">Cambiar estado a:</h6></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="confirmada">Confirmada</a></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="en_proceso">En Proceso</a></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="completada">Completada</a></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="confirmada">
+                                                    <span class="badge bg-info me-2">●</span> Confirmada
+                                                </a></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="en_proceso">
+                                                    <span class="badge bg-primary me-2">●</span> En Proceso
+                                                </a></li>
+                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="completada">
+                                                    <span class="badge bg-success me-2">●</span> Completada
+                                                </a></li>
                                                 <li><hr class="dropdown-divider"></li>
-                                                <li><a class="dropdown-item cambiar-estado text-danger" href="#" data-estado="cancelada">Cancelar</a></li>
+                                                <li><a class="dropdown-item cambiar-estado text-danger" href="#" data-estado="cancelada">
+                                                    <i class="fas fa-ban me-2"></i> Cancelar
+                                                </a></li>
                                             </ul>
                                         </div>
                                     </div>
@@ -234,12 +263,15 @@
                             {% endfor %}
                         {% else %}
                             <tr id="sin-resultados">
-                                <td colspan="8" class="text-center py-4">
-                                    <i class="fas fa-calendar-alt fa-2x text-muted mb-3"></i>
-                                    <p class="text-muted">No hay reservas registradas</p>
-                                    <a href="{{ url_for('crear_reserva') }}" class="btn btn-primary">
-                                        <i class="fas fa-plus me-1"></i>Crear primera reserva
-                                    </a>
+                                <td colspan="8" class="text-center py-5">
+                                    <div class="py-4">
+                                        <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted mb-3">No hay reservas registradas</h5>
+                                        <p class="text-muted mb-4">Comienza creando tu primera reserva</p>
+                                        <a href="{{ url_for('crear_reserva') }}" class="btn btn-primary btn-lg">
+                                            <i class="fas fa-plus me-2"></i>Crear primera reserva
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         {% endif %}
@@ -247,17 +279,32 @@
                 </table>
             </div>
         </div>
+        
+        <div class="card-footer bg-light">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <nav aria-label="Paginación de reservas">
+                        <ul class="pagination pagination-sm mb-0" id="paginacion-reservas"></ul>
+                    </nav>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        Mostrando <span id="registros-mostrados">1-10</span> de <span id="total-filtradas">{{ reservas|length }}</span> reservas
+                    </small>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Vista de calendario (inicialmente oculta) -->
+<!-- Vista de calendario -->
 <div id="vista-calendario" class="d-none">
     <div class="card">
         <div class="card-header bg-light">
             <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Calendario de Reservas</h5>
         </div>
         <div class="card-body">
-            <div id="calendario-reservas"></div>
+            <div id="calendario-reservas" style="min-height: 600px;"></div>
         </div>
     </div>
 </div>
@@ -285,42 +332,8 @@
         </div>
     </div>
 </div>
-
-<!-- Modal de confirmación de eliminación -->
-<div class="modal fade" id="modal-confirmar-eliminacion" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar la reserva <strong id="codigo-reserva-eliminar">[Código]</strong>?</p>
-                <p class="text-danger"><small>Esta acción no se puede deshacer. Se eliminarán todos los servicios asociados.</small></p>
-                
-                <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
-                    <label class="form-check-label" for="confirmar-eliminacion">
-                        Confirmo que deseo eliminar esta reserva
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminacion" disabled>
-                    <i class="fas fa-trash me-1"></i>Eliminar Reserva
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
-<!-- FullCalendar (opcional, para vista calendario) -->
-<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.global.min.js'></script>
 {% endblock %}

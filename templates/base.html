@@ -17,30 +17,81 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Navbar SIN LOGIN -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <!-- NAVBAR COMPLETA Y RESPONSIVE -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <!-- Brand -->
+            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
                 <i class="fas fa-paw me-2"></i>PetGlow Groomers
             </a>
             
-            <!-- Información de usuario fija -->
-            <div class="navbar-nav ms-auto">
-                <div class="nav-item">
-                    <span class="nav-link text-white">
-                        <i class="fas fa-user-circle me-1"></i>Administrador
-                    </span>
-                </div>
+            <!-- Toggler para móviles -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" 
+                    data-bs-target="#navbarPrincipal" aria-controls="navbarPrincipal" 
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <!-- Contenido del navbar -->
+            <div class="collapse navbar-collapse" id="navbarPrincipal">
+                <!-- Menú de navegación principal -->
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" 
+                           href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-home me-1"></i>Inicio
+                        </a>
+                    </li>
+                    
+                    <!-- MENÚ CAJA -->
+                    {% if session.get('rol') in ['admin', 'cajero'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" 
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-cash-register me-1"></i>Caja
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('apertura_caja') }}">
+                                <i class="fas fa-lock-open me-2 text-success"></i>Apertura
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('cierre_caja') }}">
+                                <i class="fas fa-lock me-2 text-warning"></i>Cierre
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#">
+                                <i class="fas fa-chart-bar me-2"></i>Reportes
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <!-- Información del usuario -->
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link text-white">
+                            <i class="fas fa-user-circle me-1"></i>
+                            {% if session.get('nombre') %}
+                                {{ session.nombre }}
+                            {% else %}
+                                Administrador
+                            {% endif %}
+                        </a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
     
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar -->
+            <!-- Sidebar (para desktop) -->
             <div class="col-md-3 col-lg-2 d-none d-md-block sidebar">
-                <div class="position-sticky">
-                    <ul class="nav flex-column">
+                <div class="position-sticky pt-3">
+                    <h6 class="sidebar-heading px-3 text-muted mb-3">
+                        <i class="fas fa-bars me-2"></i>Menú Principal
+                    </h6>
+                    <ul class="nav flex-column mb-4">
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" 
                                href="{{ url_for('dashboard') }}">
@@ -74,7 +125,7 @@
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'ventas' %}active{% endif %}" 
                                href="{{ url_for('ventas') }}">
-                                <i class="fas fa-cash-register me-2"></i>Ventas
+                                <i class="fas fa-shopping-cart me-2"></i>Ventas
                             </a>
                         </li>
                         <li class="nav-item">
@@ -92,26 +143,26 @@
                     </ul>
                     
                     <!-- Acciones rápidas -->
-                    <div class="mt-4 pt-4 border-top">
-                        <h6 class="sidebar-heading px-3 text-muted">Acciones Rápidas</h6>
-                        <ul class="nav flex-column">
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('crear_cliente') }}">
-                                    <i class="fas fa-user-plus me-2"></i>Nuevo Cliente
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="#">
-                                    <i class="fas fa-calendar-plus me-2"></i>Nueva Reserva
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('ventas') }}">
-                                    <i class="fas fa-cash-register me-2"></i>Nueva Venta
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
+                    <h6 class="sidebar-heading px-3 text-muted mb-3">
+                        <i class="fas fa-bolt me-2"></i>Acciones Rápidas
+                    </h6>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('crear_cliente') }}">
+                                <i class="fas fa-user-plus me-2 text-success"></i>Nuevo Cliente
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('crear_reserva') }}">
+                                <i class="fas fa-calendar-plus me-2 text-info"></i>Nueva Reserva
+                            </a>
+                        </li>
+<li class="nav-item">
+    <a class="nav-link" href="{{ url_for('ventas') }}">
+        <i class="fas fa-cash-register me-2 text-warning"></i>Nueva Venta
+    </a>
+</li>
+                    </ul>
                 </div>
             </div>
             
@@ -122,6 +173,7 @@
                     {% if messages %}
                         {% for category, message in messages %}
                             <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                                <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% elif category == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
                                 {{ message }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
@@ -147,7 +199,12 @@
                 <div class="col-md-6 text-end">
                     <span class="text-muted">
                         <i class="fas fa-clock me-1"></i>{{ now.strftime('%d/%m/%Y %H:%M') }}
-                        | <i class="fas fa-user me-1"></i> ADMIN
+                        | <i class="fas fa-user me-1"></i> 
+                        {% if session.get('rol') %}
+                            {{ session.rol|upper }}
+                        {% else %}
+                            ADMIN
+                        {% endif %}
                     </span>
                 </div>
             </div>

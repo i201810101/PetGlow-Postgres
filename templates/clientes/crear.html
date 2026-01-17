@@ -1,122 +1,183 @@
-{% extends "base.html" %}
-
-{% block title %}Nuevo Cliente - PetGlow{% endblock %}
-
+{% extends "base.html" %} {% block title %}Nuevo Cliente - PetGlow{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/clientes.css') }}">
-{% endblock %}
-
-{% block content %}
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='css/clientes.css') }}"
+/>
+{% endblock %} {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Nuevo Cliente</h4>
+  <div class="col-md-10">
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="fas fa-user-plus me-2"></i>Nuevo Cliente</h4>
+      </div>
+      <div class="card-body">
+        <form
+          method="POST"
+          action="{{ url_for('crear_cliente') }}"
+          id="form-crear-cliente"
+          class="needs-validation"
+          novalidate
+        >
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="dni" class="form-label"
+                >DNI / Carnet de Extranjería</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="dni"
+                name="dni"
+                pattern="\d{8,9}"
+                maxlength="9"
+                placeholder="Ej: 12345678 (DNI) o 123456789 (CE)"
+              />
+              <div class="form-text">
+                8 dígitos para DNI peruano, 9 para Carnet de Extranjería
+              </div>
+              <div class="invalid-feedback" id="dni-error">
+                DNI debe tener 8 dígitos o Carnet de Extranjería 9 dígitos
+              </div>
             </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('crear_cliente') }}" id="form-crear-cliente" class="needs-validation" novalidate>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="dni" class="form-label">DNI / Carnet de Extranjería</label>
-                            <input type="text" class="form-control" id="dni" name="dni" 
-                                   pattern="\d{8,9}"
-                                   maxlength="9"
-                                   placeholder="Ej: 12345678 (DNI) o 123456789 (CE)">
-                            <div class="form-text">8 dígitos para DNI peruano, 9 para Carnet de Extranjería</div>
-                            <div class="invalid-feedback" id="dni-error">
-                                DNI debe tener 8 dígitos o Carnet de Extranjería 9 dígitos
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="nombre" class="form-label required">Nombre *</label>
-                            <input type="text" class="form-control" id="nombre" name="nombre" 
-                                   required
-                                   minlength="2"
-                                   maxlength="50"
-                                   pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
-                                   placeholder="Ej: Juan">
-                            <div class="invalid-feedback" id="nombre-error">
-                                El nombre es obligatorio (solo letras, 2-50 caracteres)
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="apellido" class="form-label required">Apellido *</label>
-                            <input type="text" class="form-control" id="apellido" name="apellido" 
-                                   required
-                                   minlength="2"
-                                   maxlength="50"
-                                   pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
-                                   placeholder="Ej: Pérez">
-                            <div class="invalid-feedback" id="apellido-error">
-                                El apellido es obligatorio (solo letras, 2-50 caracteres)
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="telefono" class="form-label required">Teléfono *</label>
-                            <input type="tel" class="form-control" id="telefono" name="telefono" 
-                                   required
-                                   pattern="9\d{8}"
-                                   maxlength="9"
-                                   placeholder="Ej: 987654321">
-                            <div class="form-text">9 dígitos, debe empezar con 9</div>
-                            <div class="invalid-feedback" id="telefono-error">
-                                Teléfono peruano: 9 dígitos, empezando con 9
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="email" name="email" 
-                                   placeholder="ejemplo@email.com">
-                            <div class="invalid-feedback" id="email-error">
-                                Por favor ingresa un email válido
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="direccion" class="form-label">Dirección</label>
-                            <input type="text" class="form-control" id="direccion" name="direccion" 
-                                   placeholder="Ej: Av. Principal 123">
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="notas" class="form-label">Notas</label>
-                        <textarea class="form-control" id="notas" name="notas" rows="3" 
-                                  placeholder="Notas adicionales sobre el cliente"></textarea>
-                    </div>
-                    
-                    <!-- Instrucciones -->
-                    <div class="alert alert-info mt-4">
-                        <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Instrucciones:</h6>
-                        <ul class="mb-0">
-                            <li>Los campos marcados con <span class="required">*</span> son obligatorios</li>
-                            <li><strong>DNI:</strong> 8 dígitos para DNI peruano</li>
-                            <li><strong>Carnet de Extranjería:</strong> 9 dígitos</li>
-                            <li><strong>Teléfono:</strong> 9 dígitos, debe empezar con 9 (formato peruano)</li>
-                            <li><strong>Nombre/Apellido:</strong> Solo letras y espacios, mínimo 2 caracteres</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                        <a href="{{ url_for('clientes') }}" class="btn btn-secondary me-2">
-                            <i class="fas fa-times me-1"></i>Cancelar
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>Guardar Cliente
-                        </button>
-                    </div>
-                </form>
+            <div class="col-md-6 mb-3">
+              <label for="nombre" class="form-label required">Nombre *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="nombre"
+                name="nombre"
+                required
+                minlength="2"
+                maxlength="50"
+                pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
+                placeholder="Ej: Juan"
+              />
+              <div class="invalid-feedback" id="nombre-error">
+                El nombre es obligatorio (solo letras, 2-50 caracteres)
+              </div>
             </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+          </div>
 
-{% block extra_js %}
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="apellido" class="form-label required"
+                >Apellido *</label
+              >
+              <input
+                type="text"
+                class="form-control"
+                id="apellido"
+                name="apellido"
+                required
+                minlength="2"
+                maxlength="50"
+                pattern="[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+"
+                placeholder="Ej: Pérez"
+              />
+              <div class="invalid-feedback" id="apellido-error">
+                El apellido es obligatorio (solo letras, 2-50 caracteres)
+              </div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="telefono" class="form-label required"
+                >Teléfono *</label
+              >
+              <input
+                type="tel"
+                class="form-control"
+                id="telefono"
+                name="telefono"
+                required
+                pattern="9\d{8}"
+                maxlength="9"
+                placeholder="Ej: 987654321"
+              />
+              <div class="form-text">9 dígitos, debe empezar con 9</div>
+              <div class="invalid-feedback" id="telefono-error">
+                Teléfono peruano: 9 dígitos, empezando con 9
+              </div>
+            </div>
+          </div>
+
+          <!-- Solo cambios en los campos que faltaban -->
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="email" class="form-label">Email</label>
+              <input
+                type="email"
+                class="form-control"
+                id="email"
+                name="email"
+                value="{{ email or '' }}"
+                placeholder="ejemplo@email.com"
+              />
+              <div class="invalid-feedback" id="email-error">
+                Por favor ingresa un email válido
+              </div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="direccion" class="form-label">Dirección</label>
+              <input
+                type="text"
+                class="form-control"
+                id="direccion"
+                name="direccion"
+                value="{{ direccion or '' }}"
+                placeholder="Ej: Av. Principal 123"
+              />
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="notas" class="form-label">Notas</label>
+            <textarea
+              class="form-control"
+              id="notas"
+              name="notas"
+              rows="3"
+              placeholder="Notas adicionales sobre el cliente"
+            >
+{{ notas or '' }}</textarea
+            >
+          </div>
+
+          <!-- Instrucciones -->
+          <div class="alert alert-info mt-4">
+            <h6 class="alert-heading">
+              <i class="fas fa-info-circle me-2"></i>Instrucciones:
+            </h6>
+            <ul class="mb-0">
+              <li>
+                Los campos marcados con <span class="required">*</span> son
+                obligatorios
+              </li>
+              <li><strong>DNI:</strong> 8 dígitos para DNI peruano</li>
+              <li><strong>Carnet de Extranjería:</strong> 9 dígitos</li>
+              <li>
+                <strong>Teléfono:</strong> 9 dígitos, debe empezar con 9
+                (formato peruano)
+              </li>
+              <li>
+                <strong>Nombre/Apellido:</strong> Solo letras y espacios, mínimo
+                2 caracteres
+              </li>
+            </ul>
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <a href="{{ url_for('clientes') }}" class="btn btn-secondary me-2">
+              <i class="fas fa-times me-1"></i>Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-1"></i>Guardar Cliente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
 <script src="{{ url_for('static', filename='js/clientes.js') }}"></script>
 {% endblock %}

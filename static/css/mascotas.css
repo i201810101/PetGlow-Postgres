@@ -230,3 +230,28 @@
 .card {
     animation: fadeIn 0.3s ease-out;
 }
+/* Estilos para servicios en historial de reservas */
+.servicios-contenedor .badge {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+/* Asegurar que la tabla se vea bien */
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.reservas-table {
+    font-size: 0.9rem;
+}
+
+.reservas-table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+.reservas-table td {
+    vertical-align: middle;
+}

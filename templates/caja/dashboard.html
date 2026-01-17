@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+
+{% block title %}Caja - PetGlow{% endblock %}
+
+{% block extra_css %}
+<style>
+.caja-card {
+    border-left: 4px solid;
+    transition: all 0.3s;
+}
+.caja-abierta { border-left-color: #28a745; }
+.caja-cerrada { border-left-color: #6c757d; }
+.movimiento-ingreso { border-left-color: #28a745; }
+.movimiento-egreso { border-left-color: #dc3545; }
+.caja-status {
+    font-size: 0.9rem;
+    padding: 0.25rem 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Encabezado -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cash-register me-2"></i>Caja</h1>
+            <p class="text-muted">Gestión unificada de caja diaria</p>
+        </div>
+        <div>
+            <span class="badge bg-secondary me-2">{{ date_now.strftime('%d/%m/%Y') }}</span>
+            {% if caja_abierta %}
+            <span class="badge bg-success">Caja Abierta</span>
+            {% else %}
+            <span class="badge bg-danger">Caja Cerrada</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Panel principal de caja -->
+        <div class="col-lg-8">
+            <!-- Estado de caja -->
+            <div class="card shadow mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-2"></i>Estado de Caja
+                    </h6>
+                    <div>
+                        {% if not caja_abierta %}
+                        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalApertura">
+                            <i class="fas fa-lock-open me-1"></i>Aperturar
+                        </button>
+                        {% else %}
+                        <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#modalCierre">
+                            <i class="fas fa-lock me-1"></i>Cerrar
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if caja %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Resumen Financiero</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Apertura:</strong></td>
+                                    <td class="text-end">S/ {{ "%.2f"|format(caja.monto_apertura) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Ingresos del día:</td>
+                                    <td class="text-end text-success">+ S/ {{ "%.2f"|format(total_ingresos) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Egresos del día:</td>
+                                    <td class="text-end text-danger">- S/ {{ "%.2f"|format(total_egresos) }}</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><strong>Efectivo Esperado:</strong></td>
+                                    <td class="text-end"><strong>S/ {{ "%.2f"|format(caja.monto_apertura + total_ingresos - total_egresos) }}</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Información</h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="fas fa-user-tie me-2 text-muted"></i>
+                                    <strong>Cajero:</strong> {{ caja.cajero or 'Sistema' }}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-calendar me-2 text-muted"></i>
+                                    <strong>Fecha:</strong> {{ caja.fecha }}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    <strong>Hora Apertura:</strong> {{ caja.hora_apertura.strftime('%H:%M') }}
+                                </li>
+                                {% if caja.hora_cierre %}
+                                <li class="mb-2">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    <strong>Hora Cierre:</strong> {{ caja.hora_cierre.strftime('%H:%M') }}
+                                </li>
+                                {% endif %}
+                                <li class="mb-2">
+                                    <i class="fas fa-hashtag me-2 text-muted"></i>
+                                    <strong>ID Caja:</strong> #{{ caja.id_caja }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-cash-register fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No hay caja para hoy</h5>
+                        <p class="text-muted">Apertura una caja para comenzar a registrar movimientos</p>
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalApertura">
+                            <i class="fas fa-lock-open me-2"></i>Aperturar Caja
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Movimientos del día -->
+            {% if caja_abierta %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-exchange-alt me-2"></i>Movimientos del Día
+                        </h6>
+                        <div>
+                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalIngreso">
+                                <i class="fas fa-plus-circle me-1"></i>Ingreso
+                            </button>
+                            <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalEgreso">
+                                <i class="fas fa-minus-circle me-1"></i>Egreso
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if movimientos %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Descripción</th>
+                                    <th>Tipo</th>
+                                    <th>Método</th>
+                                    <th class="text-end">Monto</th>
+                                    <th>Hora</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mov in movimientos %}
+                                <tr class="movimiento-{{ mov.categoria }}">
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ mov.prefijo }}{{ mov.id }} - {{ mov.descripcion }}</td>
+                                    <td>
+                                        <span class="badge {% if mov.categoria == 'ingreso' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ mov.tipo }}
+                                        </span>
+                                    </td>
+                                    <td>{{ mov.metodo_pago|title }}</td>
+                                    <td class="text-end {% if mov.categoria == 'ingreso' %}text-success{% else %}text-danger{% endif %}">
+                                        {% if mov.categoria == 'ingreso' %}+{% else %}-{% endif %}
+                                        S/ {{ "%.2f"|format(mov.monto) }}
+                                    </td>
+                                    <td>{{ mov.fecha.strftime('%H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td colspan="4" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end text-success">+ S/ {{ "%.2f"|format(total_ingresos) }}</td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end text-danger">- S/ {{ "%.2f"|format(total_egresos) }}</td>
+                                    <td></td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td colspan="4" class="text-end"><strong>Saldo Neto:</strong></td>
+                                    <td class="text-end"><strong>S/ {{ "%.2f"|format(total_ingresos - total_egresos) }}</strong></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-receipt fa-2x text-muted mb-3"></i>
+                        <p class="text-muted mb-0">No hay movimientos registrados hoy</p>
+                        <small class="text-muted">Registra ingresos o egresos usando los botones de arriba</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Panel lateral derecho -->
+        <div class="col-lg-4">
+            <!-- Acciones rápidas -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-bolt me-2"></i>Acciones Rápidas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('ventas') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-shopping-cart me-2"></i>Nueva Venta
+                        </a>
+                        <a href="{{ url_for('historial_caja') }}" class="btn btn-outline-info">
+                            <i class="fas fa-history me-2"></i>Historial de Cajas
+                        </a>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-home me-2"></i>Volver al Inicio
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Información de caja -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-2"></i>Información
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading"><i class="fas fa-lightbulb me-2"></i>Instrucciones</h6>
+                        <ol class="mb-0 small">
+                            <li>Apertura caja al inicio del día</li>
+                            <li>Registra todas las ventas y pagos</li>
+                            <li>Registra ingresos/egresos extras</li>
+                            <li>Cierra caja al final del día</li>
+                            <li>Verifica que el monto físico coincida</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="alert alert-warning small">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Importante:</strong> Cada cajero debe aperturar y cerrar su propia caja.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Apertura de Caja -->
+<div class="modal fade" id="modalApertura" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-lock-open me-2"></i>Aperturar Caja</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formApertura">
+                <div class="modal-body">
+                    <p>Ingresa el monto inicial para aperturar la caja del día:</p>
+                    
+                    <div class="mb-3">
+                        <label for="monto_apertura" class="form-label">Monto de Apertura *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_apertura" 
+                                   name="monto_apertura" step="0.01" min="0" required
+                                   placeholder="0.00" value="100.00">
+                        </div>
+                        <div class="form-text">Monto con el que inicia la caja del día</div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">Información</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Fecha:</strong> {{ date_now.strftime('%d/%m/%Y') }}</li>
+                            <li><strong>Cajero:</strong> {{ session.get('nombre', 'Sistema') }}</li>
+                            <li>Recomendado: S/ 100.00 como monto inicial</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-lock-open me-1"></i>Aperturar Caja
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cierre de Caja -->
+<div class="modal fade" id="modalCierre" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title"><i class="fas fa-lock me-2"></i>Cerrar Caja</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formCierre">
+                <div class="modal-body">
+                    <p>Verifica el monto físico en caja y completa la información:</p>
+                    
+                    <div class="mb-3">
+                        <label for="monto_cierre" class="form-label">Monto Físico en Caja *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_cierre" 
+                                   name="monto_cierre" step="0.01" min="0" required
+                                   placeholder="0.00"
+                                   value="{{ "%.2f"|format(caja.monto_apertura + total_ingresos - total_egresos) if caja else '0.00' }}">
+                        </div>
+                        <div class="form-text">Monto físico contado en caja (efectivo real)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observaciones" class="form-label">Observaciones</label>
+                        <textarea class="form-control" id="observaciones" name="observaciones" 
+                                  rows="3" placeholder="Observaciones del día..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">Resumen</h6>
+                        <p class="mb-0">
+                            <strong>Efectivo esperado:</strong> S/ {{ "%.2f"|format(caja.monto_apertura + total_ingresos - total_egresos) if caja else '0.00' }}<br>
+                            <small>(Apertura + Ingresos - Egresos)</small>
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-lock me-1"></i>Cerrar Caja
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Registrar Ingreso -->
+<div class="modal fade" id="modalIngreso" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i>Registrar Ingreso</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formIngreso">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="concepto_ingreso" class="form-label">Concepto *</label>
+                        <input type="text" class="form-control" id="concepto_ingreso" 
+                               name="concepto" required placeholder="Ej: Pago de cliente, Reembolso, etc.">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="monto_ingreso" class="form-label">Monto *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_ingreso" 
+                                   name="monto" step="0.01" min="0.01" required
+                                   placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="metodo_pago_ingreso" class="form-label">Método de Pago</label>
+                        <select class="form-select" id="metodo_pago_ingreso" name="metodo_pago">
+                            <option value="efectivo" selected>Efectivo</option>
+                            <option value="tarjeta">Tarjeta</option>
+                            <option value="yape">Yape</option>
+                            <option value="plin">Plin</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="deposito">Depósito</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-1"></i>Registrar Ingreso
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Registrar Egreso -->
+<div class="modal fade" id="modalEgreso" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-minus-circle me-2"></i>Registrar Egreso</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEgreso">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="concepto_egreso" class="form-label">Concepto *</label>
+                        <input type="text" class="form-control" id="concepto_egreso" 
+                               name="concepto" required placeholder="Ej: Compra de insumos, Gasto de transporte, etc.">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="monto_egreso" class="form-label">Monto *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_egreso" 
+                                   name="monto" step="0.01" min="0.01" required
+                                   placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="metodo_pago_egreso" class="form-label">Método de Pago</label>
+                        <select class="form-select" id="metodo_pago_egreso" name="metodo_pago">
+                            <option value="efectivo" selected>Efectivo</option>
+                            <option value="tarjeta">Tarjeta</option>
+                            <option value="transferencia">Transferencia</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-check me-1"></i>Registrar Egreso
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Toast para mensajes -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">PetGlow Caja</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Toast de mensajes
+    const toast = new bootstrap.Toast(document.getElementById('liveToast'));
+    
+    function showToast(message, type = 'info') {
+        $('#toastMessage').html(message);
+        $('#liveToast').removeClass('bg-success bg-danger bg-warning bg-info');
+        $('#liveToast').addClass('bg-' + type);
+        toast.show();
+    }
+    
+    // Aperturar caja
+    $('#formApertura').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = $(this).serialize();
+        
+        $.ajax({
+            url: '{{ url_for("aperturar_caja") }}',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    $('#modalApertura').modal('hide');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(response.message, 'danger');
+                }
+            },
+            error: function() {
+                showToast('Error en la conexión', 'danger');
+            }
+        });
+    });
+    
+    // Cerrar caja
+    $('#formCierre').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = $(this).serialize();
+        
+        $.ajax({
+            url: '{{ url_for("cerrar_caja") }}',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    $('#modalCierre').modal('hide');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(response.message, 'danger');
+                }
+            },
+            error: function() {
+                showToast('Error en la conexión', 'danger');
+            }
+        });
+    });
+    
+    // Registrar ingreso
+    $('#formIngreso').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = $(this).serialize() + '&tipo=ingreso';
+        
+        $.ajax({
+            url: '{{ url_for("registrar_movimiento_caja") }}',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    $('#modalIngreso').modal('hide');
+                    $('#formIngreso')[0].reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(response.message, 'danger');
+                }
+            },
+            error: function() {
+                showToast('Error en la conexión', 'danger');
+            }
+        });
+    });
+    
+    // Registrar egreso
+    $('#formEgreso').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = $(this).serialize() + '&tipo=egreso';
+        
+        $.ajax({
+            url: '{{ url_for("registrar_movimiento_caja") }}',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    $('#modalEgreso').modal('hide');
+                    $('#formEgreso')[0].reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(response.message, 'danger');
+                }
+            },
+            error: function() {
+                showToast('Error en la conexión', 'danger');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

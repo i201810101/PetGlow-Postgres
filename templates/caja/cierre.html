@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Cierre de Caja - PetGlow{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-lock me-2"></i>Cierre de Caja</h4>
+            </div>
+            <div class="card-body">
+                <!-- Resumen de caja -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Resumen de Caja</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Apertura:</strong></td>
+                                        <td class="text-end"><strong>S/ {{ "%.2f"|format(caja.monto_apertura_float) }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Venta Efectivo:</td>
+                                        <td class="text-end">S/ {{ "%.2f"|format(caja.venta_efectivo_float) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Venta Tarjeta:</td>
+                                        <td class="text-end">S/ {{ "%.2f"|format(caja.venta_tarjeta_float) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Venta Digital:</td>
+                                        <td class="text-end">S/ {{ "%.2f"|format(caja.venta_digital_float) }}</td>
+                                    </tr>
+                                    <tr class="table-success">
+                                        <td><strong>Total Ventas:</strong></td>
+                                        <td class="text-end"><strong>S/ {{ "%.2f"|format(caja.total_ventas_float) }}</strong></td>
+                                    </tr>
+                                    <tr class="table-info">
+                                        <td><strong>Efectivo Esperado:</strong></td>
+                                        {% set efectivo_esperado = caja.monto_apertura_float + caja.venta_efectivo_float %}
+                                        <td class="text-end"><strong>S/ {{ "%.2f"|format(efectivo_esperado) }}</strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Información</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>Cajero:</strong> {{ caja.cajero }}</li>
+                                    <li><strong>Fecha:</strong> {{ caja.fecha }}</li>
+                                    <li><strong>Hora Apertura:</strong> {{ caja.hora_apertura.strftime('%H:%M') }}</li>
+                                    <li><strong>Estado:</strong> <span class="badge bg-success">{{ caja.estado }}</span></li>
+                                    <li><strong>ID Caja:</strong> #{{ caja.id_caja }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Formulario de cierre -->
+                <form method="POST" action="{{ url_for('cierre_caja') }}">
+                    <div class="mb-3">
+                        <label for="monto_cierre" class="form-label">Monto en Caja al Cierre *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" class="form-control" id="monto_cierre" 
+                                   name="monto_cierre" step="0.01" min="0" required
+                                   placeholder="0.00"
+                                   value="{{ "%.2f"|format(caja.monto_apertura_float + caja.venta_efectivo_float) }}">
+                        </div>
+                        <div class="form-text">Monto físico contado en caja (efectivo real)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observaciones" class="form-label">Observaciones</label>
+                        <textarea class="form-control" id="observaciones" name="observaciones" 
+                                  rows="3" placeholder="Observaciones del día..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Importante</h6>
+                        <p class="mb-0">
+                            {% set efectivo_esperado = caja.monto_apertura_float + caja.venta_efectivo_float %}
+                            <strong>Efectivo esperado:</strong> S/ {{ "%.2f"|format(efectivo_esperado) }}<br>
+                            (Apertura: S/ {{ "%.2f"|format(caja.monto_apertura_float) }} + Ventas en efectivo: S/ {{ "%.2f"|format(caja.venta_efectivo_float) }})
+                        </p>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="fas fa-lock me-2"></i>Cerrar Caja
+                        </button>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
