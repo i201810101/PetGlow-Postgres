@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Reservas - PetGlow{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Estilos específicos para vista de empleado */
+.reserva-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid;
+    border-radius: 8px;
+}
+
+.reserva-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.reserva-card.pendiente {
+    border-left-color: #ffc107;
+}
+
+.reserva-card.confirmada {
+    border-left-color: #17a2b8;
+}
+
+.reserva-card.en_proceso {
+    border-left-color: #007bff;
+}
+
+.reserva-card.completada {
+    border-left-color: #28a745;
+}
+
+.reserva-card.cancelada {
+    border-left-color: #dc3545;
+}
+
+.estado-badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+.estado-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.servicio-tag {
+    background: #e9ecef;
+    color: #495057;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    margin: 2px;
+    display: inline-block;
+}
+
+.timeline-item {
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 20px;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #007bff;
+    background: white;
+}
+
+.timeline-item.completada::before {
+    border-color: #28a745;
+    background: #28a745;
+}
+
+.timeline-item.cancelada::before {
+    border-color: #dc3545;
+    background: #dc3545;
+}
+
+.count-card {
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    color: white;
+    margin-bottom: 15px;
+}
+
+.count-card h3 {
+    font-size: 2.5rem;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* Para pantallas grandes de trabajo */
+@media (min-width: 1200px) {
+    .reserva-card {
+        height: 100%;
+    }
+    
+    .estado-actions .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+}
+
+/* Scroll suave */
+.reservas-container {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Animación para nuevas reservas */
+@keyframes highlightNew {
+    0% { background-color: #e3f2fd; }
+    100% { background-color: transparent; }
+}
+
+.reserva-nueva {
+    animation: highlightNew 2s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .reserva-card {
+        margin-bottom: 15px;
+    }
+    
+    .estado-actions {
+        flex-direction: column;
+    }
+    
+    .estado-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header del empleado -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-primary text-white shadow">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="fas fa-user-tie me-2"></i>{{ empleado.nombre }} {{ empleado.apellido }}
+                            </h2>
+                            <p class="mb-0">
+                                <i class="fas fa-briefcase me-1"></i>Especialidad: {{ empleado.especialidad|capitalize }}
+                                | <i class="fas fa-calendar-alt me-1"></i>Hoy: {{ now.strftime('%d/%m/%Y') }}
+                            </p>
+                        </div>
+                        <div class="text-end">
+                            <a href="{{ url_for('empleado_monitor') }}" class="btn btn-light btn-lg">
+                                <i class="fas fa-tv me-2"></i>Modo Monitor
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="count-card bg-primary">
+                <i class="fas fa-tasks fa-2x mb-2"></i>
+                <h3>{{ estadisticas.total or 0 }}</h3>
+                <p class="mb-0">Total Reservas</p>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="count-card bg-warning">
+                <i class="fas fa-clock fa-2x mb-2"></i>
+                <h3>{{ estadisticas.pendientes or 0 }}</h3>
+                <p class="mb-0">Pendientes</p>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="count-card bg-info">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <h3>{{ estadisticas.confirmadas or 0 }}</h3>
+                <p class="mb-0">Confirmadas</p>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="count-card bg-success">
+                <i class="fas fa-play-circle fa-2x mb-2"></i>
+                <h3>{{ estadisticas.en_proceso or 0 }}</h3>
+                <p class="mb-0">En Proceso</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros rápidos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-primary active filtro-estado" data-estado="todos">
+                            <i class="fas fa-layer-group me-1"></i>Todas
+                        </button>
+                        <button class="btn btn-outline-warning filtro-estado" data-estado="pendiente">
+                            <i class="fas fa-clock me-1"></i>Pendientes
+                        </button>
+                        <button class="btn btn-outline-info filtro-estado" data-estado="confirmada">
+                            <i class="fas fa-check-circle me-1"></i>Confirmadas
+                        </button>
+                        <button class="btn btn-outline-primary filtro-estado" data-estado="en_proceso">
+                            <i class="fas fa-play-circle me-1"></i>En Proceso
+                        </button>
+                        <button class="btn btn-outline-success filtro-estado" data-estado="completada">
+                            <i class="fas fa-check-double me-1"></i>Completadas
+                        </button>
+                        <div class="ms-auto">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" id="buscador-empleado" class="form-control" 
+                                       placeholder="Buscar mascota o cliente...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tarjetas de reservas -->
+    <div class="row" id="reservas-container">
+        {% if reservas %}
+            {% for reserva in reservas %}
+            <div class="col-xl-4 col-lg-6 mb-4 reserva-item" 
+                 data-estado="{{ reserva.estado }}"
+                 data-mascota="{{ reserva.mascota_nombre|lower }}"
+                 data-cliente="{{ reserva.cliente_nombre|lower }} {{ reserva.cliente_apellido|lower }}"
+                 data-id="{{ reserva.id_reserva }}">
+                <div class="card reserva-card h-100 {{ reserva.estado }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">
+                                <i class="fas fa-calendar-alt me-2"></i>{{ reserva.codigo_reserva }}
+                            </h5>
+                            <small class="text-muted">{{ reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') }}</small>
+                        </div>
+                        <span class="badge estado-badge bg-{{ 'warning' if reserva.estado == 'pendiente' else 'info' if reserva.estado == 'confirmada' else 'primary' if reserva.estado == 'en_proceso' else 'success' if reserva.estado == 'completada' else 'danger' }}">
+                            {{ reserva.estado.replace('_', ' ').title() }}
+                        </span>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Información de la mascota -->
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="flex-shrink-0">
+                                <i class="fas {{ 'fa-dog' if reserva.especie == 'perro' else 'fa-cat' if reserva.especie == 'gato' else 'fa-paw' }} fa-2x text-primary"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-0">{{ reserva.mascota_nombre }}</h6>
+                                <small class="text-muted">
+                                    {{ reserva.especie|capitalize }} 
+                                    {% if reserva.raza %}| {{ reserva.raza }}{% endif %}
+                                    {% if reserva.color %}| {{ reserva.color }}{% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- Información del cliente -->
+                        <div class="mb-3">
+                            <h6 class="text-muted mb-1">
+                                <i class="fas fa-user me-1"></i>Cliente:
+                            </h6>
+                            <p class="mb-1">{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</p>
+                            <small class="text-muted">
+                                <i class="fas fa-phone me-1"></i>{{ reserva.cliente_telefono }}
+                            </small>
+                        </div>
+                        
+                        <!-- Servicios -->
+                        {% if reserva.servicios_nombres %}
+                        <div class="mb-3">
+                            <h6 class="text-muted mb-2">
+                                <i class="fas fa-cut me-1"></i>Servicios:
+                            </h6>
+                            <div class="servicios-list">
+                                {% set servicios_list = reserva.servicios_nombres.split(',') %}
+                                {% for servicio in servicios_list %}
+                                    <span class="servicio-tag">{{ servicio|trim }}</span>
+                                {% endfor %}
+                            </div>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                Duración: {{ reserva.duracion_total or 60 }} min
+                            </small>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Notas -->
+                        {% if reserva.notas %}
+                        <div class="mb-3">
+                            <h6 class="text-muted mb-1">
+                                <i class="fas fa-sticky-note me-1"></i>Notas:
+                            </h6>
+                            <p class="mb-0 small">{{ reserva.notas }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Tiempo restante -->
+                        {% set tiempo_restante = (reserva.fecha_reserva - now).total_seconds() / 60 %}
+                        {% if tiempo_restante > 0 and tiempo_restante <= 120 %}
+                        <div class="alert alert-{{ 'warning' if tiempo_restante <= 30 else 'info' }} mb-3">
+                            <i class="fas fa-clock me-2"></i>
+                            {% if tiempo_restante <= 30 %}
+                                Próxima: En {{ tiempo_restante|int }} minutos
+                            {% else %}
+                                Programada: En {{ (tiempo_restante/60)|int }} horas
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Acciones -->
+                    <div class="card-footer bg-transparent">
+                        <div class="estado-actions">
+                            {% if reserva.estado == 'pendiente' %}
+                                <button class="btn btn-info btn-sm cambiar-estado" 
+                                        data-estado="confirmada"
+                                        data-id="{{ reserva.id_reserva }}">
+                                    <i class="fas fa-check me-1"></i>Confirmar
+                                </button>
+                                <button class="btn btn-danger btn-sm cambiar-estado" 
+                                        data-estado="cancelada"
+                                        data-id="{{ reserva.id_reserva }}">
+                                    <i class="fas fa-times me-1"></i>Cancelar
+                                </button>
+                            
+                            {% elif reserva.estado == 'confirmada' %}
+                                <button class="btn btn-primary btn-sm cambiar-estado" 
+                                        data-estado="en_proceso"
+                                        data-id="{{ reserva.id_reserva }}">
+                                    <i class="fas fa-play me-1"></i>Comenzar
+                                </button>
+                                <button class="btn btn-danger btn-sm cambiar-estado" 
+                                        data-estado="cancelada"
+                                        data-id="{{ reserva.id_reserva }}">
+                                    <i class="fas fa-times me-1"></i>Cancelar
+                                </button>
+                            
+                            {% elif reserva.estado == 'en_proceso' %}
+                                <button class="btn btn-success btn-sm cambiar-estado" 
+                                        data-estado="completada"
+                                        data-id="{{ reserva.id_reserva }}">
+                                    <i class="fas fa-check-double me-1"></i>Completar
+                                </button>
+                                <button class="btn btn-warning btn-sm" 
+                                        onclick="window.location.href='{{ url_for('ver_reserva', id=reserva.id_reserva) }}'">
+                                    <i class="fas fa-eye me-1"></i>Ver Detalles
+                                </button>
+                            
+                            {% else %}
+                                <button class="btn btn-outline-secondary btn-sm" 
+                                        onclick="window.location.href='{{ url_for('ver_reserva', id=reserva.id_reserva) }}'">
+                                    <i class="fas fa-eye me-1"></i>Ver Reserva
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-calendar-alt fa-4x text-muted mb-4"></i>
+                        <h3 class="text-muted mb-3">No tienes reservas asignadas</h3>
+                        <p class="text-muted mb-4">
+                            Las reservas que te asignen aparecerán aquí automáticamente.
+                        </p>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Las reservas se asignan automáticamente según tu especialidad y disponibilidad.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Actualización automática -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center">
+                        <div class="spinner-border spinner-border-sm text-primary me-2" id="spinner-actualizacion" style="display: none;"></div>
+                        <small class="text-muted">
+                            <i class="fas fa-sync-alt me-1"></i>
+                            Actualización automática cada 60 segundos
+                            | Última actualización: <span id="ultima-actualizacion">{{ now.strftime('%H:%M:%S') }}</span>
+                        </small>
+                        <button class="btn btn-sm btn-outline-primary ms-3" id="btn-actualizar-manual">
+                            <i class="fas fa-redo me-1"></i>Actualizar ahora
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación -->
+<div class="modal fade" id="modalConfirmarEstado" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exchange-alt me-2"></i>Cambiar Estado
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="mensaje-cambio"></p>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Esta acción actualizará el estado de la reserva en el sistema.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarCambio">
+                    <i class="fas fa-check me-1"></i>Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let intervaloActualizacion;
+    let reservaActual = null;
+    let estadoActual = null;
+    
+    // Inicializar filtros
+    $('.filtro-estado').on('click', function() {
+        $('.filtro-estado').removeClass('active');
+        $(this).addClass('active');
+        
+        const estado = $(this).data('estado');
+        filtrarReservas(estado);
+    });
+    
+    // Búsqueda
+    $('#buscador-empleado').on('keyup', function() {
+        const termino = $(this).val().toLowerCase();
+        filtrarPorBusqueda(termino);
+    });
+    
+    // Cambiar estado de reserva
+    $('.cambiar-estado').on('click', function() {
+        reservaActual = $(this).data('id');
+        estadoActual = $(this).data('estado');
+        
+        const estados = {
+            'confirmada': 'Confirmar',
+            'en_proceso': 'Comenzar',
+            'completada': 'Completar',
+            'cancelada': 'Cancelar'
+        };
+        
+        $('#mensaje-cambio').html(`
+            ¿Estás seguro de cambiar el estado de esta reserva a 
+            <strong class="text-primary">${estados[estadoActual]}</strong>?
+        `);
+        
+        $('#modalConfirmarEstado').modal('show');
+    });
+    
+    // Confirmar cambio de estado
+    $('#btnConfirmarCambio').on('click', function() {
+        if (!reservaActual || !estadoActual) return;
+        
+        $.ajax({
+            url: `/api/empleado/reservas/${reservaActual}/estado`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ estado: estadoActual }),
+            success: function(response) {
+                if (response.success) {
+                    mostrarNotificacion('success', response.message);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    mostrarNotificacion('danger', response.message);
+                }
+                $('#modalConfirmarEstado').modal('hide');
+            },
+            error: function() {
+                mostrarNotificacion('danger', 'Error al cambiar estado');
+                $('#modalConfirmarEstado').modal('hide');
+            }
+        });
+    });
+    
+    // Actualización manual
+    $('#btn-actualizar-manual').on('click', function() {
+        actualizarReservas();
+    });
+    
+    // Actualización automática cada 60 segundos
+    function iniciarActualizacionAutomatica() {
+        intervaloActualizacion = setInterval(actualizarReservas, 60000); // 60 segundos
+    }
+    
+    // Filtrar reservas por estado
+    function filtrarReservas(estado) {
+        if (estado === 'todos') {
+            $('.reserva-item').show();
+        } else {
+            $('.reserva-item').each(function() {
+                const itemEstado = $(this).data('estado');
+                $(this).toggle(itemEstado === estado);
+            });
+        }
+        
+        // Actualizar contador
+        const totalVisibles = $('.reserva-item:visible').length;
+        $('.filtro-estado[data-estado="todos"]').html(
+            `<i class="fas fa-layer-group me-1"></i>Todas (${totalVisibles})`
+        );
+    }
+    
+    // Filtrar por búsqueda
+    function filtrarPorBusqueda(termino) {
+        $('.reserva-item').each(function() {
+            const mascota = $(this).data('mascota');
+            const cliente = $(this).data('cliente');
+            const mostrar = mascota.includes(termino) || cliente.includes(termino);
+            $(this).toggle(mostrar);
+        });
+    }
+    
+    // Actualizar reservas
+    function actualizarReservas() {
+        $('#spinner-actualizacion').show();
+        
+        $.ajax({
+            url: '/api/empleado/reservas/hoy',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    // Actualizar hora de última actualización
+                    const ahora = new Date();
+                    const hora = ahora.getHours().toString().padStart(2, '0');
+                    const minutos = ahora.getMinutes().toString().padStart(2, '0');
+                    const segundos = ahora.getSeconds().toString().padStart(2, '0');
+                    $('#ultima-actualizacion').text(`${hora}:${minutos}:${segundos}`);
+                    
+                    // Aquí podrías actualizar dinámicamente las reservas
+                    // Por simplicidad, recargamos la página si hay cambios
+                    console.log('Reservas actualizadas:', response.reservas.length);
+                    
+                    // Opcional: Comparar y actualizar solo si hay cambios
+                    // actualizarUIReservas(response.reservas);
+                }
+            },
+            complete: function() {
+                $('#spinner-actualizacion').hide();
+            }
+        });
+    }
+    
+    // Mostrar notificación
+    function mostrarNotificacion(tipo, mensaje) {
+        const alerta = $(`
+            <div class="alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3" style="z-index: 1050;">
+                <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                ${mensaje}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+        
+        $('body').append(alerta);
+        
+        setTimeout(() => {
+            alerta.alert('close');
+        }, 5000);
+    }
+    
+    // Iniciar actualización automática
+    iniciarActualizacionAutomatica();
+    
+    // Limpiar intervalo al salir de la página
+    $(window).on('beforeunload', function() {
+        if (intervaloActualizacion) {
+            clearInterval(intervaloActualizacion);
+        }
+    });
+});
+</script>
+{% endblock %}

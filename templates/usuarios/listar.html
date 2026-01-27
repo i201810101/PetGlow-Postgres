@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Usuarios - PetGlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <!-- ENCABEZADO -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-users me-2"></i>Gestión de Usuarios
+            </h1>
+            <p class="text-muted mb-0">Administra los usuarios del sistema</p>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+            <i class="fas fa-plus me-2"></i>Nuevo Usuario
+        </button>
+    </div>
+    
+    <!-- ESTADÍSTICAS RÁPIDAS -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Usuarios
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-usuarios">
+                                {{ total_usuarios }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Usuarios Activos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ usuarios_activos }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Administradores
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ administradores }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-shield fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Último Registro
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ ultimo_registro|default('Ninguno', true) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PANEL DE BÚSQUEDA Y FILTROS -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter me-2"></i>Filtros y Búsqueda
+            </h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm" id="btn-limpiar-todo">
+                    <i class="fas fa-times me-1"></i>Limpiar Todo
+                </button>
+                <button class="btn btn-outline-primary btn-sm" id="btn-exportar">
+                    <i class="fas fa-download me-1"></i>Exportar
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Buscar</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="buscador-usuarios" 
+                               placeholder="Usuario, nombre, apellido...">
+                        <button class="btn btn-outline-secondary" type="button">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">Rol</label>
+                    <select class="form-select" id="filtro-rol">
+                        <option value="todos">Todos los roles</option>
+                        <option value="admin">Administrador</option>
+                        <option value="gerente">Gerente</option>
+                        <option value="empleado">Empleado</option>
+                        <option value="cajero">Cajero</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" id="filtro-estado">
+                        <option value="todos">Todos los estados</option>
+                        <option value="activo">Activo</option>
+                        <option value="inactivo">Inactivo</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" id="btn-aplicar-filtros">
+                        <i class="fas fa-filter me-1"></i>Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- TABLA DE USUARIOS -->
+    <div class="card shadow">
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-list me-2"></i>Lista de Usuarios
+                </h6>
+                <div>
+                    <span class="text-muted me-3" id="pagina-info"></span>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-usuarios">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Empleado</th>
+                            <th>Rol</th>
+                            <th>Estado</th>
+                            <th>Último Login</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-usuarios">
+                        {% for usuario in usuarios %}
+                        <tr class="usuario-fade-in" 
+                            data-id="{{ usuario.id_usuario }}"
+                            data-username="{{ usuario.username }}"
+                            data-nombre="{{ usuario.empleado_nombre or '' }}"
+                            data-apellido="{{ usuario.empleado_apellido or '' }}"
+                            data-rol="{{ usuario.rol }}"
+                            data-estado="{{ 'activo' if usuario.activo else 'inactivo' }}">
+                            <td>{{ usuario.id_usuario }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="usuario-avatar me-3">
+                                        {{ usuario.username[:2]|upper }}
+                                    </div>
+                                    <div>
+                                        <strong>{{ usuario.username }}</strong>
+                                        <div class="text-muted small">{{ usuario.email or '' }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if usuario.empleado_nombre %}
+                                <div>
+                                    <strong>{{ usuario.empleado_nombre }} {{ usuario.empleado_apellido }}</strong>
+                                    <div class="text-muted small">ID: {{ usuario.id_empleado }}</div>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">No asignado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.rol == 'admin' %}
+                                <span class="badge badge-rol-admin">Administrador</span>
+                                {% elif usuario.rol == 'gerente' %}
+                                <span class="badge badge-rol-gerente">Gerente</span>
+                                {% elif usuario.rol == 'empleado' %}
+                                <span class="badge badge-rol-empleado">Empleado</span>
+                                {% elif usuario.rol == 'cajero' %}
+                                <span class="badge badge-rol-cajero">Cajero</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ usuario.rol }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.activo %}
+                                <span class="badge bg-success">Activo</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.ultimo_login %}
+                                <div>
+                                    <div>{{ usuario.ultimo_login.strftime('%d/%m/%Y') }}</div>
+                                    <div class="text-muted small">{{ usuario.ultimo_login.strftime('%H:%M') }}</div>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-warning" 
+                                            onclick="editarUsuario({{ usuario.id_usuario }})"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" 
+                                            onclick="mostrarModalEliminar({{ usuario.id_usuario }}, '{{ usuario.username }}')"
+                                            title="Eliminar"
+                                            {% if usuario.rol == 'admin' and usuario.id_usuario == session.get('id_usuario') %}disabled{% endif %}>
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr id="sin-resultados" class="fila-vacia">
+                            <td colspan="7" class="text-center py-5">
+                                <div class="py-4">
+                                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted mb-3">No hay usuarios registrados</h5>
+                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+                                        <i class="fas fa-plus me-1"></i>Crear Primer Usuario
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- PAGINACIÓN -->
+            {% if usuarios and usuarios|length > 10 %}
+            <nav aria-label="Paginación de usuarios" class="mt-4">
+                <ul class="pagination justify-content-center" id="paginacion-usuarios">
+                    <!-- La paginación se generará con JavaScript -->
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- MODAL NUEVO USUARIO -->
+<div class="modal fade" id="modalNuevoUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>Nuevo Usuario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="form-nuevo-usuario" class="needs-validation" novalidate>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label required">Nombre de Usuario *</label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   required pattern="[a-zA-Z0-9_]{3,20}"
+                                   placeholder="mín. 3 caracteres, solo letras, números y _">
+                            <div class="invalid-feedback">
+                                El nombre de usuario es obligatorio (3-20 caracteres, solo letras, números y _)
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label required">Contraseña *</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" 
+                                       required minlength="6"
+                                       placeholder="mín. 6 caracteres">
+                                <button class="btn btn-outline-secondary password-toggle" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-info" type="button" id="btn-generar-password">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                            </div>
+                            <div class="invalid-feedback">
+                                La contraseña debe tener al menos 6 caracteres
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_empleado" class="form-label">Asociar a Empleado</label>
+                            <select class="form-select" id="id_empleado" name="id_empleado">
+                                <option value="">Seleccionar empleado (opcional)</option>
+                                {% for empleado in empleados_sin_usuario %}
+                                <option value="{{ empleado.id_empleado }}">
+                                    {{ empleado.nombre }} {{ empleado.apellido }} - {{ empleado.dni }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                <small>Si no seleccionas un empleado, el usuario será independiente</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="rol" class="form-label required">Rol *</label>
+                            <select class="form-select" id="rol" name="rol" required>
+                                <option value="">Seleccionar rol...</option>
+                                <option value="admin">Administrador</option>
+                                <option value="gerente">Gerente</option>
+                                <option value="empleado">Empleado</option>
+                                <option value="cajero">Cajero</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Debes seleccionar un rol
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="activo" name="activo" checked>
+                            <label class="form-check-label" for="activo">
+                                Usuario activo
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- PERMISOS (opcional) -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Permisos del Rol</h6>
+                        </div>
+                        <div class="card-body permisos-container">
+                            <div id="permisos-admin" class="d-none">
+                                <div class="permiso-item">✅ Acceso completo al sistema</div>
+                                <div class="permiso-item">✅ Gestión de usuarios</div>
+                                <div class="permiso-item">✅ Gestión de empleados</div>
+                                <div class="permiso-item">✅ Gestión de clientes</div>
+                                <div class="permiso-item">✅ Gestión de reservas</div>
+                                <div class="permiso-item">✅ Reportes y estadísticas</div>
+                            </div>
+                            <div id="permisos-gerente" class="d-none">
+                                <div class="permiso-item">✅ Gestión de reservas</div>
+                                <div class="permiso-item">✅ Gestión de clientes</div>
+                                <div class="permiso-item">✅ Reportes de ventas</div>
+                                <div class="permiso-item">❌ No puede gestionar usuarios</div>
+                            </div>
+                            <div id="permisos-empleado" class="d-none">
+                                <div class="permiso-item">✅ Ver reservas asignadas</div>
+                                <div class="permiso-item">✅ Registrar servicios</div>
+                                <div class="permiso-item">❌ No puede ver reportes</div>
+                                <div class="permiso-item">❌ No puede gestionar usuarios</div>
+                            </div>
+                            <div id="permisos-cajero" class="d-none">
+                                <div class="permiso-item">✅ Registrar pagos</div>
+                                <div class="permiso-item">✅ Generar facturas</div>
+                                <div class="permiso-item">❌ Solo módulo de caja</div>
+                            </div>
+                            <div id="permisos-vacio" class="text-muted">
+                                Selecciona un rol para ver sus permisos
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Guardar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDITAR USUARIO -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-edit me-2"></i>Editar Usuario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="form-editar-usuario" class="needs-validation" novalidate>
+                <input type="hidden" id="editar_id_usuario" name="id_usuario">
+                
+                <div class="modal-body">
+                    <div id="info-empleado">
+                        <!-- Información del empleado se cargará aquí -->
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editar_username" class="form-label required">Nombre de Usuario *</label>
+                            <input type="text" class="form-control" id="editar_username" name="username" 
+                                   required pattern="[a-zA-Z0-9_]{3,20}">
+                            <div class="invalid-feedback">
+                                El nombre de usuario es obligatorio
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="editar_password" class="form-label">Nueva Contraseña</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="editar_password" name="password" 
+                                       minlength="6"
+                                       placeholder="Dejar vacío para no cambiar">
+                                <button class="btn btn-outline-secondary password-toggle" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">
+                                <small>Dejar vacío para mantener la contraseña actual</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="editar_rol" class="form-label required">Rol *</label>
+                            <select class="form-select" id="editar_rol" name="rol" required>
+                                <option value="">Seleccionar rol...</option>
+                                <option value="admin">Administrador</option>
+                                <option value="gerente">Gerente</option>
+                                <option value="empleado">Empleado</option>
+                                <option value="cajero">Cajero</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Debes seleccionar un rol
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Estado</label>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="editar_activo" name="activo" checked>
+                                <label class="form-check-label" for="editar_activo">
+                                    Usuario activo
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- HISTORIAL DE LOGIN -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-history me-2"></i>Historial de Login</h6>
+                        </div>
+                        <div class="card-body" id="historial-login">
+                            <p class="text-muted text-center py-3">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Cargando historial...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save me-1"></i>Actualizar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL ELIMINAR USUARIO -->
+<div class="modal fade" id="modalEliminarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>¡Atención!</strong> Esta acción no se puede deshacer.
+                </div>
+                
+                <p>¿Estás seguro de que deseas eliminar al usuario <strong id="usuario-a-eliminar"></strong>?</p>
+                
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <small>
+                        <strong>Consecuencias:</strong><br>
+                        • El usuario perderá acceso al sistema<br>
+                        • Se eliminarán sus permisos<br>
+                        • El registro será permanente
+                    </small>
+                </div>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="confirmar-eliminacion">
+                    <label class="form-check-label" for="confirmar-eliminacion">
+                        Entiendo las consecuencias y deseo continuar
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-eliminar" disabled>
+                    <i class="fas fa-trash-alt me-1"></i>Eliminar Usuario
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/usuarios.js') }}"></script>
+<script>
+// Mostrar permisos según el rol seleccionado
+document.getElementById('rol')?.addEventListener('change', function() {
+    const rol = this.value;
+    ['admin', 'gerente', 'empleado', 'cajero', 'vacio'].forEach(id => {
+        const elemento = document.getElementById(`permisos-${id}`);
+        if (elemento) {
+            elemento.classList.add('d-none');
+        }
+    });
+    
+    if (rol) {
+        const permisosElemento = document.getElementById(`permisos-${rol}`);
+        if (permisosElemento) {
+            permisosElemento.classList.remove('d-none');
+        }
+    } else {
+        document.getElementById('permisos-vacio')?.classList.remove('d-none');
+    }
+});
+
+// Habilitar botón de eliminación solo cuando se confirme
+document.getElementById('confirmar-eliminacion')?.addEventListener('change', function() {
+    document.getElementById('btn-confirmar-eliminar').disabled = !this.checked;
+});
+
+// Botón limpiar todos los filtros
+document.getElementById('btn-limpiar-todo')?.addEventListener('click', function() {
+    document.getElementById('buscador-usuarios').value = '';
+    document.getElementById('filtro-rol').value = 'todos';
+    document.getElementById('filtro-estado').value = 'todos';
+    // Disparar evento para buscar
+    const event = new Event('input');
+    document.getElementById('buscador-usuarios').dispatchEvent(event);
+});
+
+// Botón refrescar
+document.getElementById('btn-refresh')?.addEventListener('click', function() {
+    window.location.reload();
+});
+</script>
+{% endblock %}

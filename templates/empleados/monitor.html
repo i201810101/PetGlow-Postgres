@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Reservas - PetGlow</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .monitor-header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .reserva-card-monitor {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-left: 6px solid;
+            transition: all 0.3s ease;
+            height: 100%;
+            position: relative;
+        }
+        
+        .reserva-card-monitor:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        
+        .reserva-card-monitor.pendiente { border-left-color: #ffc107; }
+        .reserva-card-monitor.confirmada { border-left-color: #17a2b8; }
+        .reserva-card-monitor.en_proceso { border-left-color: #007bff; }
+        .reserva-card-monitor.completada { border-left-color: #28a745; }
+        .reserva-card-monitor.cancelada { border-left-color: #dc3545; }
+        
+        .hora-reserva {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .mascota-nombre {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .servicios-monitor {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .servicio-monitor {
+            background: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid #dee2e6;
+        }
+        
+        .reloj {
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 5px;
+        }
+        
+        .fecha-actual {
+            font-size: 1.2rem;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .columna-reserva {
+            padding: 0 10px;
+        }
+        
+        .estado-monitor {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 0.8rem;
+            padding: 3px 10px;
+            border-radius: 15px;
+        }
+        
+        .info-cliente {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        
+        /* Animación para próximas reservas */
+        @keyframes pulse {
+            0% { box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3); }
+            50% { box-shadow: 0 5px 25px rgba(255, 193, 7, 0.6); }
+            100% { box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3); }
+        }
+        
+        .proxima {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Animación para carga */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .reloj {
+                font-size: 2rem;
+            }
+            
+            .hora-reserva {
+                font-size: 1.5rem;
+            }
+            
+            .mascota-nombre {
+                font-size: 1.2rem;
+            }
+            
+            .reserva-card-monitor {
+                padding: 15px;
+            }
+        }
+        
+        /* Estado de no hay reservas */
+        .sin-reservas {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Cabecera con reloj -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="reloj" id="reloj">--:--:--</div>
+                <div class="fecha-actual" id="fecha">--/--/----</div>
+            </div>
+        </div>
+        
+        <!-- Encabezado del monitor -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="monitor-header">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h1 class="display-6 mb-0">
+                                <i class="fas fa-tv me-2 text-primary"></i>
+                                Monitor de Reservas
+                            </h1>
+                            <p class="text-muted mb-0" id="info-empleado">
+                                <i class="fas fa-user-tie me-1"></i>
+                                Empleado: <span id="nombre-empleado">Cargando...</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="btnActualizar">
+                                    <i class="fas fa-sync-alt me-1"></i>Actualizar
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="window.location.href='/empleado/reservas'">
+                                    <i class="fas fa-tasks me-1"></i>Ver Detalles
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="window.location.href='/logout'">
+                                    <i class="fas fa-sign-out-alt me-1"></i>Salir
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted" id="ultima-actualizacion">
+                                    Última actualización: --
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Contenedor de reservas -->
+        <div class="row" id="reservas-monitor">
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+                <p class="mt-3 text-white">Cargando reservas...</p>
+            </div>
+        </div>
+        
+        <!-- Pie del monitor -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="text-center">
+                    <small class="text-white">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Actualización automática cada 30 segundos
+                        | Sistema PetGlow © 2024
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script>
+    $(document).ready(function() {
+        let intervaloReservas;
+        let intervaloReloj;
+        
+        // Actualizar reloj
+        function actualizarReloj() {
+            const ahora = new Date();
+            const hora = ahora.getHours().toString().padStart(2, '0');
+            const minutos = ahora.getMinutes().toString().padStart(2, '0');
+            const segundos = ahora.getSeconds().toString().padStart(2, '0');
+            const fecha = ahora.toLocaleDateString('es-ES', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            
+            $('#reloj').text(`${hora}:${minutos}:${segundos}`);
+            $('#fecha').text(fecha.charAt(0).toUpperCase() + fecha.slice(1));
+        }
+        
+        // Cargar información del empleado
+        function cargarInfoEmpleado() {
+            $.ajax({
+                url: '/api/empleado/info',
+                method: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        $('#nombre-empleado').text(response.nombre);
+                    } else {
+                        $('#nombre-empleado').text('Error al cargar');
+                        console.error('Error info empleado:', response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#nombre-empleado').text('Error de conexión');
+                    console.error('Error AJAX info empleado:', error);
+                }
+            });
+        }
+        
+        // Cargar reservas
+        function cargarReservas() {
+            $.ajax({
+                url: '/api/empleado/reservas/hoy',
+                method: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        mostrarReservas(response.reservas);
+                        actualizarUltimaActualizacion();
+                    } else {
+                        mostrarErrorReservas(response.message || 'Error al cargar reservas');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    mostrarErrorReservas('Error de conexión: ' + error);
+                    console.error('Error AJAX reservas:', error);
+                }
+            });
+        }
+        
+        // Mostrar reservas en el monitor
+        function mostrarReservas(reservas) {
+            const ahora = new Date();
+            const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+            
+            if (reservas.length === 0) {
+                $('#reservas-monitor').html(`
+                    <div class="col-12">
+                        <div class="sin-reservas fade-in">
+                            <i class="fas fa-calendar-alt fa-4x text-muted mb-4"></i>
+                            <h3 class="text-muted mb-3">No hay reservas para hoy</h3>
+                            <p class="text-muted">¡Buen trabajo! No tienes reservas programadas para hoy.</p>
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Las nuevas reservas aparecerán aquí automáticamente.
+                            </div>
+                        </div>
+                    </div>
+                `);
+                return;
+            }
+            
+            let html = '';
+            
+            // Agrupar por estado (primero las en proceso)
+            const porEstado = {
+                'en_proceso': [],
+                'confirmada': [],
+                'pendiente': []
+            };
+            
+            reservas.forEach(reserva => {
+                if (porEstado[reserva.estado]) {
+                    porEstado[reserva.estado].push(reserva);
+                }
+            });
+            
+            // Mostrar por estado
+            ['en_proceso', 'confirmada', 'pendiente'].forEach(estado => {
+                if (porEstado[estado] && porEstado[estado].length > 0) {
+                    porEstado[estado].forEach(reserva => {
+                        let claseProxima = '';
+                        let textoEstado = '';
+                        
+                        // Formatear hora
+                        let horaFormateada = '--:--';
+                        if (reserva.hora_str) {
+                            horaFormateada = reserva.hora_str;
+                        } else if (reserva.fecha_reserva) {
+                            // Intentar extraer hora de la fecha
+                            const fecha = new Date(reserva.fecha_reserva);
+                            if (!isNaN(fecha)) {
+                                horaFormateada = fecha.getHours().toString().padStart(2, '0') + ':' + 
+                                                fecha.getMinutes().toString().padStart(2, '0');
+                            }
+                        }
+                        
+                        // Determinar si es próxima
+                        if (reserva.minutos_restantes > 0 && reserva.minutos_restantes <= 30) {
+                            claseProxima = 'proxima';
+                            textoEstado = `<small class="text-warning d-block mt-1">
+                                <i class="fas fa-clock me-1"></i>
+                                En ${reserva.minutos_restantes} minutos
+                            </small>`;
+                        }
+                        
+                        // Texto del estado
+                        const textosEstado = {
+                            'pendiente': 'PENDIENTE',
+                            'confirmada': 'CONFIRMADA',
+                            'en_proceso': 'EN PROCESO',
+                            'completada': 'COMPLETADA',
+                            'cancelada': 'CANCELADA'
+                        };
+                        
+                        html += `
+                            <div class="col-xl-4 col-lg-6 col-md-6 mb-4 columna-reserva fade-in">
+                                <div class="reserva-card-monitor ${reserva.estado} ${claseProxima}">
+                                    <span class="badge estado-monitor bg-${reserva.estado_color || 'secondary'}">
+                                        ${textosEstado[reserva.estado] || reserva.estado.toUpperCase()}
+                                    </span>
+                                    
+                                    <div class="hora-reserva">
+                                        ${horaFormateada}
+                                    </div>
+                                    
+                                    <div class="mascota-nombre">
+                                        <i class="fas ${reserva.especie === 'perro' ? 'fa-dog' : 
+                                                      reserva.especie === 'gato' ? 'fa-cat' : 'fa-paw'} me-2"></i>
+                                        ${reserva.mascota_nombre || 'Sin nombre'}
+                                    </div>
+                                    
+                                    <div class="info-cliente">
+                                        <div>
+                                            <i class="fas fa-user me-1"></i>
+                                            <strong>Cliente:</strong> ${reserva.cliente_nombre || ''} ${reserva.cliente_apellido || ''}
+                                        </div>
+                                        ${reserva.cliente_telefono ? `
+                                        <div class="mt-1">
+                                            <i class="fas fa-phone me-1"></i>
+                                            <strong>Teléfono:</strong> ${reserva.cliente_telefono}
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    
+                                    ${reserva.servicios_nombres ? `
+                                        <div class="mt-3">
+                                            <strong><i class="fas fa-cut me-1"></i>Servicios:</strong>
+                                            <div class="servicios-monitor mt-2">
+                                                ${reserva.servicios_nombres.split(',').map(servicio => 
+                                                    `<span class="servicio-monitor">${servicio.trim()}</span>`
+                                                ).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    
+                                    ${textoEstado}
+                                    
+                                    ${reserva.duracion_total ? `
+                                    <div class="mt-3 pt-3 border-top">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>
+                                            Duración: ${reserva.duracion_total} minutos
+                                        </small>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${reserva.notas ? `
+                                    <div class="mt-3 pt-3 border-top">
+                                        <small class="text-muted">
+                                            <i class="fas fa-sticky-note me-1"></i>
+                                            <strong>Notas:</strong> ${reserva.notas}
+                                        </small>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+            
+            $('#reservas-monitor').html(html);
+        }
+        
+        // Mostrar error
+        function mostrarErrorReservas(mensaje) {
+            $('#reservas-monitor').html(`
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${mensaje}
+                        <button class="btn btn-sm btn-outline-danger ms-3" onclick="cargarReservas()">
+                            <i class="fas fa-redo me-1"></i>Reintentar
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+        
+        // Actualizar última actualización
+        function actualizarUltimaActualizacion() {
+            const ahora = new Date();
+            const hora = ahora.getHours().toString().padStart(2, '0');
+            const minutos = ahora.getMinutes().toString().padStart(2, '0');
+            const segundos = ahora.getSeconds().toString().padStart(2, '0');
+            
+            $('#ultima-actualizacion').text(`Última actualización: ${hora}:${minutos}:${segundos}`);
+        }
+        
+        // Botón de actualizar
+        $('#btnActualizar').on('click', function() {
+            const btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Actualizando...');
+            
+            cargarReservas();
+            
+            setTimeout(() => {
+                btn.prop('disabled', false).html('<i class="fas fa-sync-alt me-1"></i>Actualizar');
+            }, 2000);
+        });
+        
+        // Inicializar
+        actualizarReloj();
+        cargarInfoEmpleado();
+        cargarReservas();
+        
+        // Iniciar intervalos
+        intervaloReloj = setInterval(actualizarReloj, 1000);
+        intervaloReservas = setInterval(cargarReservas, 30000); // 30 segundos
+        
+        // Limpiar intervalos al salir
+        $(window).on('beforeunload', function() {
+            if (intervaloReloj) clearInterval(intervaloReloj);
+            if (intervaloReservas) clearInterval(intervaloReservas);
+        });
+    });
+    </script>
+</body>
+</html>

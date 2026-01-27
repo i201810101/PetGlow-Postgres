@@ -102,21 +102,20 @@
                     </div>
                     
                     <!-- Resumen final dinámico -->
-                    <div class="alert alert-warning" id="resumenPago">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-0">Total a Pagar:</h5>
-                                <p class="mb-0 text-muted" id="tipoComprobanteText">Boleta</p>
-                            </div>
-                            <div class="text-end">
-                                <h3 class="mb-0 text-success">S/ {{ "%.2f"|format(total) }}</h3>
-                                <small class="text-muted" id="detalleIGV">
-                                    Subtotal: S/ {{ "%.2f"|format(subtotal) }}<br>
-                                    IGV (18%): S/ {{ "%.2f"|format(igv) }}
-                                </small>
-                            </div>
-                        </div>
-                    </div>
+<div class="alert alert-warning" id="resumenPago">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0">Total a Pagar:</h5>
+            <p class="mb-0 text-muted" id="tipoComprobanteText">Boleta</p>
+        </div>
+        <div class="text-end">
+            <h3 class="mb-0 text-success" id="totalMostrar">S/ {{ "%.2f"|format(total) }}</h3>
+            <small class="text-muted" id="detalleIGV">
+                Total: S/ {{ "%.2f"|format(total) }}
+            </small>
+        </div>
+    </div>
+</div>
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" class="btn btn-secondary me-md-2">
@@ -136,20 +135,26 @@
 function actualizarTotales() {
     const tipoComprobante = document.getElementById('tipo_comprobante').value;
     const total = {{ total }};
-    const subtotal = {{ subtotal }};
-    const igv = {{ igv }};
     
     const tipoText = document.getElementById('tipoComprobanteText');
+    const totalMostrar = document.getElementById('totalMostrar');
     const detalleIGV = document.getElementById('detalleIGV');
     
     if (tipoComprobante === 'factura') {
+        // Para factura: calcular base e IGV
+        const subtotal = total / 1.18;  // Base imponible
+        const igv = subtotal * 0.18;    // IGV 18%
+        
         tipoText.textContent = 'Factura (con IGV 18%)';
+        totalMostrar.textContent = 'S/ ' + total.toFixed(2);
         detalleIGV.innerHTML = `
-            Subtotal: S/ ${subtotal.toFixed(2)}<br>
+            Base: S/ ${subtotal.toFixed(2)}<br>
             IGV (18%): S/ ${igv.toFixed(2)}
         `;
     } else {
+        // Para boleta: mostrar solo el total
         tipoText.textContent = 'Boleta (sin IGV)';
+        totalMostrar.textContent = 'S/ ' + total.toFixed(2);
         detalleIGV.innerHTML = `Total: S/ ${total.toFixed(2)}`;
     }
 }

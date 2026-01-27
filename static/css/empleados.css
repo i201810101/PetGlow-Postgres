@@ -1,0 +1,217 @@
+/* static/css/empleados.css */
+
+/* Estilos específicos para la gestión de empleados */
+
+.required:after {
+    content: " *";
+    color: #dc3545;
+}
+
+/* Avatar de empleado */
+.avatar-empleado {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: black;
+    font-weight: bold;
+}
+
+/* Badges para estados */
+.badge-estado {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.badge-estado-activo {
+    background-color: #198754;
+    color: white;
+}
+
+.badge-estado-inactivo {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Badges para especialidades */
+.badge-especialidad {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.badge-especialidad-baño {
+    background-color: #0dcaf0;
+    color: black;
+}
+
+.badge-especialidad-corte {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-especialidad-ambos {
+    background-color: #20c997;
+    color: black;
+}
+
+.badge-especialidad-ventas {
+    background-color: #6610f2;
+    color: black;
+}
+/* static/css/empleados.css */
+
+/* ... código existente ... */
+
+/* Badges para especialidades - MEJORADO */
+.badge-baño {
+    background-color: #17a2b8 !important;
+    color: white !important;
+    font-weight: 600;
+    border: none;
+}
+
+.badge-corte {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+    font-weight: 600;
+    border: none;
+}
+
+.badge-ambos {
+    background-color: #28a745 !important;
+    color: white !important;
+    font-weight: 600;
+    border: none;
+}
+
+.badge-ventas {
+    background-color: #6f42c1 !important;
+    color: white !important;
+    font-weight: 600;
+    border: none;
+}
+
+/* Para mejorar visibilidad en hover */
+.badge-baño:hover { background-color: #138496 !important; }
+.badge-corte:hover { background-color: #e0a800 !important; }
+.badge-ambos:hover { background-color: #218838 !important; }
+.badge-ventas:hover { background-color: #5a3796 !important; }
+
+/* Badge default para valores no definidos */
+.badge-especialidad {
+    background-color: #6c757d !important;
+    color: white !important;
+    font-weight: 600;
+    border: none;
+}
+
+/* Asegurar que los badges tengan buen padding y forma */
+.badge-baño,
+.badge-corte,
+.badge-ambos,
+.badge-ventas,
+.badge-especialidad {
+    padding: 0.35em 0.65em !important;
+    font-size: 0.75em !important;
+    border-radius: 0.25rem !important;
+    display: inline-block !important;
+    min-width: 70px !important;
+    text-align: center !important;
+}
+
+/* Hover effects en la tabla */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Botones de acción */
+.btn-action {
+    width: 35px;
+    height: 35px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 2px;
+}
+
+/* Tarjetas de información */
+.info-card {
+    border-left: 4px solid #0d6efd;
+    background-color: #f8f8fa;
+}
+
+/* Formularios */
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Modal personalizado */
+.modal-header {
+    border-bottom: none;
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: none;
+    padding: 1.5rem;
+}
+
+/* Paginación */
+.pagination .page-item.active .page-link {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .btn-action {
+        width: 30px;
+        height: 30px;
+        font-size: 0.8rem;
+    }
+    
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Estilos para la impresión */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .modal {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 100vh !important;
+        width: 100% !important;
+    }
+    
+    .modal-content {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .modal-footer {
+        display: none !important;
+    }
+}

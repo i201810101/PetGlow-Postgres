@@ -17,7 +17,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- NAVBAR COMPLETA Y RESPONSIVE -->
+    <!-- NAVBAR COMPLETA Y RESPONSIVA -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
         <div class="container-fluid">
             <!-- Brand -->
@@ -43,7 +43,23 @@
                         </a>
                     </li>
                     
-                    <!-- MENÚ CAJA -->
+                    <!-- MENÚ ESPECIAL PARA EMPLEADOS -->
+                    {% if session.get('rol') == 'empleado' %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'empleado_reservas' %}active{% endif %}" 
+                           href="{{ url_for('empleado_reservas') }}">
+                            <i class="fas fa-tasks me-1"></i>Mis Reservas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'empleado_monitor' %}active{% endif %}" 
+                           href="{{ url_for('empleado_monitor') }}">
+                            <i class="fas fa-tv me-1"></i>Monitor
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    <!-- MENÚ CAJA (solo para admin y cajero) -->
                     {% if session.get('rol') in ['admin', 'cajero'] %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" 
@@ -68,8 +84,9 @@
                 
                 <!-- Información del usuario -->
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link text-white">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle text-white" href="#" role="button" 
+                           data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-user-circle me-1"></i>
                             {% if session.get('nombre') %}
                                 {{ session.nombre }}
@@ -77,6 +94,24 @@
                                 Administrador
                             {% endif %}
                         </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="#">
+                                    <i class="fas fa-user me-2"></i>Mi Perfil
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#">
+                                    <i class="fas fa-cog me-2"></i>Configuración
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                    <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -98,70 +133,153 @@
                                 <i class="fas fa-tachometer-alt me-2"></i>Dashboard
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'clientes' %}active{% endif %}" 
-                               href="{{ url_for('clientes') }}">
-                                <i class="fas fa-users me-2"></i>Clientes
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'mascotas' %}active{% endif %}" 
-                               href="{{ url_for('mascotas') }}">
-                                <i class="fas fa-dog me-2"></i>Mascotas
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'servicios' %}active{% endif %}" 
-                               href="{{ url_for('servicios') }}">
-                                <i class="fas fa-cut me-2"></i>Servicios
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'reservas' %}active{% endif %}" 
-                               href="{{ url_for('reservas') }}">
-                                <i class="fas fa-calendar-alt me-2"></i>Reservas
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'ventas' %}active{% endif %}" 
-                               href="{{ url_for('ventas') }}">
-                                <i class="fas fa-shopping-cart me-2"></i>Ventas
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'reportes' %}active{% endif %}" 
-                               href="{{ url_for('reportes') }}">
-                                <i class="fas fa-chart-bar me-2"></i>Reportes
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'config' %}active{% endif %}" 
-                               href="{{ url_for('config') }}">
-                                <i class="fas fa-cog me-2"></i>Configuración
-                            </a>
-                        </li>
+                        
+                        <!-- MENÚ DIFERENCIADO POR ROL -->
+                        {% if session.get('rol') == 'empleado' %}
+                            <!-- MENÚ PARA EMPLEADOS (VISTA SIMPLIFICADA) -->
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'empleado_reservas' %}active{% endif %}" 
+                                   href="{{ url_for('empleado_reservas') }}">
+                                    <i class="fas fa-tasks me-2"></i>Mis Reservas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'empleado_monitor' %}active{% endif %}" 
+                                   href="{{ url_for('empleado_monitor') }}">
+                                    <i class="fas fa-tv me-2"></i>Pantalla Monitor
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'reservas' %}active{% endif %}" 
+                                   href="{{ url_for('reservas') }}">
+                                    <i class="fas fa-calendar-alt me-2"></i>Todas las Reservas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'mascotas' %}active{% endif %}" 
+                                   href="{{ url_for('mascotas') }}">
+                                    <i class="fas fa-dog me-2"></i>Mascotas
+                                </a>
+                            </li>
+                            
+                        {% else %}
+                            <!-- MENÚ COMPLETO PARA ADMIN/GERENTE/CAJERO -->
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'clientes' %}active{% endif %}" 
+                                   href="{{ url_for('clientes') }}">
+                                    <i class="fas fa-users me-2"></i>Clientes
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'mascotas' %}active{% endif %}" 
+                                   href="{{ url_for('mascotas') }}">
+                                    <i class="fas fa-dog me-2"></i>Mascotas
+                                </a>
+                            </li>
+                            <!-- ENLACE PARA EMPLEADOS -->
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'empleados' %}active{% endif %}" 
+                                   href="{{ url_for('empleados') }}">
+                                    <i class="fas fa-users-cog me-2"></i>Empleados
+                                </a>
+                            </li>
+                            <!-- ENLACE PARA USUARIOS -->
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'usuarios' %}active{% endif %}" 
+                                   href="{{ url_for('usuarios') }}">
+                                    <i class="fas fa-user-shield me-2"></i>Usuarios
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'servicios' %}active{% endif %}" 
+                                   href="{{ url_for('servicios') }}">
+                                    <i class="fas fa-cut me-2"></i>Servicios
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'reservas' %}active{% endif %}" 
+                                   href="{{ url_for('reservas') }}">
+                                    <i class="fas fa-calendar-alt me-2"></i>Reservas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'ventas' %}active{% endif %}" 
+                                   href="{{ url_for('ventas') }}">
+                                    <i class="fas fa-shopping-cart me-2"></i>Ventas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'reportes' %}active{% endif %}" 
+                                   href="{{ url_for('reportes') }}">
+                                    <i class="fas fa-chart-bar me-2"></i>Reportes
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'config' %}active{% endif %}" 
+                                   href="{{ url_for('config') }}">
+                                    <i class="fas fa-cog me-2"></i>Configuración
+                                </a>
+                            </li>
+                        {% endif %}
                     </ul>
                     
-                    <!-- Acciones rápidas -->
+                    <!-- Acciones rápidas (también diferenciadas por rol) -->
                     <h6 class="sidebar-heading px-3 text-muted mb-3">
                         <i class="fas fa-bolt me-2"></i>Acciones Rápidas
                     </h6>
                     <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('crear_cliente') }}">
-                                <i class="fas fa-user-plus me-2 text-success"></i>Nuevo Cliente
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('crear_reserva') }}">
-                                <i class="fas fa-calendar-plus me-2 text-info"></i>Nueva Reserva
-                            </a>
-                        </li>
-<li class="nav-item">
-    <a class="nav-link" href="{{ url_for('ventas') }}">
-        <i class="fas fa-cash-register me-2 text-warning"></i>Nueva Venta
-    </a>
-</li>
+                        {% if session.get('rol') == 'empleado' %}
+                            <!-- ACCIONES RÁPIDAS PARA EMPLEADOS -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('empleado_reservas') }}">
+                                    <i class="fas fa-tasks me-2 text-primary"></i>Ver Mis Reservas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('empleado_monitor') }}">
+                                    <i class="fas fa-tv me-2 text-info"></i>Abrir Monitor
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('reservas') }}">
+                                    <i class="fas fa-calendar-alt me-2 text-warning"></i>Todas las Reservas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mascotas') }}">
+                                    <i class="fas fa-dog me-2 text-success"></i>Buscar Mascota
+                                </a>
+                            </li>
+                        {% else %}
+                            <!-- ACCIONES RÁPIDAS PARA ADMIN/GERENTE/CAJERO -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('crear_cliente') }}">
+                                    <i class="fas fa-user-plus me-2 text-success"></i>Nuevo Cliente
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('crear_reserva') }}">
+                                    <i class="fas fa-calendar-plus me-2 text-info"></i>Nueva Reserva
+                                </a>
+                            </li>
+                            <!-- ACCIÓN RÁPIDA PARA NUEVO EMPLEADO -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('empleados') }}" onclick="return abrirModalNuevoEmpleado(event)">
+                                    <i class="fas fa-user-plus me-2 text-primary"></i>Nuevo Empleado
+                                </a>
+                            </li>
+                            <!-- ACCIÓN RÁPIDA PARA NUEVO USUARIO -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('usuarios') }}">
+                                    <i class="fas fa-user-plus me-2 text-warning"></i>Nuevo Usuario
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('ventas') }}">
+                                    <i class="fas fa-cash-register me-2 text-warning"></i>Nueva Venta
+                                </a>
+                            </li>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
@@ -215,6 +333,40 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/comunes.js') }}"></script>
+    
+    <script>
+    // Función para abrir el modal de nuevo empleado desde el enlace rápido
+    function abrirModalNuevoEmpleado(event) {
+        event.preventDefault();
+        
+        // Verificar si estamos en la página de empleados
+        if (window.location.pathname.includes('/empleados')) {
+            // Si ya estamos en empleados, abrir el modal
+            const modal = new bootstrap.Modal(document.getElementById('modalNuevoEmpleado'));
+            if (modal) {
+                modal.show();
+            } else {
+                console.error('Modal no encontrado');
+                window.location.href = "{{ url_for('empleados') }}";
+            }
+        } else {
+            // Si no estamos en empleados, ir a la página
+            window.location.href = "{{ url_for('empleados') }}";
+        }
+        return false;
+    }
+    
+    // Detectar si es un dispositivo móvil/tablet
+    function esDispositivoMovil() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+    
+    // Si es móvil y es empleado, redirigir a vista móvil optimizada
+    if (esDispositivoMovil() && window.location.pathname.includes('/empleado/')) {
+        // Podrías redirigir a una versión móvil optimizada
+        console.log("Dispositivo móvil detectado - Vista empleado");
+    }
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

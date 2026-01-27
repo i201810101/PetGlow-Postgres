@@ -3,16 +3,41 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 import mysql.connector
+import hashlib
+from functools import wraps
 from mysql.connector import Error
 
 # Cargar variables de entorno
 load_dotenv()
 
+
+
+def login_required(f):
+    """Decorador para requerir inicio de sesión"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'id_usuario' not in session:
+            flash('Por favor inicia sesión para acceder a esta página.', 'warning')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorador para requerir rol de administrador"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'id_usuario' not in session:
+            flash('Por favor inicia sesión.', 'warning')
+            return redirect(url_for('login'))
+        if session.get('rol') != 'admin':
+            flash('No tienes permisos para acceder a esta página.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Inicializar la aplicación
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'petglow-secret-key-2025')
-
-
 
 # Configuración de la base de datos MySQL
 def get_db_connection():
@@ -52,6 +77,7 @@ def index():
     return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """Panel de control principal"""
     conn = get_db_connection()
@@ -130,7 +156,202 @@ def dashboard():
     
     # Pasar las últimas reservas a la plantilla
     return render_template('dashboard.html', ultimas_reservas=ultimas_reservas, **stats)
+
+def hash_password(password):
+    """Generar hash seguro para contraseñas"""
+    # Usar sha256 con salt
+    salt = "petglow_salt_2024"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de inicio de sesión"""
+    # Si ya está logueado, redirigir al dashboard
+    if 'id_usuario' in session:
+        return redirect(url_for('dashboard'))
     
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        remember = request.form.get('remember') == 'on'
+        
+        # Validaciones básicas
+        if not username or not password:
+            flash('Usuario y contraseña son requeridos.', 'danger')
+            return render_template('login/login.html')
+        
+        conn = get_db_connection()
+        if not conn:
+            flash('Error de conexión a la base de datos.', 'danger')
+            return render_template('login/login.html')
+        
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # Buscar usuario
+            cursor.execute("""
+                SELECT u.*, e.nombre, e.apellido, e.email as empleado_email
+                FROM usuarios u
+                LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
+                WHERE u.username = %s AND u.activo = TRUE
+            """, (username,))
+            
+            usuario = cursor.fetchone()
+            
+            if not usuario:
+                flash('Usuario o contraseña incorrectos.', 'danger')
+                return render_template('login/login.html')
+            
+            # Verificar contraseña (comparar hashes)
+            hashed_password = hash_password(password)
+            if usuario['password_hash'] != hashlib.sha256(password.encode()).hexdigest():
+                # Registrar intento fallido
+                cursor.execute("""
+                    UPDATE usuarios 
+                    SET intentos_fallidos = COALESCE(intentos_fallidos, 0) + 1,
+                        ultimo_intento_fallido = NOW()
+                    WHERE id_usuario = %s
+                """, (usuario['id_usuario'],))
+                conn.commit()
+                
+                flash('Usuario o contraseña incorrectos.', 'danger')
+                return render_template('login/login.html')
+            
+            # Verificar si la cuenta está bloqueada por intentos fallidos
+            if usuario.get('intentos_fallidos', 0) >= 5:
+                # Verificar si han pasado 5 minutos desde el último intento
+                cursor.execute("""
+                    SELECT TIMESTAMPDIFF(MINUTE, ultimo_intento_fallido, NOW()) as minutos_desde_bloqueo
+                    FROM usuarios 
+                    WHERE id_usuario = %s
+                """, (usuario['id_usuario'],))
+                bloqueo = cursor.fetchone()
+                
+                if bloqueo and bloqueo['minutos_desde_bloqueo'] < 5:
+                    flash('Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta nuevamente en 5 minutos.', 'danger')
+                    return render_template('login/login.html')
+                else:
+                    # Restablecer intentos si ya pasaron 5 minutos
+                    cursor.execute("""
+                        UPDATE usuarios 
+                        SET intentos_fallidos = 0,
+                            ultimo_intento_fallido = NULL
+                        WHERE id_usuario = %s
+                    """, (usuario['id_usuario'],))
+            
+            # Restablecer intentos fallidos
+            cursor.execute("""
+                UPDATE usuarios 
+                SET intentos_fallidos = 0,
+                    ultimo_intento_fallido = NULL,
+                    ultimo_login = NOW()
+                WHERE id_usuario = %s
+            """, (usuario['id_usuario'],))
+            
+            # Registrar historial de login
+            ip_address = request.remote_addr
+            user_agent = request.headers.get('User-Agent', '')
+            
+            cursor.execute("""
+                INSERT INTO login_history (id_usuario, ip_address, user_agent)
+                VALUES (%s, %s, %s)
+            """, (usuario['id_usuario'], ip_address, user_agent))
+            
+            conn.commit()
+            
+            # Configurar sesión
+            session['id_usuario'] = usuario['id_usuario']
+            session['username'] = usuario['username']
+            session['rol'] = usuario['rol']
+            session['nombre'] = usuario.get('nombre', 'Administrador')
+            session['apellido'] = usuario.get('apellido', '')
+            session['email'] = usuario.get('empleado_email', '')
+            session['last_activity'] = datetime.now().isoformat()
+            
+            # Configurar duración de sesión
+            if remember:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(days=7)  # 7 días
+            else:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(hours=8)  # 8 horas
+            
+            flash(f'¡Bienvenido(a), {session["nombre"]}!', 'success')
+            
+            # Redirigir según rol
+            if usuario['rol'] == 'admin':
+                return redirect(url_for('dashboard'))
+            elif usuario['rol'] == 'gerente':
+                return redirect(url_for('reservas'))
+            elif usuario['rol'] == 'cajero':
+                return redirect(url_for('ventas'))
+            else:
+                return redirect(url_for('dashboard'))
+            
+        except Error as e:
+            flash(f'Error en el inicio de sesión: {str(e)}', 'danger')
+            return render_template('login/login.html')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    # GET: Mostrar formulario de login
+    return render_template('login/login.html')
+
+@app.route('/logout')
+def logout():
+    """Cerrar sesión"""
+    # Registrar logout
+    if 'id_usuario' in session:
+        conn = get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("""
+                    UPDATE usuarios 
+                    SET ultimo_logout = NOW()
+                    WHERE id_usuario = %s
+                """, (session['id_usuario'],))
+                conn.commit()
+            except:
+                pass
+            finally:
+                cursor.close()
+                conn.close()
+    
+    # Limpiar sesión
+    session.clear()
+    flash('Sesión cerrada exitosamente.', 'info')
+    return redirect(url_for('login'))
+
+# ==================== RUTA DE VERIFICACIÓN DE SESIÓN ====================
+
+@app.before_request
+def before_request():
+    """Verificar sesión antes de cada petición"""
+    # Excluir rutas públicas
+    public_routes = ['login', 'static']
+    if request.endpoint in public_routes:
+        return
+    
+    # Verificar si hay sesión activa
+    if 'id_usuario' not in session:
+        return redirect(url_for('login'))
+    
+    # Verificar timeout de sesión (8 horas)
+    if 'last_activity' in session:
+        last_activity = datetime.fromisoformat(session['last_activity'])
+        time_difference = datetime.now() - last_activity
+        
+        if time_difference.total_seconds() > 28800:  # 8 horas en segundos
+            session.clear()
+            flash('Tu sesión ha expirado por inactividad.', 'warning')
+            return redirect(url_for('login'))
+    
+    # Actualizar última actividad
+    session['last_activity'] = datetime.now().isoformat()
+
+   
 @app.route('/ventas')
 def ventas():
     """Listar ventas/facturas"""
@@ -181,6 +402,7 @@ def ventas():
     return render_template('ventas/listar.html', ventas=ventas_list)
     
 @app.route('/clientes')
+@login_required
 def clientes():
     """Listar clientes"""
     conn = get_db_connection()
@@ -1210,18 +1432,15 @@ def crear_reserva():
                 fecha_hora_dt = datetime.strptime(fecha_hora_str, '%Y-%m-%d %H:%M')
                 ahora = datetime.now()
                 
-                # CORRECCIÓN: Comparar solo año, mes, día, hora y minutos (ignorar segundos)
-                # Crear un datetime sin segundos para comparación
+                # CORRECCIÓN: Comparar solo año, mes, día, hora y minutos
                 fecha_hora_sin_segundos = fecha_hora_dt.replace(second=0, microsecond=0)
                 ahora_sin_segundos = ahora.replace(second=0, microsecond=0)
                 
-                # Solo verificar si es una fecha/hora pasada (más de 1 minuto en el pasado)
-                # Usamos 1 minuto de margen para evitar problemas de sincronización
                 if fecha_hora_sin_segundos < (ahora_sin_segundos - timedelta(minutes=1)):
                     flash('No se pueden crear reservas en fechas u horas pasadas.', 'danger')
                     return redirect(url_for('crear_reserva'))
                 
-                # NUEVO: Horario de atención LUNES A DOMINGO de 9:00 AM a 6:00 PM
+                # Horario de atención LUNES A DOMINGO de 9:00 AM a 6:00 PM
                 hora = fecha_hora_dt.hour
                 minuto = fecha_hora_dt.minute
                 
@@ -1243,34 +1462,49 @@ def crear_reserva():
                     resultado = cursor.fetchone()
                     duracion_total = int(resultado['duracion_total']) if resultado and resultado['duracion_total'] else 60
                     
-                    # Verificar disponibilidad del empleado
+                    # OBTENER INFORMACIÓN DEL EMPLEADO PARA VERIFICAR SI PUEDE MÚLTIPLES RESERVAS
                     cursor.execute("""
-                        SELECT r.id_reserva, r.fecha_reserva, s.duracion_min
-                        FROM reservas r
-                        JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
-                        JOIN servicios s ON rs.id_servicio = s.id_servicio
-                        WHERE r.id_empleado = %s 
-                        AND r.estado NOT IN ('cancelada', 'no_show')
-                        AND DATE(r.fecha_reserva) = DATE(%s)
-                    """, (id_empleado, fecha_reserva))
+                        SELECT nombre, apellido 
+                        FROM empleados 
+                        WHERE id_empleado = %s
+                    """, (id_empleado,))
+                    empleado_info = cursor.fetchone()
                     
-                    reservas_existentes = cursor.fetchall()
+                    # Verificar si es administrador/sistema (puede múltiples reservas)
+                    es_administrador = False
+                    if empleado_info:
+                        nombre_completo = f"{empleado_info['nombre']} {empleado_info['apellido']}".lower()
+                        if any(keyword in nombre_completo for keyword in ['admin', 'sistema', 'administrador']):
+                            es_administrador = True
                     
-                    # Calcular hora de inicio y fin de la nueva reserva
-                    nueva_inicio = fecha_hora_dt
-                    nueva_fin = fecha_hora_dt + timedelta(minutes=int(duracion_total))
-                    
-                    # Verificar superposiciones
-                    for reserva in reservas_existentes:
-                        reserva_inicio = reserva['fecha_reserva']
-                        # CORRECCIÓN: Convertir decimal.Decimal a int
-                        reserva_duracion = int(reserva['duracion_min']) if reserva['duracion_min'] else 60
-                        reserva_fin = reserva_inicio + timedelta(minutes=int(reserva_duracion))
+                    # Verificar disponibilidad del empleado SOLO si NO es administrador
+                    if not es_administrador:
+                        cursor.execute("""
+                            SELECT r.id_reserva, r.fecha_reserva, s.duracion_min
+                            FROM reservas r
+                            JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+                            JOIN servicios s ON rs.id_servicio = s.id_servicio
+                            WHERE r.id_empleado = %s 
+                            AND r.estado NOT IN ('cancelada', 'no_show')
+                            AND DATE(r.fecha_reserva) = DATE(%s)
+                        """, (id_empleado, fecha_reserva))
                         
-                        # Verificar si hay superposición
-                        if (nueva_inicio < reserva_fin and nueva_fin > reserva_inicio):
-                            flash(f'El empleado ya tiene una reserva de {reserva_inicio.strftime("%H:%M")} a {reserva_fin.strftime("%H:%M")}.', 'danger')
-                            return redirect(url_for('crear_reserva'))
+                        reservas_existentes = cursor.fetchall()
+                        
+                        # Calcular hora de inicio y fin de la nueva reserva
+                        nueva_inicio = fecha_hora_dt
+                        nueva_fin = fecha_hora_dt + timedelta(minutes=int(duracion_total))
+                        
+                        # Verificar superposiciones
+                        for reserva in reservas_existentes:
+                            reserva_inicio = reserva['fecha_reserva']
+                            reserva_duracion = int(reserva['duracion_min']) if reserva['duracion_min'] else 60
+                            reserva_fin = reserva_inicio + timedelta(minutes=int(reserva_duracion))
+                            
+                            # Verificar si hay superposición
+                            if (nueva_inicio < reserva_fin and nueva_fin > reserva_inicio):
+                                flash(f'El empleado ya tiene una reserva de {reserva_inicio.strftime("%H:%M")} a {reserva_fin.strftime("%H:%M")}.', 'danger')
+                                return redirect(url_for('crear_reserva'))
                 
             except ValueError:
                 flash('Formato de fecha u hora inválido.', 'danger')
@@ -1291,7 +1525,6 @@ def crear_reserva():
             
             # Agregar servicios a la reserva
             for servicio_id in servicios:
-                # Obtener precio del servicio
                 cursor.execute("SELECT precio FROM servicios WHERE id_servicio = %s", (servicio_id,))
                 servicio = cursor.fetchone()
                 if servicio:
@@ -1317,7 +1550,7 @@ def crear_reserva():
         """)
         mascotas = cursor.fetchall()
         
-        # Empleados - Buscar primero si existe un empleado llamado "Admin" o "Sistema"
+        # Empleados - Ordenar con administrador primero
         cursor.execute("""
             SELECT id_empleado, nombre, apellido, especialidad
             FROM empleados
@@ -1325,8 +1558,7 @@ def crear_reserva():
             ORDER BY 
                 CASE 
                     WHEN LOWER(nombre) LIKE '%admin%' OR LOWER(nombre) LIKE '%sistema%' THEN 1
-                    WHEN LOWER(apellido) LIKE '%admin%' OR LOWER(apellido) LIKE '%sistema%' THEN 2
-                    ELSE 3
+                    ELSE 2
                 END,
                 nombre
         """)
@@ -1352,31 +1584,22 @@ def crear_reserva():
         # Fecha mínima (siempre hoy)
         fecha_minima = datetime.now().strftime('%Y-%m-%d')
         
-        # Hora mínima dinámica - SIN RESTRICCIÓN DE 30 MINUTOS
+        # Hora mínima dinámica
         ahora = datetime.now()
-        
-        # NUEVO: Todos los días de 9:00 AM a 6:00 PM
-        # SIN RESTRICCIÓN: usar hora actual redondeada a minutos
-        # Redondear a minutos completos (sin segundos)
         hora_minima = f"{ahora.hour:02d}:{ahora.minute:02d}"
         
-        # Ajustar si está fuera de horario de atención
+        # Ajustar si está fuera de horario
         hora_actual = ahora.hour
         minuto_actual = ahora.minute
         
-        # Si ya pasó el horario de atención hoy (después de las 6 PM)
         if hora_actual > 18 or (hora_actual == 18 and minuto_actual > 0):
-            # Pasar al siguiente día
             fecha_minima = (ahora + timedelta(days=1)).strftime('%Y-%m-%d')
             hora_minima = '09:00'
         elif hora_actual < 9:
-            # Si es antes de las 9 AM, usar 9:00
             hora_minima = '09:00'
         else:
-            # Para horario actual dentro del horario de atención
-            # Asegurar que no sobrepase el límite de las 6 PM
             if hora_actual >= 18:
-                hora_minima = '17:59'  # Último minuto disponible
+                hora_minima = '17:59'
         
     except Error as e:
         flash(f'Error creando reserva: {e}', 'danger')
@@ -1519,6 +1742,15 @@ def editar_reserva(id):
                 
                 # Verificar disponibilidad del empleado si se cambió empleado o fecha/hora
                 if id_empleado != str(reserva['id_empleado']) or fecha_hora_dt != fecha_hora_actual:
+                    # OBTENER INFORMACIÓN DEL EMPLEADO
+                    cursor.execute("SELECT nombre, apellido FROM empleados WHERE id_empleado = %s", (id_empleado,))
+                    empleado_info = cursor.fetchone()
+    
+                    es_administrador = False
+                    if empleado_info:
+                        nombre_completo = f"{empleado_info['nombre']} {empleado_info['apellido']}".lower()
+                        if any(keyword in nombre_completo for keyword in ['admin', 'sistema', 'administrador']):
+                            es_administrador = True    
                     # Calcular duración total de servicios para verificar disponibilidad
                     if servicios:
                         servicios_tuple = tuple(map(int, servicios))
@@ -1701,6 +1933,300 @@ def eliminar_reserva(id):
     finally:
         cursor.close()
         conn.close()
+# ==================== RUTAS API PARA EMPLEADOS ====================
+
+@app.route('/api/empleado/info')
+@login_required
+def api_empleado_info():
+    """Obtener información del empleado actual"""
+    id_empleado = session.get('id_empleado')
+    
+    if not id_empleado:
+        return jsonify({'success': False, 'message': 'No se encontró empleado'})
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'message': 'Error de conexión'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener información del empleado
+        cursor.execute("""
+            SELECT e.id_empleado, e.nombre, e.apellido, e.especialidad, e.email, e.telefono,
+                   e.fecha_contratacion, u.username, u.rol
+            FROM empleados e
+            LEFT JOIN usuarios u ON e.id_empleado = u.id_empleado
+            WHERE e.id_empleado = %s
+        """, (id_empleado,))
+        
+        empleado = cursor.fetchone()
+        
+        if empleado:
+            return jsonify({
+                'success': True,
+                'id': empleado['id_empleado'],
+                'nombre': f"{empleado['nombre']} {empleado['apellido']}",
+                'nombre_corto': empleado['nombre'],
+                'apellido': empleado['apellido'],
+                'especialidad': empleado['especialidad'],
+                'email': empleado['email'],
+                'telefono': empleado['telefono'],
+                'username': empleado.get('username'),
+                'rol': empleado.get('rol'),
+                'fecha_contratacion': empleado['fecha_contratacion'].strftime('%d/%m/%Y') if empleado['fecha_contratacion'] else None
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Empleado no encontrado'})
+            
+    except Error as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+# ==================== VISTA DE EMPLEADOS ====================
+
+@app.route('/empleado/reservas')
+@login_required
+def empleado_reservas():
+    """Vista especial para empleados - Ver sus reservas asignadas"""
+    id_empleado = session.get('id_empleado')
+    
+    if not id_empleado:
+        flash('No se encontró información del empleado.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener reservas asignadas a este empleado
+        # Hoy + próximos 7 días
+        cursor.execute("""
+            SELECT 
+                r.*,
+                m.id_mascota,
+                m.nombre as mascota_nombre,
+                m.especie,
+                m.raza,
+                m.color,
+                m.tamano,
+                c.id_cliente,
+                c.nombre as cliente_nombre,
+                c.apellido as cliente_apellido,
+                c.telefono as cliente_telefono,
+                CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
+                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                SUM(s.duracion_min) as duracion_total
+            FROM reservas r
+            JOIN mascotas m ON r.id_mascota = m.id_mascota
+            JOIN clientes c ON m.id_cliente = c.id_cliente
+            JOIN empleados e ON r.id_empleado = e.id_empleado
+            LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+            LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
+            WHERE r.id_empleado = %s
+            AND DATE(r.fecha_reserva) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+            AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
+            GROUP BY r.id_reserva
+            ORDER BY 
+                CASE r.estado 
+                    WHEN 'en_proceso' THEN 1
+                    WHEN 'confirmada' THEN 2
+                    WHEN 'pendiente' THEN 3
+                    ELSE 4
+                END,
+                r.fecha_reserva ASC
+        """, (id_empleado,))
+        
+        reservas_asignadas = cursor.fetchall()
+        
+        # Obtener estadísticas
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) as pendientes,
+                SUM(CASE WHEN estado = 'confirmada' THEN 1 ELSE 0 END) as confirmadas,
+                SUM(CASE WHEN estado = 'en_proceso' THEN 1 ELSE 0 END) as en_proceso
+            FROM reservas 
+            WHERE id_empleado = %s 
+            AND DATE(fecha_reserva) >= CURDATE()
+            AND estado IN ('pendiente', 'confirmada', 'en_proceso')
+        """, (id_empleado,))
+        
+        estadisticas = cursor.fetchone()
+        
+        # Obtener información del empleado
+        cursor.execute("""
+            SELECT nombre, apellido, especialidad 
+            FROM empleados 
+            WHERE id_empleado = %s
+        """, (id_empleado,))
+        
+        empleado_info = cursor.fetchone()
+        
+    except Error as e:
+        flash(f'Error obteniendo reservas: {e}', 'danger')
+        return redirect(url_for('dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('empleados/reservas.html', 
+                         reservas=reservas_asignadas,
+                         estadisticas=estadisticas,
+                         empleado=empleado_info)
+
+@app.route('/api/empleado/reservas/<int:id>/estado', methods=['POST'])
+@login_required
+def api_cambiar_estado_reserva_empleado(id):
+    """API para que empleados cambien estado de sus reservas"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'message': 'No autorizado'}), 401
+    
+    data = request.get_json()
+    nuevo_estado = data.get('estado')
+    
+    if not nuevo_estado:
+        return jsonify({'success': False, 'message': 'Estado no especificado.'}), 400
+    
+    estados_validos = ['confirmada', 'en_proceso', 'completada', 'cancelada']
+    if nuevo_estado not in estados_validos:
+        return jsonify({'success': False, 'message': 'Estado no válido.'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        id_empleado = session.get('id_empleado')
+        
+        # Verificar que la reserva pertenece a este empleado
+        cursor.execute("""
+            SELECT id_reserva FROM reservas 
+            WHERE id_reserva = %s AND id_empleado = %s
+        """, (id, id_empleado))
+        
+        reserva = cursor.fetchone()
+        
+        if not reserva:
+            return jsonify({'success': False, 'message': 'Reserva no encontrada o no asignada.'}), 404
+        
+        # Cambiar estado
+        cursor.execute("""
+            UPDATE reservas 
+            SET estado = %s, fecha_modificacion = NOW()
+            WHERE id_reserva = %s
+        """, (nuevo_estado, id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Estado cambiado a {nuevo_estado.replace("_", " ").title()}',
+            'estado': nuevo_estado
+        })
+            
+    except Error as e:
+        return jsonify({'success': False, 'message': f'Error cambiando estado: {str(e)}'}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleado/reservas/hoy')
+@login_required
+def api_reservas_hoy_empleado():
+    """API para obtener reservas de hoy del empleado (para pantallas de trabajo)"""
+    id_empleado = session.get('id_empleado')
+    
+    if not id_empleado:
+        return jsonify({'success': False, 'message': 'No se encontró empleado'}), 401
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Reservas de hoy para este empleado
+        cursor.execute("""
+            SELECT 
+                r.id_reserva,
+                r.codigo_reserva,
+                r.fecha_reserva,
+                r.estado,
+                r.notas,
+                m.nombre as mascota_nombre,
+                m.especie,
+                m.raza,
+                m.color,
+                c.nombre as cliente_nombre,
+                c.apellido as cliente_apellido,
+                c.telefono as cliente_telefono,
+                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                SUM(s.duracion_min) as duracion_total
+            FROM reservas r
+            JOIN mascotas m ON r.id_mascota = m.id_mascota
+            JOIN clientes c ON m.id_cliente = c.id_cliente
+            LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+            LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
+            WHERE r.id_empleado = %s
+            AND DATE(r.fecha_reserva) = CURDATE()
+            AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
+            GROUP BY r.id_reserva
+            ORDER BY r.fecha_reserva ASC
+        """, (id_empleado,))
+        
+        reservas_hoy = cursor.fetchall()
+        
+        # Formatear datos
+        for reserva in reservas_hoy:
+            # Estado con clase CSS
+            estado_clases = {
+                'pendiente': 'warning',
+                'confirmada': 'info',
+                'en_proceso': 'primary',
+                'completada': 'success',
+                'cancelada': 'danger'
+            }
+            reserva['estado_color'] = estado_clases.get(reserva['estado'], 'secondary')
+            
+            # Formatear fecha/hora
+            if reserva['fecha_reserva']:
+                fecha_obj = reserva['fecha_reserva']
+                if isinstance(fecha_obj, datetime):
+                    reserva['hora_str'] = fecha_obj.strftime('%H:%M')
+                    reserva['fecha_str'] = fecha_obj.strftime('%d/%m/%Y')
+                    
+                    # Calcular minutos restantes
+                    ahora = datetime.now()
+                    diferencia = (fecha_obj - ahora).total_seconds() / 60
+                    reserva['minutos_restantes'] = int(diferencia) if diferencia > 0 else 0
+                    reserva['es_proxima'] = 0 < diferencia <= 30
+        
+        return jsonify({
+            'success': True,
+            'reservas': reservas_hoy,
+            'total': len(reservas_hoy),
+            'hoy': datetime.now().strftime('%d/%m/%Y')
+        })
+        
+    except Error as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/empleado/monitor')
+@login_required
+def empleado_monitor():
+    """Pantalla de monitor/kiosk para empleados (solo lectura, auto-refresh)"""
+    return render_template('empleados/monitor.html')
 
 @app.route('/api/mascota/<int:id>')
 def obtener_datos_mascota(id):
@@ -1953,7 +2479,7 @@ def ver_factura(id):
             flash('Factura no encontrada.', 'danger')
             return redirect(url_for('ventas'))
         
-        # 2. Obtener servicios de la factura
+        # 2. Obtener servicios y productos
         cursor.execute("""
             SELECT fs.*, s.categoria
             FROM factura_servicios fs
@@ -1962,7 +2488,6 @@ def ver_factura(id):
         """, (id,))
         servicios = cursor.fetchall()
         
-        # 3. Obtener productos de la factura (si los hay) - AÑADIR ESTO
         cursor.execute("""
             SELECT fp.*, p.categoria
             FROM factura_productos fp
@@ -1971,26 +2496,31 @@ def ver_factura(id):
         """, (id,))
         productos = cursor.fetchall()
         
-        # 4. Calcular según tipo de comprobante CORREGIDO
+        # 3. Calcular totales desde los detalles
         total_servicios = sum(float(s['subtotal']) for s in servicios) if servicios else 0.0
         total_productos = sum(float(p['subtotal']) for p in productos) if productos else 0.0
-        total_general = total_servicios + total_productos
         
-        if factura['tipo_comprobante'] == 'factura':
-            # Para factura: calcular IGV (18%)
-            subtotal = total_general / 1.18  # Base imponible
-            igv = subtotal * 0.18  # IGV 18%
-            total = subtotal + igv
+        # 4. Si la factura ya tiene totales calculados, usarlos
+        if factura['total'] and factura['total'] > 0:
+            total = float(factura['total'])
+            subtotal = float(factura['subtotal']) if factura['subtotal'] else 0.0
+            igv = float(factura['igv']) if factura['igv'] else 0.0
         else:
-            # Para boleta: no hay IGV
-            subtotal = total_general  # En boletas, el total ya incluye el IGV implícito
-            igv = 0.00
-            total = total_general
+            # Calcular según tipo de comprobante
+            total_base = total_servicios + total_productos
+            
+            if factura['tipo_comprobante'] == 'factura':
+                # Para factura: separar IGV
+                subtotal = total_base / 1.18
+                igv = subtotal * 0.18
+                total = subtotal + igv
+            else:
+                # Para boleta: no hay IGV separado
+                subtotal = total_base
+                igv = 0.00
+                total = total_base
         
-        # 5. Formatear fecha de emisión
-        if factura['fecha_emision']:
-            factura['fecha_emision_str'] = factura['fecha_emision'].strftime('%d/%m/%Y %H:%M')
-        
+        # 5. Asignar valores a la factura
         factura['servicios'] = servicios
         factura['productos'] = productos
         factura['total_servicios'] = round(total_servicios, 2)
@@ -1999,7 +2529,11 @@ def ver_factura(id):
         factura['igv'] = round(igv, 2)
         factura['total'] = round(total, 2)
         
-        # 6. Verificar si tiene pagos registrados en caja
+        # 6. Formatear fecha
+        if factura['fecha_emision']:
+            factura['fecha_emision_str'] = factura['fecha_emision'].strftime('%d/%m/%Y %H:%M')
+        
+        # 7. Verificar pagos
         cursor.execute("""
             SELECT * FROM movimientos_caja 
             WHERE id_factura = %s
@@ -2863,7 +3397,888 @@ def anular_factura(id):
         if 'cursor' in locals() and cursor:
             cursor.close()
         if conn:
-            conn.close()                  
+            conn.close()        
+
+
+# Añadir estas rutas a tu app.py
+
+@app.route('/empleados')
+@login_required
+def empleados():
+    """Página principal de gestión de empleados"""
+    return render_template('empleados/listar.html')
+
+# ==================== API PARA EMPLEADOS ====================
+
+@app.route('/api/empleados', methods=['GET'])
+def api_get_empleados():
+    """Obtener todos los empleados"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id_empleado, dni, nombre, apellido, telefono, email, 
+                   especialidad, fecha_contratacion, activo
+            FROM empleados
+            ORDER BY nombre, apellido
+        """)
+        empleados = cursor.fetchall()
+        return jsonify(empleados)
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados', methods=['POST'])
+def api_create_empleado():
+    """Crear nuevo empleado"""
+    data = request.get_json()
+    
+    # Validar datos requeridos
+    required_fields = ['dni', 'nombre', 'apellido', 'email', 'especialidad']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            return jsonify({'error': f'El campo {field} es requerido'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el DNI ya existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE dni = %s", (data['dni'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'El DNI ya está registrado'}), 400
+        
+        # Verificar si el email ya existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE email = %s", (data['email'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'El email ya está registrado'}), 400
+        
+        # Insertar empleado
+        cursor.execute("""
+            INSERT INTO empleados (dni, nombre, apellido, telefono, email, 
+                                  especialidad, fecha_contratacion, activo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            data['dni'],
+            data['nombre'],
+            data['apellido'],
+            data.get('telefono'),
+            data['email'],
+            data['especialidad'],
+            data.get('fecha_contratacion'),
+            data.get('activo', True)
+        ))
+        
+        id_empleado = cursor.lastrowid
+        
+        # Crear usuario si se solicitó
+        if 'usuario' in data and data['usuario']:
+            usuario_data = data['usuario']
+            
+            # Validar datos del usuario
+            if not usuario_data.get('username') or not usuario_data.get('password') or not usuario_data.get('rol'):
+                return jsonify({'error': 'Faltan datos para crear el usuario'}), 400
+            
+            # Crear hash de la contraseña
+            password_hash = hashlib.sha256(usuario_data['password'].encode()).hexdigest()
+            
+            cursor.execute("""
+                INSERT INTO usuarios (id_empleado, username, password_hash, rol)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                id_empleado,
+                usuario_data['username'],
+                password_hash,
+                usuario_data['rol']
+            ))
+        
+        conn.commit()
+        
+        # Obtener el empleado creado
+        cursor.execute("""
+            SELECT id_empleado, dni, nombre, apellido, telefono, email, 
+                   especialidad, fecha_contratacion, activo
+            FROM empleados
+            WHERE id_empleado = %s
+        """, (id_empleado,))
+        empleado = cursor.fetchone()
+        
+        return jsonify({'success': True, 'empleado': empleado})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados/<int:id>', methods=['GET'])
+def api_get_empleado(id):
+    """Obtener un empleado específico"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id_empleado, dni, nombre, apellido, telefono, email, 
+                   especialidad, fecha_contratacion, activo
+            FROM empleados
+            WHERE id_empleado = %s
+        """, (id,))
+        empleado = cursor.fetchone()
+        
+        if not empleado:
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        return jsonify(empleado)
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados/<int:id>', methods=['PUT'])
+def api_update_empleado(id):
+    """Actualizar empleado"""
+    data = request.get_json()
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el empleado existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        # Verificar duplicados de DNI (excluyendo el actual)
+        if 'dni' in data:
+            cursor.execute("SELECT id_empleado FROM empleados WHERE dni = %s AND id_empleado != %s", 
+                          (data['dni'], id))
+            if cursor.fetchone():
+                return jsonify({'error': 'El DNI ya está registrado por otro empleado'}), 400
+        
+        # Verificar duplicados de email (excluyendo el actual)
+        if 'email' in data:
+            cursor.execute("SELECT id_empleado FROM empleados WHERE email = %s AND id_empleado != %s", 
+                          (data['email'], id))
+            if cursor.fetchone():
+                return jsonify({'error': 'El email ya está registrado por otro empleado'}), 400
+        
+        # Construir query de actualización dinámica
+        update_fields = []
+        params = []
+        
+        field_mapping = {
+            'dni': 'dni',
+            'nombre': 'nombre',
+            'apellido': 'apellido',
+            'telefono': 'telefono',
+            'email': 'email',
+            'especialidad': 'especialidad',
+            'fecha_contratacion': 'fecha_contratacion',
+            'activo': 'activo'
+        }
+        
+        for key, db_field in field_mapping.items():
+            if key in data:
+                update_fields.append(f"{db_field} = %s")
+                params.append(data[key])
+        
+        if not update_fields:
+            return jsonify({'error': 'No hay datos para actualizar'}), 400
+        
+        params.append(id)  # Para el WHERE
+        
+        query = f"""
+            UPDATE empleados 
+            SET {', '.join(update_fields)}
+            WHERE id_empleado = %s
+        """
+        
+        cursor.execute(query, params)
+        conn.commit()
+        
+        return jsonify({'success': True})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados/<int:id>', methods=['DELETE'])
+def api_delete_empleado(id):
+    """Desactivar empleado (no eliminar permanentemente)"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el empleado existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        # Desactivar empleado (no eliminar)
+        cursor.execute("UPDATE empleados SET activo = FALSE WHERE id_empleado = %s", (id,))
+        
+        # También desactivar el usuario si existe
+        cursor.execute("UPDATE usuarios SET activo = FALSE WHERE id_empleado = %s", (id,))
+        
+        conn.commit()
+        return jsonify({'success': True})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados/<int:id>/usuario', methods=['GET'])
+def api_get_usuario_empleado(id):
+    """Obtener información del usuario de un empleado"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el empleado existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        # Obtener usuario
+        cursor.execute("""
+            SELECT id_usuario, username, rol, fecha_creacion, ultimo_login, activo
+            FROM usuarios
+            WHERE id_empleado = %s
+        """, (id,))
+        usuario = cursor.fetchone()
+        
+        if usuario:
+            # Formatear fechas
+            if usuario['fecha_creacion']:
+                usuario['fecha_creacion'] = usuario['fecha_creacion'].strftime('%d/%m/%Y %H:%M')
+            if usuario['ultimo_login']:
+                usuario['ultimo_login'] = usuario['ultimo_login'].strftime('%d/%m/%Y %H:%M')
+            
+            return jsonify({'existe': True, 'usuario': usuario})
+        else:
+            return jsonify({'existe': False})
+        
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/empleados/<int:id>/usuario', methods=['POST'])
+def api_create_usuario_empleado(id):
+    """Crear usuario para un empleado"""
+    data = request.get_json()
+    
+    # Validar datos
+    required_fields = ['username', 'password', 'rol']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            return jsonify({'error': f'El campo {field} es requerido'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el empleado existe
+        cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        # Verificar si ya tiene usuario
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE id_empleado = %s", (id,))
+        if cursor.fetchone():
+            return jsonify({'error': 'El empleado ya tiene un usuario'}), 400
+        
+        # Verificar si el username ya existe
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE username = %s", (data['username'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'El username ya está en uso'}), 400
+        
+        # Crear hash de la contraseña
+        password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+        
+        # Crear usuario
+        cursor.execute("""
+            INSERT INTO usuarios (id_empleado, username, password_hash, rol)
+            VALUES (%s, %s, %s, %s)
+        """, (id, data['username'], password_hash, data['rol']))
+        
+        conn.commit()
+        return jsonify({'success': True})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/usuarios/<int:id>', methods=['PUT'])
+def api_update_usuario(id):
+    """Actualizar usuario"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No hay datos para actualizar'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el usuario existe
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE id_usuario = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+        
+        # Construir query de actualización dinámica
+        update_fields = []
+        params = []
+        
+        if 'rol' in data:
+            update_fields.append("rol = %s")
+            params.append(data['rol'])
+        
+        if 'password' in data and data['password']:
+            password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+            update_fields.append("password_hash = %s")
+            params.append(password_hash)
+        
+        if 'activo' in data:
+            update_fields.append("activo = %s")
+            params.append(data['activo'])
+        
+        if not update_fields:
+            return jsonify({'error': 'No hay datos válidos para actualizar'}), 400
+        
+        params.append(id)  # Para el WHERE
+        
+        query = f"""
+            UPDATE usuarios 
+            SET {', '.join(update_fields)}
+            WHERE id_usuario = %s
+        """
+        
+        cursor.execute(query, params)
+        conn.commit()
+        
+        return jsonify({'success': True})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ==================== FUNCIONES DE REPORTES ====================
+
+@app.route('/api/empleados/estadisticas')
+def api_get_estadisticas_empleados():
+    """Obtener estadísticas de empleados"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Estadísticas básicas
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN activo = TRUE THEN 1 ELSE 0 END) as activos,
+                SUM(CASE WHEN activo = FALSE THEN 1 ELSE 0 END) as inactivos,
+                COUNT(DISTINCT especialidad) as especialidades_diferentes
+            FROM empleados
+        """)
+        estadisticas = cursor.fetchone()
+        
+        # Conteo por especialidad
+        cursor.execute("""
+            SELECT especialidad, COUNT(*) as cantidad
+            FROM empleados
+            WHERE activo = TRUE
+            GROUP BY especialidad
+            ORDER BY cantidad DESC
+        """)
+        por_especialidad = cursor.fetchall()
+        
+        # Últimos empleados contratados
+        cursor.execute("""
+            SELECT nombre, apellido, fecha_contratacion, especialidad
+            FROM empleados
+            WHERE fecha_contratacion IS NOT NULL
+            ORDER BY fecha_contratacion DESC
+            LIMIT 5
+        """)
+        ultimos_contratados = cursor.fetchall()
+        
+        # Formatear fechas
+        for empleado in ultimos_contratados:
+            if empleado['fecha_contratacion']:
+                empleado['fecha_contratacion'] = empleado['fecha_contratacion'].strftime('%d/%m/%Y')
+        
+        return jsonify({
+            'estadisticas': estadisticas,
+            'por_especialidad': por_especialidad,
+            'ultimos_contratados': ultimos_contratados
+        })
+        
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/empleados/exportar')
+def exportar_empleados():
+    """Exportar empleados a Excel"""
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('empleados'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT dni, nombre, apellido, telefono, email, especialidad,
+                   fecha_contratacion, 
+                   CASE WHEN activo = TRUE THEN 'Activo' ELSE 'Inactivo' END as estado
+            FROM empleados
+            ORDER BY nombre, apellido
+        """)
+        empleados = cursor.fetchall()
+        
+        # Crear DataFrame
+        import pandas as pd
+        df = pd.DataFrame(empleados)
+        
+        # Crear respuesta Excel
+        from io import BytesIO
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Empleados', index=False)
+            
+            # Ajustar ancho de columnas
+            worksheet = writer.sheets['Empleados']
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        # Enviar archivo
+        from flask import send_file
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'empleados_petglow_{datetime.now().strftime("%Y%m%d_%H%M")}.xlsx'
+        )
+        
+    except Error as e:
+        flash(f'Error exportando empleados: {str(e)}', 'danger')
+        return redirect(url_for('empleados'))
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(url_for('empleados'))
+    finally:
+        cursor.close()
+        conn.close()
+@app.route('/api/empleado/<int:id>/disponibilidad')
+def verificar_disponibilidad_empleado(id):
+    """Verificar disponibilidad de un empleado en fecha y hora específicas"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'disponible': False, 'mensaje': 'Error de conexión'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        fecha = request.args.get('fecha')
+        hora = request.args.get('hora')
+        
+        if not fecha or not hora:
+            return jsonify({'disponible': False, 'mensaje': 'Fecha y hora requeridas'}), 400
+        
+        # Obtener información del empleado
+        cursor.execute("SELECT nombre, apellido FROM empleados WHERE id_empleado = %s", (id,))
+        empleado = cursor.fetchone()
+        
+        if not empleado:
+            return jsonify({'disponible': False, 'mensaje': 'Empleado no encontrado'}), 404
+        
+        # Verificar si es administrador
+        nombre_completo = f"{empleado['nombre']} {empleado['apellido']}".lower()
+        es_administrador = any(keyword in nombre_completo for keyword in ['admin', 'sistema', 'administrador'])
+        
+        # Si es administrador, siempre está disponible
+        if es_administrador:
+            return jsonify({
+                'disponible': True,
+                'mensaje': 'Administrador - puede múltiples reservas'
+            })
+        
+        # Si no es administrador, verificar disponibilidad normal
+        fecha_hora_str = f"{fecha} {hora}"
+        try:
+            fecha_hora_dt = datetime.strptime(fecha_hora_str, '%Y-%m-%d %H:%M')
+        except ValueError:
+            return jsonify({'disponible': False, 'mensaje': 'Formato de fecha/hora inválido'}), 400
+        
+        # Verificar reservas existentes
+        cursor.execute("""
+            SELECT r.id_reserva, r.fecha_reserva, s.duracion_min
+            FROM reservas r
+            JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+            JOIN servicios s ON rs.id_servicio = s.id_servicio
+            WHERE r.id_empleado = %s 
+            AND r.estado NOT IN ('cancelada', 'no_show')
+            AND DATE(r.fecha_reserva) = DATE(%s)
+        """, (id, fecha))
+        
+        reservas_existentes = cursor.fetchall()
+        
+        # Para simplificar, asumimos duración de 60 minutos
+        duracion_estimada = 60
+        nueva_inicio = fecha_hora_dt
+        nueva_fin = fecha_hora_dt + timedelta(minutes=duracion_estimada)
+        
+        for reserva in reservas_existentes:
+            reserva_inicio = reserva['fecha_reserva']
+            reserva_duracion = int(reserva['duracion_min']) if reserva['duracion_min'] else 60
+            reserva_fin = reserva_inicio + timedelta(minutes=int(reserva_duracion))
+            
+            if (nueva_inicio < reserva_fin and nueva_fin > reserva_inicio):
+                return jsonify({
+                    'disponible': False,
+                    'mensaje': f'Ya tiene reserva de {reserva_inicio.strftime("%H:%M")} a {reserva_fin.strftime("%H:%M")}'
+                })
+        
+        return jsonify({'disponible': True, 'mensaje': 'Empleado disponible'})
+        
+    except Error as e:
+        return jsonify({'disponible': False, 'mensaje': f'Error: {str(e)}'}), 500
+    finally:
+        cursor.close()
+        conn.close()
+# ==================== RUTAS PARA USUARIOS ====================
+
+@app.route('/usuarios')
+@login_required  # Agregar este decorador
+@admin_required  # Solo administradores pueden ver usuarios
+def usuarios():
+    """Listar usuarios del sistema"""
+    if 'id_usuario' not in session:
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('index'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener todos los usuarios
+        cursor.execute("""
+            SELECT u.*, e.nombre as empleado_nombre, e.apellido as empleado_apellido, 
+                   e.email, e.dni as empleado_dni
+            FROM usuarios u
+            LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
+            ORDER BY u.id_usuario DESC
+        """)
+        usuarios = cursor.fetchall()
+        
+        # Estadísticas
+        cursor.execute("SELECT COUNT(*) as total FROM usuarios")
+        total_usuarios = cursor.fetchone()['total']
+        
+        cursor.execute("SELECT COUNT(*) as activos FROM usuarios WHERE activo = TRUE")
+        usuarios_activos = cursor.fetchone()['activos']
+        
+        cursor.execute("SELECT COUNT(*) as admins FROM usuarios WHERE rol = 'admin'")
+        administradores = cursor.fetchone()['admins']
+        
+        # Obtener empleados sin usuario
+        cursor.execute("""
+            SELECT e.* FROM empleados e
+            LEFT JOIN usuarios u ON e.id_empleado = u.id_empleado
+            WHERE u.id_usuario IS NULL AND e.activo = TRUE
+            ORDER BY e.nombre
+        """)
+        empleados_sin_usuario = cursor.fetchall()
+        
+        # Último registro
+        ultimo_registro = None
+        if usuarios:
+            ultimo_registro = usuarios[0].get('fecha_creacion')
+        
+    except Error as e:
+        flash(f'Error cargando usuarios: {e}', 'danger')
+        return redirect(url_for('index'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('usuarios/listar.html',
+                         usuarios=usuarios,
+                         total_usuarios=total_usuarios,
+                         usuarios_activos=usuarios_activos,
+                         administradores=administradores,
+                         ultimo_registro=ultimo_registro,
+                         empleados_sin_usuario=empleados_sin_usuario)
+
+# ==================== API PARA USUARIOS ====================
+
+@app.route('/api/usuarios', methods=['POST'])
+def api_crear_usuario():
+    """Crear un nuevo usuario (API)"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    data = request.json
+    required_fields = ['username', 'password', 'rol']
+    
+    # Validar campos requeridos
+    for field in required_fields:
+        if field not in data or not data[field]:
+            return jsonify({'success': False, 'error': f'El campo {field} es requerido'}), 400
+    
+    # Validar longitud de contraseña
+    if len(data['password']) < 6:
+        return jsonify({'success': False, 'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el usuario ya existe
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE username = %s", (data['username'],))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 400
+        
+        # Crear usuario
+        cursor.execute("""
+            INSERT INTO usuarios (username, password, id_empleado, rol, activo)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (data['username'], data['password'], 
+              data.get('id_empleado'), data['rol'], 
+              data.get('activo', True)))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Usuario creado exitosamente'})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/usuarios/<int:id>', methods=['GET'])
+def api_obtener_usuario(id):
+    """Obtener información de un usuario (API)"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener usuario
+        cursor.execute("""
+            SELECT u.*, e.nombre, e.apellido, e.dni, e.email
+            FROM usuarios u
+            LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
+            WHERE u.id_usuario = %s
+        """, (id,))
+        
+        usuario = cursor.fetchone()
+        
+        if not usuario:
+            return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+        
+        # Obtener historial de login (últimos 5)
+        cursor.execute("""
+            SELECT fecha_login, ip_address, user_agent
+            FROM login_history
+            WHERE id_usuario = %s
+            ORDER BY fecha_login DESC
+            LIMIT 5
+        """, (id,))
+        
+        historial = cursor.fetchall()
+        usuario['historial_login'] = historial
+        
+        return jsonify({'success': True, 'usuario': usuario})
+        
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/usuarios/<int:id>', methods=['PUT'])
+def api_actualizar_usuario(id):
+    """Actualizar un usuario (API)"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    data = request.json
+    
+    # Validar campos requeridos
+    if 'username' not in data or not data['username']:
+        return jsonify({'success': False, 'error': 'El nombre de usuario es requerido'}), 400
+    
+    if 'rol' not in data or not data['rol']:
+        return jsonify({'success': False, 'error': 'El rol es requerido'}), 400
+    
+    # Validar contraseña si se proporciona
+    if 'password' in data and data['password']:
+        if len(data['password']) < 6:
+            return jsonify({'success': False, 'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el usuario existe
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE id_usuario = %s", (id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+        
+        # Verificar si el username ya existe (excluyendo el actual)
+        cursor.execute("SELECT id_usuario FROM usuarios WHERE username = %s AND id_usuario != %s", 
+                      (data['username'], id))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 400
+        
+        # Actualizar usuario
+        if 'password' in data and data['password']:
+            cursor.execute("""
+                UPDATE usuarios 
+                SET username = %s, password = %s, rol = %s, activo = %s
+                WHERE id_usuario = %s
+            """, (data['username'], data['password'], data['rol'], 
+                  data.get('activo', True), id))
+        else:
+            cursor.execute("""
+                UPDATE usuarios 
+                SET username = %s, rol = %s, activo = %s
+                WHERE id_usuario = %s
+            """, (data['username'], data['rol'], 
+                  data.get('activo', True), id))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Usuario actualizado exitosamente'})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/usuarios/<int:id>', methods=['DELETE'])
+def api_eliminar_usuario(id):
+    """Eliminar un usuario (API)"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    # Prevenir que un usuario se elimine a sí mismo
+    if id == session.get('id_usuario'):
+        return jsonify({'success': False, 'error': 'No puedes eliminar tu propio usuario'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificar si el usuario existe
+        cursor.execute("SELECT id_usuario, rol FROM usuarios WHERE id_usuario = %s", (id,))
+        usuario = cursor.fetchone()
+        
+        if not usuario:
+            return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
+        
+        # Prevenir eliminación del último administrador
+        if usuario['rol'] == 'admin':
+            cursor.execute("SELECT COUNT(*) as total_admins FROM usuarios WHERE rol = 'admin'")
+            total_admins = cursor.fetchone()['total_admins']
+            
+            if total_admins <= 1:
+                return jsonify({'success': False, 'error': 'No se puede eliminar el único administrador'}), 400
+        
+        # Eliminar usuario
+        cursor.execute("DELETE FROM usuarios WHERE id_usuario = %s", (id,))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Usuario eliminado exitosamente'})
+        
+    except Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 # ================= EJECUCIÓN =================
 
 if __name__ == '__main__':

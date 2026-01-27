@@ -129,44 +129,59 @@
                     {% endif %}
                     
                     <!-- Totales -->
-                    <div class="row justify-content-end">
-                        <div class="col-md-6">
-                            <div class="total-box">
-                                {% if factura.total_servicios > 0 %}
-                                <div class="row mb-2">
-                                    <div class="col-6 text-end"><strong>Subtotal Servicios:</strong></div>
-                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.subtotal) }}</div>
-                                </div>
-                                {% endif %}
-                                
-                                {% if factura.total_productos and factura.total_productos > 0 %}
-                                <div class="row mb-2">
-                                    <div class="col-6 text-end"><strong>Subtotal Productos:</strong></div>
-                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_productos) }}</div>
-                                </div>
-                                {% endif %}
-                                
-                                {% if factura.descuento_total and factura.descuento_total > 0 %}
-                                <div class="row mb-2">
-                                    <div class="col-6 text-end"><strong>Descuento:</strong></div>
-                                    <div class="col-6 text-end">- S/ {{ "%.2f"|format(factura.descuento_total) }}</div>
-                                </div>
-                                {% endif %}
-                                
-                                {% if factura.tipo_comprobante == 'factura' %}
-                                <div class="row mb-2">
-                                    <div class="col-6 text-end"><strong>IGV (18%):</strong></div>
-                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.igv) }}</div>
-                                </div>
-                                {% endif %}
-                                
-                                <div class="row">
-                                    <div class="col-6 text-end"><h5 class="mb-0"><strong>TOTAL:</strong></h5></div>
-                                    <div class="col-6 text-end"><h5 class="mb-0 text-success">S/ {{ "%.2f"|format(factura.total) }}</h5></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<div class="row justify-content-end">
+    <div class="col-md-6">
+        <div class="total-box">
+            {% if factura.total_servicios > 0 %}
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>Subtotal Servicios:</strong></div>
+                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_servicios) }}</div>
+            </div>
+            {% endif %}
+            
+            {% if factura.total_productos and factura.total_productos > 0 %}
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>Subtotal Productos:</strong></div>
+                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_productos) }}</div>
+            </div>
+            {% endif %}
+            
+            {% if factura.descuento_total and factura.descuento_total > 0 %}
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>Descuento:</strong></div>
+                <div class="col-6 text-end">- S/ {{ "%.2f"|format(factura.descuento_total) }}</div>
+            </div>
+            {% endif %}
+            
+            <!-- Esto es lo que debes cambiar: -->
+            {% if factura.tipo_comprobante == 'factura' %}
+            <!-- Para factura, mostramos base e IGV por separado -->
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>Base Imponible:</strong></div>
+                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.subtotal) }}</div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>IGV (18%):</strong></div>
+                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.igv) }}</div>
+            </div>
+            {% else %}
+            <!-- Para boleta, solo mostramos el total -->
+            <div class="row mb-2">
+                <div class="col-6 text-end"><strong>Total:</strong></div>
+                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total) }}</div>
+            </div>
+            {% endif %}
+            
+            <!-- Solo en facturas mostramos el total final aquí -->
+            {% if factura.tipo_comprobante == 'factura' %}
+            <div class="row border-top pt-2 mt-2">
+                <div class="col-6 text-end"><h5 class="mb-0"><strong>TOTAL:</strong></h5></div>
+                <div class="col-6 text-end"><h5 class="mb-0 text-success">S/ {{ "%.2f"|format(factura.total) }}</h5></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
                     
                     <!-- Notas -->
                     {% if factura.notas %}

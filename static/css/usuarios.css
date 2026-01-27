@@ -1,0 +1,137 @@
+/* ESTILOS PARA GESTIÓN DE USUARIOS */
+
+/* Badges para roles */
+.badge-rol-admin {
+    background-color: #dc3545;
+    color: white;
+}
+
+.badge-rol-gerente {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge-rol-empleado {
+    background-color: #20c997;
+    color: white;
+}
+
+.badge-rol-cajero {
+    background-color: #fd7e14;
+    color: white;
+}
+
+/* Tarjetas de usuario */
+.usuario-card {
+    transition: all 0.3s ease;
+    border: 1px solid #dee2e6;
+}
+
+.usuario-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+/* Avatar de usuario */
+.usuario-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0 auto;
+}
+
+/* Indicadores de estado */
+.usuario-activo {
+    border-left: 4px solid #28a745;
+}
+
+.usuario-inactivo {
+    border-left: 4px solid #6c757d;
+}
+
+/* Formularios de usuario */
+.password-toggle {
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.password-toggle:hover {
+    color: #007bff;
+}
+
+/* Tabla de usuarios */
+.table-usuarios tbody tr {
+    transition: background-color 0.3s;
+}
+
+.table-usuarios tbody tr:hover {
+    background-color: rgba(0,123,255,0.05);
+}
+
+/* Modal de confirmación */
+#modalEliminarUsuario .modal-header {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .usuario-card .card-body {
+        text-align: center;
+    }
+    
+    .usuario-avatar {
+        width: 60px;
+        height: 60px;
+        font-size: 18px;
+    }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.usuario-fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Estilos para permisos */
+.permisos-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px;
+}
+
+.permiso-item {
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+/* Estilos para historial de login */
+.login-history {
+    font-size: 0.85rem;
+}
+
+.login-history-item {
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.login-history-item:last-child {
+    border-bottom: none;
+}

@@ -178,35 +178,38 @@ function validarDisponibilidad() {
     
     if (!infoElement) return;
     
-    // Solo verificar disponibilidad si se seleccionó un empleado
     if (!empleadoId || !fecha || !hora) {
         if (fecha && hora) {
             infoElement.innerHTML = `
                 <div class="alert alert-info">
                     <i class="fas fa-check-circle me-2"></i>
                     <strong>Horario disponible</strong>
-                    <div class="small">Sin empleado asignado - puede reservar</div>
+                    <div class="small">Completa los datos para ver disponibilidad</div>
                 </div>
             `;
         } else {
-            infoElement.innerHTML = '<p class="text-muted">Completa fecha y hora para ver disponibilidad</p>';
+            infoElement.innerHTML = '<p class="text-muted">Selecciona fecha y hora para ver disponibilidad</p>';
         }
         return;
     }
     
-    // Mostrar estado de carga
+    // Mostrar carga
     infoElement.innerHTML = '<p class="text-info"><i class="fas fa-spinner fa-spin me-1"></i>Verificando disponibilidad...</p>';
     
-    // Hacer petición al servidor para verificar disponibilidad
     fetch(`/api/empleado/${empleadoId}/disponibilidad?fecha=${fecha}&hora=${hora}`)
         .then(response => response.json())
         .then(data => {
             if (data.disponible) {
+                let mensajeExtra = '';
+                if (data.mensaje && data.mensaje.includes('Administrador')) {
+                    mensajeExtra = '<div class="small mt-1"><i class="fas fa-user-shield me-1"></i>Permite múltiples reservas simultáneas</div>';
+                }
+                
                 infoElement.innerHTML = `
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle me-2"></i>
-                        <strong>Empleado disponible</strong>
-                        <div class="small">El empleado está libre en este horario</div>
+                        <strong>${data.mensaje || 'Empleado disponible'}</strong>
+                        ${mensajeExtra}
                     </div>
                 `;
             } else {
@@ -220,7 +223,7 @@ function validarDisponibilidad() {
             }
         })
         .catch(error => {
-            console.error('Error al verificar disponibilidad:', error);
+            console.error('Error:', error);
             infoElement.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-circle me-2"></i>
