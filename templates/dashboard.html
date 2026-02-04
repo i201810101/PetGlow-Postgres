@@ -3,19 +3,18 @@
 {% block title %}Dashboard - PetGlow{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary">Hoy</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary">Semana</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary">Mes</button>
+<!-- Page Header -->
+<div class="page-header animate-fade-in">
+    <div class="d-flex flex-column align-items-center text-center">
+        <div>
+            <h1 class="mb-2">Panel de Control</h1>
+            <p class="subtitle mb-0 text-center">Bienvenido al sistema de gestión PetGlow Groomers</p>
         </div>
     </div>
 </div>
 
 <!-- Tarjetas de estadísticas -->
-<div class="row">
+<div class="row animate-fade-in" style="animation-delay: 0.1s">
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-left-primary shadow h-100 py-2 stat-card">
             <div class="card-body">
@@ -25,9 +24,15 @@
                             Clientes Totales
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_clientes }}</div>
+                        <div class="mt-2">
+                            <span class="text-success">
+                                <i class="fas fa-arrow-up me-1"></i>12.5%
+                            </span>
+                            <span class="text-muted ms-2">vs mes anterior</span>
+                        </div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                        <i class="fas fa-users fa-3x text-primary-lighter"></i>
                     </div>
                 </div>
             </div>
@@ -43,9 +48,15 @@
                             Mascotas Totales
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_mascotas }}</div>
+                        <div class="mt-2">
+                            <span class="text-success">
+                                <i class="fas fa-arrow-up me-1"></i>8.3%
+                            </span>
+                            <span class="text-muted ms-2">vs mes anterior</span>
+                        </div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-dog fa-2x text-gray-300"></i>
+                        <i class="fas fa-dog fa-3x text-success"></i>
                     </div>
                 </div>
             </div>
@@ -61,9 +72,20 @@
                             Reservas Hoy
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">{{ reservas_hoy }}</div>
+                        <div class="mt-2">
+                            {% if reservas_hoy|int > 5 %}
+                            <span class="text-success">
+                                <i class="fas fa-arrow-up me-1"></i>Alta demanda
+                            </span>
+                            {% else %}
+                            <span class="text-warning">
+                                <i class="fas fa-clock me-1"></i>Disponible
+                            </span>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                        <i class="fas fa-calendar-alt fa-3x text-info"></i>
                     </div>
                 </div>
             </div>
@@ -79,9 +101,14 @@
                             Ventas Hoy (S/.)
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">{{ "%.2f"|format(ventas_hoy) }}</div>
+                        <div class="mt-2">
+                            <span class="text-success">
+                                <i class="fas fa-money-bill-wave me-1"></i>Ingresos
+                            </span>
+                        </div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        <i class="fas fa-dollar-sign fa-3x text-warning"></i>
                     </div>
                 </div>
             </div>
@@ -90,48 +117,48 @@
 </div>
 
 <!-- Acciones rápidas -->
-<div class="row mt-4">
+<div class="row mt-4 quick-actions animate-fade-in" style="animation-delay: 0.2s">
     <div class="col-12">
         <div class="card shadow">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">Acciones Rápidas</h5>
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Acciones Rápidas</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-2 col-6 mb-3">
-                        <a href="{{ url_for('crear_cliente') }}" class="btn btn-primary btn-lg p-3 rounded-circle">
-                            <i class="fas fa-user-plus fa-2x"></i>
+                        <a href="{{ url_for('crear_cliente') }}" class="btn btn-primary btn-lg btn-circle">
+                            <i class="fas fa-user-plus"></i>
                         </a>
                         <p class="mt-2">Nuevo Cliente</p>
                     </div>
-                    <!-- Corregir estos botones: -->
-<div class="col-md-2 col-6 mb-3">
-    <a href="{{ url_for('crear_mascota') }}" class="btn btn-success btn-lg p-3 rounded-circle">
-        <i class="fas fa-dog fa-2x"></i>
-    </a>
-    <p class="mt-2">Nueva Mascota</p>
-</div>
-<div class="col-md-2 col-6 mb-3">
-    <a href="{{ url_for('crear_reserva') }}" class="btn btn-info btn-lg p-3 rounded-circle">
-        <i class="fas fa-calendar-plus fa-2x"></i>
-    </a>
-    <p class="mt-2">Nueva Reserva</p>
-</div>
                     <div class="col-md-2 col-6 mb-3">
-                        <a href="{{ url_for('ventas') }}" class="btn btn-warning btn-lg p-3 rounded-circle">
-                            <i class="fas fa-cash-register fa-2x"></i>
+                        <a href="{{ url_for('crear_mascota') }}" class="btn btn-success btn-lg btn-circle">
+                            <i class="fas fa-dog"></i>
+                        </a>
+                        <p class="mt-2">Nueva Mascota</p>
+                    </div>
+                    <div class="col-md-2 col-6 mb-3">
+                        <a href="{{ url_for('crear_reserva') }}" class="btn btn-info btn-lg btn-circle">
+                            <i class="fas fa-calendar-plus"></i>
+                        </a>
+                        <p class="mt-2">Nueva Reserva</p>
+                    </div>
+                    <div class="col-md-2 col-6 mb-3">
+                        <a href="{{ url_for('ventas') }}" class="btn btn-warning btn-lg btn-circle">
+                            <i class="fas fa-cash-register"></i>
                         </a>
                         <p class="mt-2">Nueva Venta</p>
                     </div>
                     <div class="col-md-2 col-6 mb-3">
-                        <a href="{{ url_for('servicios') }}" class="btn btn-danger btn-lg p-3 rounded-circle">
-                            <i class="fas fa-cut fa-2x"></i>
+                        <a href="{{ url_for('servicios') }}" class="btn btn-danger btn-lg btn-circle">
+                            <i class="fas fa-cut"></i>
                         </a>
                         <p class="mt-2">Servicios</p>
                     </div>
                     <div class="col-md-2 col-6 mb-3">
-                        <a href="{{ url_for('reportes') }}" class="btn btn-secondary btn-lg p-3 rounded-circle">
-                            <i class="fas fa-chart-bar fa-2x"></i>
+                        <a href="javascript:void(0)" onclick="solicitarAccesoReportes(event)" 
+                           class="btn btn-secondary btn-lg btn-circle">
+                            <i class="fas fa-chart-bar"></i>
                         </a>
                         <p class="mt-2">Reportes</p>
                     </div>
@@ -142,12 +169,14 @@
 </div>
 
 <!-- Tabla de últimas reservas -->
-<div class="row mt-4">
+<div class="row mt-4 animate-fade-in" style="animation-delay: 0.3s">
     <div class="col-12">
-        <div class="card shadow">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Últimas Reservas</h5>
-                <a href="{{ url_for('reservas') }}" class="btn btn-sm btn-primary">Ver todas</a>
+        <div class="card shadow table-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-history me-2 text-primary"></i>Últimas Reservas</h5>
+                <a href="{{ url_for('reservas') }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-list me-1"></i>Ver todas
+                </a>
             </div>
             <div class="card-body">
                 {% if ultimas_reservas %}
@@ -167,42 +196,73 @@
                             {% for reserva in ultimas_reservas %}
                             <tr>
                                 <td>{{ reserva.fecha_reserva.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</td>
-                                <td>{{ reserva.mascota_nombre }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-primary-lighter rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            <i class="fas fa-user text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <strong>{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}</strong>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-success-light rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            <i class="fas fa-dog text-success"></i>
+                                        </div>
+                                        <div>
+                                            <strong>{{ reserva.mascota_nombre }}</strong>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td>
                                     {% if reserva.servicios_nombres %}
                                         {% set servicios = reserva.servicios_nombres.split(',') %}
-                                        {% for servicio in servicios[:1] %}
-                                            {{ servicio|trim }}
-                                        {% endfor %}
-                                        {% if servicios|length > 1 %}
-                                            <span class="badge bg-secondary">+{{ servicios|length - 1 }}</span>
-                                        {% endif %}
+                                        <div class="service-tags">
+                                            {% for servicio in servicios[:2] %}
+                                                <span class="service-tag">{{ servicio|trim }}</span>
+                                            {% endfor %}
+                                            {% if servicios|length > 2 %}
+                                                <span class="badge bg-secondary">+{{ servicios|length - 2 }}</span>
+                                            {% endif %}
+                                        </div>
                                     {% else %}
                                         <span class="text-muted">Sin servicios</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if reserva.estado == 'pendiente' %}
-                                        <span class="badge bg-warning">Pendiente</span>
+                                        <span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pendiente</span>
                                     {% elif reserva.estado == 'confirmada' %}
-                                        <span class="badge bg-info">Confirmada</span>
+                                        <span class="badge bg-info"><i class="fas fa-check-circle me-1"></i>Confirmada</span>
                                     {% elif reserva.estado == 'en_proceso' %}
-                                        <span class="badge bg-primary">En Proceso</span>
+                                        <span class="badge bg-primary"><i class="fas fa-spinner me-1"></i>En Proceso</span>
                                     {% elif reserva.estado == 'completada' %}
-                                        <span class="badge bg-success">Completada</span>
+                                        <span class="badge bg-success"><i class="fas fa-check-double me-1"></i>Completada</span>
                                     {% elif reserva.estado == 'cancelada' %}
-                                        <span class="badge bg-danger">Cancelada</span>
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Cancelada</span>
                                     {% elif reserva.estado == 'no_show' %}
-                                        <span class="badge bg-secondary">No Show</span>
+                                        <span class="badge bg-secondary"><i class="fas fa-user-slash me-1"></i>No Show</span>
                                     {% else %}
                                         <span class="badge bg-secondary">{{ reserva.estado }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="#" 
+                                           class="btn btn-sm btn-outline-info" 
+                                           data-bs-toggle="tooltip" 
+                                           title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -210,13 +270,46 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No hay reservas recientes. <a href="{{ url_for('crear_reserva') }}" class="alert-link">Crear primera reserva</a>
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">No hay reservas recientes</h5>
+                    <p class="text-muted mb-4">Comienza creando tu primera reserva</p>
+                    <a href="{{ url_for('crear_reserva') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Crear primera reserva
+                    </a>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<style>
+.avatar-sm {
+    width: 32px;
+    height: 32px;
+}
+
+.service-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.service-tag {
+    background: var(--gray-lighter);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: var(--gray-color);
+}
+
+.bg-success-light {
+    background: rgba(56, 161, 105, 0.1);
+}
+
+.bg-primary-lighter {
+    background: rgba(71, 61, 134, 0.1);
+}
+</style>
 {% endblock %}

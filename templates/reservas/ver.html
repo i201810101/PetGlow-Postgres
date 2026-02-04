@@ -4,6 +4,106 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+<style>
+/* Estilos para los modales de cambio de estado */
+.modal-content {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: none;
+    padding: 1.5rem;
+}
+
+.modal-icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-estado-change {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.avatar-exito {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #4cd964 0%, #5ac8fa 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.avatar-error {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+/* Alertas dentro del modal */
+#alertaConfirmacion {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+#alertaConfirmacion .fa-info-circle {
+    color: #0dcaf0;
+}
+
+/* Estados de las alertas */
+.alerta-confirmacion { background-color: #e7f5ff; border-color: #0dcaf0; }
+.alerta-advertencia { background-color: #fff3cd; border-color: #ffc107; }
+.alerta-exito { background-color: #d1e7dd; border-color: #198754; }
+.alerta-peligro { background-color: #f8d7da; border-color: #dc3545; }
+
+/* Detalles adicionales */
+.detalle-item {
+    padding: 0.75rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid #0dcaf0;
+}
+
+.detalle-item i {
+    width: 20px;
+    color: #6c757d;
+}
+
+/* Animación para el modal de éxito */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.avatar-exito {
+    animation: pulse 2s infinite;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -27,6 +127,7 @@
                 </div>
             </div>
             <div class="card-body">
+                <!-- ... contenido existente de la reserva ... -->
                 <div class="row mb-4">
                     <div class="col-md-6">
                         <h5 class="border-bottom pb-2 mb-3">Información General</h5>
@@ -188,26 +289,34 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {% if reserva.estado == 'pendiente' %}
-                    <button class="btn btn-success cambiar-estado-detalle" data-estado="confirmada">
+                    <button class="btn btn-success cambiar-estado-detalle" 
+                            data-estado="confirmada"
+                            data-estado-actual="{{ reserva.estado }}">
                         <i class="fas fa-check-circle me-1"></i>Confirmar Reserva
                     </button>
                     {% elif reserva.estado == 'confirmada' %}
-                    <button class="btn btn-primary cambiar-estado-detalle" data-estado="en_proceso">
+                    <button class="btn btn-primary cambiar-estado-detalle" 
+                            data-estado="en_proceso"
+                            data-estado-actual="{{ reserva.estado }}">
                         <i class="fas fa-play-circle me-1"></i>Iniciar Servicio
                     </button>
                     {% elif reserva.estado == 'en_proceso' %}
-                    <button class="btn btn-success cambiar-estado-detalle" data-estado="completada">
+                    <button class="btn btn-success cambiar-estado-detalle" 
+                            data-estado="completada"
+                            data-estado-actual="{{ reserva.estado }}">
                         <i class="fas fa-check-double me-1"></i>Completar Servicio
                     </button>
                     {% endif %}
-                    
+
                     {% if reserva.estado in ['pendiente', 'confirmada'] %}
-                    <button class="btn btn-danger cambiar-estado-detalle" data-estado="cancelada">
+                    <button class="btn btn-danger cambiar-estado-detalle" 
+                            data-estado="cancelada"
+                            data-estado-actual="{{ reserva.estado }}">
                         <i class="fas fa-times-circle me-1"></i>Cancelar Reserva
                     </button>
                     {% endif %}
                     
-                    <!-- BOTÓN DE FACTURACIÓN CORREGIDO -->
+                    <!-- BOTÓN DE FACTURACIÓN -->
                     {% if not reserva.factura and reserva.estado == 'completada' %}
                     <a href="{{ url_for('facturar_reserva', id=reserva.id_reserva) }}" class="btn btn-warning btn-facturar">
                         <i class="fas fa-file-invoice-dollar me-1"></i>Generar Factura/Boleta
@@ -226,52 +335,304 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de confirmación de cambio de estado -->
+<div class="modal fade" id="modalCambioEstado" tabindex="-1" aria-labelledby="modalCambioEstadoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <div class="d-flex align-items-center">
+                    <div class="modal-icon me-3">
+                        <i class="fas fa-exchange-alt fa-2x text-primary"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-1" id="modalCambioEstadoLabel">Cambiar Estado de Reserva</h5>
+                        <p class="text-muted mb-0 small" id="codigoReservaModal"></p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-start mb-4">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-estado-change" id="avatarEstadoActual">
+                            <i class="fas fa-clock fa-2x"></i>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="mb-1">Cambiando estado de:</h6>
+                        <div class="d-flex align-items-center">
+                            <span class="badge me-2" id="badgeEstadoActual">Pendiente</span>
+                            <i class="fas fa-arrow-right text-muted mx-2"></i>
+                            <span class="badge" id="badgeEstadoNuevo">Confirmada</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert" id="alertaConfirmacion">
+                    <div class="d-flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle fa-lg"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <p class="mb-0" id="mensajeConfirmacionTexto">
+                                Esta acción actualizará el estado de la reserva en el sistema.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="detallesAdicionales" class="mt-3">
+                    <!-- Detalles adicionales se mostrarán aquí -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarCambio">
+                    <i class="fas fa-check me-1"></i>Confirmar Cambio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de éxito -->
+<div class="modal fade" id="modalExito" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center p-5">
+                <div class="mb-4">
+                    <div class="avatar-exito mx-auto">
+                        <i class="fas fa-check fa-2x text-white"></i>
+                    </div>
+                </div>
+                <h5 class="mb-3">¡Perfecto!</h5>
+                <p class="text-muted mb-4" id="mensajeExito">Estado cambiado exitosamente</p>
+                <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal" id="btnCerrarExito">
+                    <i class="fas fa-check me-1"></i>Aceptar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de error -->
+<div class="modal fade" id="modalError" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center p-5">
+                <div class="mb-4">
+                    <div class="avatar-error mx-auto">
+                        <i class="fas fa-exclamation fa-2x text-white"></i>
+                    </div>
+                </div>
+                <h5 class="mb-3">¡Ups!</h5>
+                <p class="text-muted mb-4" id="mensajeError">Ocurrió un error al cambiar el estado</p>
+                <button type="button" class="btn btn-outline-danger w-100" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
 <script>
-// Cambiar estado desde la vista detalle
+// Función para mostrar modal de cambio de estado
+function mostrarModalCambioEstado(reservaId, codigoReserva, nuevoEstado, estadoActual) {
+    // Configurar datos del modal
+    const estadoTextos = {
+        'pendiente': { nombre: 'Pendiente', icono: 'fa-clock', color: 'bg-warning' },
+        'confirmada': { nombre: 'Confirmada', icono: 'fa-check-circle', color: 'bg-info' },
+        'en_proceso': { nombre: 'En Proceso', icono: 'fa-play-circle', color: 'bg-primary' },
+        'completada': { nombre: 'Completada', icono: 'fa-check-double', color: 'bg-success' },
+        'cancelada': { nombre: 'Cancelada', icono: 'fa-times-circle', color: 'bg-danger' },
+        'no_show': { nombre: 'No Show', icono: 'fa-user-slash', color: 'bg-secondary' }
+    };
+    
+    // Actualizar elementos del modal
+    document.getElementById('codigoReservaModal').textContent = `Código: ${codigoReserva}`;
+    document.getElementById('badgeEstadoActual').textContent = estadoTextos[estadoActual]?.nombre || estadoActual;
+    document.getElementById('badgeEstadoActual').className = `badge ${estadoTextos[estadoActual]?.color || 'bg-secondary'} me-2`;
+    document.getElementById('badgeEstadoNuevo').textContent = estadoTextos[nuevoEstado]?.nombre || nuevoEstado;
+    document.getElementById('badgeEstadoNuevo').className = `badge ${estadoTextos[nuevoEstado]?.color || 'bg-primary'}`;
+    
+    // Configurar iconos
+    const avatarEstadoActual = document.getElementById('avatarEstadoActual');
+    avatarEstadoActual.innerHTML = `<i class="fas ${estadoTextos[estadoActual]?.icono || 'fa-question'} fa-2x text-white"></i>`;
+    
+    // Configurar mensaje de confirmación
+    const alerta = document.getElementById('alertaConfirmacion');
+    const mensajeTexto = document.getElementById('mensajeConfirmacionTexto');
+    const detallesDiv = document.getElementById('detallesAdicionales');
+    
+    // Configurar según el estado
+    let mensaje = '';
+    let claseAlerta = 'alerta-confirmacion';
+    let detallesHTML = '';
+    
+    switch(nuevoEstado) {
+        case 'confirmada':
+            mensaje = 'La reserva será marcada como confirmada. Se enviará una notificación al cliente.';
+            claseAlerta = 'alerta-exito';
+            detallesHTML = `
+                <div class="detalle-item">
+                    <i class="fas fa-bell me-2"></i>
+                    <strong>Notificación:</strong> El cliente recibirá un correo de confirmación
+                </div>
+            `;
+            break;
+        case 'cancelada':
+            mensaje = 'La reserva será cancelada. Esta acción no se puede deshacer y se notificará al cliente.';
+            claseAlerta = 'alerta-peligro';
+            detallesHTML = `
+                <div class="detalle-item">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Importante:</strong> Esta acción enviará una notificación de cancelación
+                </div>
+                <div class="detalle-item">
+                    <i class="fas fa-history me-2"></i>
+                    <strong>Nota:</strong> Puedes reprogramar esta reserva si es necesario
+                </div>
+            `;
+            break;
+        case 'en_proceso':
+            mensaje = 'El servicio será marcado como en proceso. El empleado será notificado.';
+            claseAlerta = 'alerta-advertencia';
+            detallesHTML = `
+                <div class="detalle-item">
+                    <i class="fas fa-user-tie me-2"></i>
+                    <strong>Empleado:</strong> Se notificará al empleado asignado
+                </div>
+            `;
+            break;
+        case 'completada':
+            mensaje = 'El servicio será marcado como completado. Ya puedes generar la factura.';
+            claseAlerta = 'alerta-exito';
+            detallesHTML = `
+                <div class="detalle-item">
+                    <i class="fas fa-file-invoice-dollar me-2"></i>
+                    <strong>Siguiente paso:</strong> Generar factura para esta reserva
+                </div>
+            `;
+            break;
+        default:
+            mensaje = 'Esta acción actualizará el estado de la reserva en el sistema.';
+    }
+    
+    mensajeTexto.textContent = mensaje;
+    alerta.className = `alert ${claseAlerta}`;
+    detallesDiv.innerHTML = detallesHTML;
+    
+    // Guardar datos en el botón de confirmar
+    const btnConfirmar = document.getElementById('btnConfirmarCambio');
+    btnConfirmar.dataset.reservaId = reservaId;
+    btnConfirmar.dataset.nuevoEstado = nuevoEstado;
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalCambioEstado'));
+    modal.show();
+}
+
+// Función para cambiar estado de la reserva
+function cambiarEstadoReserva() {
+    const btnConfirmar = document.getElementById('btnConfirmarCambio');
+    const reservaId = btnConfirmar.dataset.reservaId;
+    const nuevoEstado = btnConfirmar.dataset.nuevoEstado;
+    
+    if (!reservaId || !nuevoEstado) {
+        mostrarModalError('Datos de reserva no válidos');
+        return;
+    }
+    
+    // Mostrar loading en el botón
+    const originalHTML = btnConfirmar.innerHTML;
+    btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Procesando...';
+    btnConfirmar.disabled = true;
+    
+    // Obtener token CSRF si estás usando Flask-WTF
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    
+    fetch(`/reservas/cambiar-estado/${reservaId}`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken || ''
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Cerrar modal de confirmación
+            bootstrap.Modal.getInstance(document.getElementById('modalCambioEstado')).hide();
+            
+            // Mostrar modal de éxito
+            setTimeout(() => {
+                document.getElementById('mensajeExito').textContent = data.message || 'Estado cambiado exitosamente';
+                const modalExito = new bootstrap.Modal(document.getElementById('modalExito'));
+                modalExito.show();
+                
+                // Configurar evento para recargar al cerrar
+                document.getElementById('btnCerrarExito').onclick = function() {
+                    modalExito.hide();
+                    window.location.reload();
+                };
+            }, 300);
+        } else {
+            throw new Error(data.message || 'Error desconocido');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        
+        // Restaurar botón
+        btnConfirmar.innerHTML = originalHTML;
+        btnConfirmar.disabled = false;
+        
+        // Cerrar modal de confirmación
+        bootstrap.Modal.getInstance(document.getElementById('modalCambioEstado')).hide();
+        
+        // Mostrar modal de error
+        setTimeout(() => {
+            document.getElementById('mensajeError').textContent = error.message || 'Error al cambiar el estado';
+            const modalError = new bootstrap.Modal(document.getElementById('modalError'));
+            modalError.show();
+        }, 300);
+    });
+}
+
+// Función para mostrar modal de error
+function mostrarModalError(mensaje) {
+    document.getElementById('mensajeError').textContent = mensaje;
+    const modal = new bootstrap.Modal(document.getElementById('modalError'));
+    modal.show();
+}
+
+// Event listeners cuando el DOM esté cargado
 document.addEventListener('DOMContentLoaded', function() {
+    // Botones de cambio de estado en detalle de reserva
     const botonesEstado = document.querySelectorAll('.cambiar-estado-detalle');
     const reservaId = {{ reserva.id_reserva }};
     
     botonesEstado.forEach(boton => {
         boton.addEventListener('click', function() {
             const nuevoEstado = this.getAttribute('data-estado');
-            const estadoTextos = {
-                'pendiente': 'Pendiente',
-                'confirmada': 'Confirmada',
-                'en_proceso': 'En Proceso',
-                'completada': 'Completada',
-                'cancelada': 'Cancelada',
-                'no_show': 'No Show'
-            };
-            
-            if (confirm(`¿Cambiar estado de la reserva a "${estadoTextos[nuevoEstado]}"?`)) {
-                fetch(`/reservas/cambiar-estado/${reservaId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ estado: nuevoEstado })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error al cambiar el estado');
-                });
-            }
+            const estadoActual = this.getAttribute('data-estado-actual');
+            mostrarModalCambioEstado(reservaId, '{{ reserva.codigo_reserva }}', nuevoEstado, estadoActual);
         });
     });
+    
+    // Confirmar cambio de estado
+    document.getElementById('btnConfirmarCambio')?.addEventListener('click', cambiarEstadoReserva);
 });
 </script>
 {% endblock %}

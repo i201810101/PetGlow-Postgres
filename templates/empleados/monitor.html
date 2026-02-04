@@ -159,6 +159,337 @@
             text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
+        /* Estilo para el selector de empleado dentro de la tarjeta */
+.reserva-card-monitor .input-group {
+    margin-top: 10px;
+}
+
+.reserva-card-monitor select.form-select {
+    border-radius: 8px 0 0 8px;
+    border: 1px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.reserva-card-monitor .btn-primary {
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    padding: 6px 12px;
+}
+
+/* Estilo para el botón asignar cuando está deshabilitado */
+.reserva-card-monitor .btn-primary:disabled {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    opacity: 0.65;
+}
+
+/* Estilo para el selector */
+.reserva-card-monitor select {
+    background-color: white;
+    border: 1px solid #ced4da;
+    transition: all 0.2s;
+}
+
+.reserva-card-monitor select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+}
+
+/* Texto de ayuda */
+.reserva-card-monitor .text-muted {
+    font-size: 0.8rem;
+    margin-top: 5px;
+    display: block;
+}
+
+/* Mejorar visibilidad del empleado asignado */
+.reserva-card-monitor .text-danger {
+    font-weight: bold;
+}
+
+.reserva-card-monitor .text-success {
+    font-weight: bold;
+}
+
+/* Animación suave para cambios */
+.reserva-card-monitor {
+    transition: all 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .reserva-card-monitor .input-group {
+        flex-direction: column;
+    }
+    
+    .reserva-card-monitor select.form-select {
+        border-radius: 8px;
+        margin-bottom: 5px;
+    }
+    
+    .reserva-card-monitor .btn-primary {
+        border-radius: 8px;
+        width: 100%;
+    }
+}
+/* Estilo para notificaciones del monitor */
+.alert-notificacion-monitor {
+    animation: slideInRight 0.3s ease;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border: none;
+    border-left: 4px solid;
+}
+
+.alert-notificacion-monitor.alert-success {
+    border-left-color: #28a745;
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.alert-notificacion-monitor.alert-error,
+.alert-notificacion-monitor.alert-danger {
+    border-left-color: #dc3545;
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.alert-notificacion-monitor.alert-warning {
+    border-left-color: #ffc107;
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.alert-notificacion-monitor.alert-info {
+    border-left-color: #17a2b8;
+    background-color: #d1ecf1;
+    color: #0c5460;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+/* Asegurar que las notificaciones estén encima de todo */
+.alert-notificacion-monitor {
+    z-index: 99999 !important;
+}
+/* Modal personalizado - Agrega esto al estilo CSS existente */
+.modal-personalizado {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-personalizado-contenido {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    transform: translateY(0);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-personalizado-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+.modal-personalizado-header h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.modal-personalizado-body {
+    padding: 25px;
+    text-align: center;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+.modal-personalizado-footer {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    border-top: 1px solid #eee;
+}
+
+.btn-modal {
+    padding: 10px 25px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    min-width: 120px;
+}
+
+.btn-modal-cancelar {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.btn-modal-cancelar:hover {
+    background-color: #e9ecef;
+    transform: translateY(-2px);
+}
+
+.btn-modal-confirmar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-modal-confirmar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-modal-devolver {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.btn-modal-devolver:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+}
+
+.btn-modal-success {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: white;
+}
+
+.btn-modal-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(67, 233, 123, 0.4);
+}
+
+/* Alertas personalizadas */
+.alerta-personalizada {
+    display: none;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    z-index: 99999;
+    min-width: 300px;
+    max-width: 400px;
+    border-left: 5px solid;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.alerta-success {
+    border-left-color: #28a745;
+    background-color: #f8fff9;
+}
+
+.alerta-error {
+    border-left-color: #dc3545;
+    background-color: #fff5f5;
+}
+
+.alerta-info {
+    border-left-color: #17a2b8;
+    background-color: #f0f9ff;
+}
+
+.alerta-warning {
+    border-left-color: #ffc107;
+    background-color: #fffdf0;
+}
+
+.alerta-personalizada-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.alerta-personalizada-icono {
+    font-size: 1.5rem;
+    margin-right: 10px;
+}
+
+.alerta-personalizada-titulo {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.alerta-personalizada-mensaje {
+    margin: 0;
+    color: #555;
+}
+
+.alerta-personalizada-cerrar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.alerta-personalizada-cerrar:hover {
+    color: #666;
+}
     </style>
 </head>
 <body>
@@ -171,43 +502,46 @@
             </div>
         </div>
         
-        <!-- Encabezado del monitor -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="monitor-header">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h1 class="display-6 mb-0">
-                                <i class="fas fa-tv me-2 text-primary"></i>
-                                Monitor de Reservas
-                            </h1>
-                            <p class="text-muted mb-0" id="info-empleado">
-                                <i class="fas fa-user-tie me-1"></i>
-                                Empleado: <span id="nombre-empleado">Cargando...</span>
-                            </p>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <div class="btn-group">
-                                <button class="btn btn-primary" id="btnActualizar">
-                                    <i class="fas fa-sync-alt me-1"></i>Actualizar
-                                </button>
-                                <button class="btn btn-outline-primary" onclick="window.location.href='/empleado/reservas'">
-                                    <i class="fas fa-tasks me-1"></i>Ver Detalles
-                                </button>
-                                <button class="btn btn-outline-secondary" onclick="window.location.href='/logout'">
-                                    <i class="fas fa-sign-out-alt me-1"></i>Salir
-                                </button>
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted" id="ultima-actualizacion">
-                                    Última actualización: --
-                                </small>
-                            </div>
-                        </div>
+<!-- Encabezado del monitor COMPLETO -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="monitor-header">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="display-6 mb-0">
+                        <i class="fas fa-tv me-2 text-primary"></i>
+                        Monitor de Reservas
+                    </h1>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-store me-1"></i>
+                        PetGlow Peluquería Canina
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <div class="btn-group mb-2">
+                        <button class="btn btn-primary" id="btnActualizar">
+                            <i class="fas fa-sync-alt me-1"></i>Actualizar
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="window.location.href='/dashboard'">
+                            <i class="fas fa-home me-1"></i>Menú
+                        </button>
+                        <button class="btn btn-outline-info" onclick="window.location.href='/reservas'">
+                            <i class="fas fa-calendar me-1"></i>Reservas
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="window.location.href='/logout'">
+                            <i class="fas fa-sign-out-alt me-1"></i>Salir
+                        </button>
+                    </div>
+                    <div>
+                        <small class="text-muted" id="ultima-actualizacion">
+                            Última actualización: --
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
         
         <!-- Contenedor de reservas -->
         <div class="row" id="reservas-monitor">
@@ -230,267 +564,646 @@
             </div>
         </div>
     </div>
+
+    <!-- ================= MODALES PERSONALIZADOS ================= -->
+    <!-- AGREGAR ESTO JUSTO ANTES DEL SCRIPT -->
     
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script>
-    $(document).ready(function() {
-        let intervaloReservas;
-        let intervaloReloj;
+    <!-- Modal personalizado de confirmación -->
+    <div id="modalConfirmacion" class="modal-personalizado">
+        <div class="modal-personalizado-contenido">
+            <div class="modal-personalizado-header">
+                <h3 id="modalTitulo"></h3>
+            </div>
+            <div class="modal-personalizado-body">
+                <p id="modalMensaje"></p>
+            </div>
+            <div class="modal-personalizado-footer">
+                <button class="btn-modal btn-modal-cancelar" id="modalBtnCancelar">Cancelar</button>
+                <button class="btn-modal btn-modal-confirmar" id="modalBtnConfirmar">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para completar reserva -->
+    <div id="modalCompletar" class="modal-personalizado">
+        <div class="modal-personalizado-contenido">
+            <div class="modal-personalizado-header">
+                <h3><i class="fas fa-check-circle me-2"></i>Completar Reserva</h3>
+            </div>
+            <div class="modal-personalizado-body">
+                <p id="modalCompletarMensaje"></p>
+            </div>
+            <div class="modal-personalizado-footer">
+                <button class="btn-modal btn-modal-cancelar" id="modalCompletarBtnCancelar">Cancelar</button>
+                <button class="btn-modal btn-modal-success" id="modalCompletarBtnConfirmar">Completar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para devolver reserva -->
+    <div id="modalDevolver" class="modal-personalizado">
+        <div class="modal-personalizado-contenido">
+            <div class="modal-personalizado-header">
+                <h3><i class="fas fa-undo-alt me-2"></i>Devolver Reserva</h3>
+            </div>
+            <div class="modal-personalizado-body">
+                <p id="modalDevolverMensaje">¿Estás seguro que deseas devolver esta reserva?<br>
+                    <small class="text-muted">La reserva volverá a estar disponible para que otros empleados la puedan tomar.</small>
+                </p>
+            </div>
+            <div class="modal-personalizado-footer">
+                <button class="btn-modal btn-modal-cancelar" id="modalDevolverBtnCancelar">Cancelar</button>
+                <button class="btn-modal btn-modal-devolver" id="modalDevolverBtnConfirmar">Devolver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas personalizadas -->
+    <div id="alertaPersonalizada" class="alerta-personalizada">
+        <button class="alerta-personalizada-cerrar" onclick="cerrarAlerta()">&times;</button>
+        <div class="alerta-personalizada-header">
+            <div class="alerta-personalizada-icono" id="alertaIcono"></div>
+            <h4 class="alerta-personalizada-titulo" id="alertaTitulo"></h4>
+        </div>
+        <p class="alerta-personalizada-mensaje" id="alertaMensaje"></p>
+    </div>
+    
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Variables globales
+    window.idEmpleadoActual = null;
+    let intervaloReservas;
+    let intervaloReloj;
+    let empleadosDisponibles = [];
+    let idReservaActual = null;
+    let botonActual = null;
+    
+    // ================= FUNCIONES PARA MODALES =================
+    
+    // Mostrar modal de confirmación general
+    window.mostrarConfirmacion = function(titulo, mensaje, callbackConfirm) {
+        $('#modalTitulo').text(titulo);
+        $('#modalMensaje').html(mensaje);
+        $('#modalConfirmacion').fadeIn(300);
         
-        // Actualizar reloj
-        function actualizarReloj() {
-            const ahora = new Date();
-            const hora = ahora.getHours().toString().padStart(2, '0');
-            const minutos = ahora.getMinutes().toString().padStart(2, '0');
-            const segundos = ahora.getSeconds().toString().padStart(2, '0');
-            const fecha = ahora.toLocaleDateString('es-ES', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            
-            $('#reloj').text(`${hora}:${minutos}:${segundos}`);
-            $('#fecha').text(fecha.charAt(0).toUpperCase() + fecha.slice(1));
-        }
+        // Configurar botones
+        $('#modalBtnConfirmar').off('click').on('click', function() {
+            $('#modalConfirmacion').fadeOut(200);
+            if (callbackConfirm) callbackConfirm();
+        });
         
-        // Cargar información del empleado
-        function cargarInfoEmpleado() {
-            $.ajax({
-                url: '/api/empleado/info',
-                method: 'GET',
-                success: function(response) {
-                    if (response.success) {
-                        $('#nombre-empleado').text(response.nombre);
-                    } else {
-                        $('#nombre-empleado').text('Error al cargar');
-                        console.error('Error info empleado:', response.message);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    $('#nombre-empleado').text('Error de conexión');
-                    console.error('Error AJAX info empleado:', error);
-                }
-            });
-        }
+        $('#modalBtnCancelar').off('click').on('click', function() {
+            $('#modalConfirmacion').fadeOut(200);
+        });
         
-        // Cargar reservas
-        function cargarReservas() {
-            $.ajax({
-                url: '/api/empleado/reservas/hoy',
-                method: 'GET',
-                success: function(response) {
-                    if (response.success) {
-                        mostrarReservas(response.reservas);
-                        actualizarUltimaActualizacion();
-                    } else {
-                        mostrarErrorReservas(response.message || 'Error al cargar reservas');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    mostrarErrorReservas('Error de conexión: ' + error);
-                    console.error('Error AJAX reservas:', error);
-                }
-            });
-        }
-        
-        // Mostrar reservas en el monitor
-        function mostrarReservas(reservas) {
-            const ahora = new Date();
-            const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
-            
-            if (reservas.length === 0) {
-                $('#reservas-monitor').html(`
-                    <div class="col-12">
-                        <div class="sin-reservas fade-in">
-                            <i class="fas fa-calendar-alt fa-4x text-muted mb-4"></i>
-                            <h3 class="text-muted mb-3">No hay reservas para hoy</h3>
-                            <p class="text-muted">¡Buen trabajo! No tienes reservas programadas para hoy.</p>
-                            <div class="alert alert-info mt-3">
-                                <i class="fas fa-info-circle me-2"></i>
-                                Las nuevas reservas aparecerán aquí automáticamente.
-                            </div>
-                        </div>
-                    </div>
-                `);
-                return;
+        // Cerrar al hacer clic fuera
+        $('#modalConfirmacion').off('click').on('click', function(e) {
+            if (e.target === this) {
+                $(this).fadeOut(200);
             }
-            
-            let html = '';
-            
-            // Agrupar por estado (primero las en proceso)
-            const porEstado = {
-                'en_proceso': [],
-                'confirmada': [],
-                'pendiente': []
-            };
-            
-            reservas.forEach(reserva => {
-                if (porEstado[reserva.estado]) {
-                    porEstado[reserva.estado].push(reserva);
-                }
-            });
-            
-            // Mostrar por estado
-            ['en_proceso', 'confirmada', 'pendiente'].forEach(estado => {
-                if (porEstado[estado] && porEstado[estado].length > 0) {
-                    porEstado[estado].forEach(reserva => {
-                        let claseProxima = '';
-                        let textoEstado = '';
-                        
-                        // Formatear hora
-                        let horaFormateada = '--:--';
-                        if (reserva.hora_str) {
-                            horaFormateada = reserva.hora_str;
-                        } else if (reserva.fecha_reserva) {
-                            // Intentar extraer hora de la fecha
-                            const fecha = new Date(reserva.fecha_reserva);
-                            if (!isNaN(fecha)) {
-                                horaFormateada = fecha.getHours().toString().padStart(2, '0') + ':' + 
-                                                fecha.getMinutes().toString().padStart(2, '0');
-                            }
-                        }
-                        
-                        // Determinar si es próxima
-                        if (reserva.minutos_restantes > 0 && reserva.minutos_restantes <= 30) {
-                            claseProxima = 'proxima';
-                            textoEstado = `<small class="text-warning d-block mt-1">
-                                <i class="fas fa-clock me-1"></i>
-                                En ${reserva.minutos_restantes} minutos
-                            </small>`;
-                        }
-                        
-                        // Texto del estado
-                        const textosEstado = {
-                            'pendiente': 'PENDIENTE',
-                            'confirmada': 'CONFIRMADA',
-                            'en_proceso': 'EN PROCESO',
-                            'completada': 'COMPLETADA',
-                            'cancelada': 'CANCELADA'
-                        };
-                        
-                        html += `
-                            <div class="col-xl-4 col-lg-6 col-md-6 mb-4 columna-reserva fade-in">
-                                <div class="reserva-card-monitor ${reserva.estado} ${claseProxima}">
-                                    <span class="badge estado-monitor bg-${reserva.estado_color || 'secondary'}">
-                                        ${textosEstado[reserva.estado] || reserva.estado.toUpperCase()}
-                                    </span>
-                                    
-                                    <div class="hora-reserva">
-                                        ${horaFormateada}
-                                    </div>
-                                    
-                                    <div class="mascota-nombre">
-                                        <i class="fas ${reserva.especie === 'perro' ? 'fa-dog' : 
-                                                      reserva.especie === 'gato' ? 'fa-cat' : 'fa-paw'} me-2"></i>
-                                        ${reserva.mascota_nombre || 'Sin nombre'}
-                                    </div>
-                                    
-                                    <div class="info-cliente">
-                                        <div>
-                                            <i class="fas fa-user me-1"></i>
-                                            <strong>Cliente:</strong> ${reserva.cliente_nombre || ''} ${reserva.cliente_apellido || ''}
-                                        </div>
-                                        ${reserva.cliente_telefono ? `
-                                        <div class="mt-1">
-                                            <i class="fas fa-phone me-1"></i>
-                                            <strong>Teléfono:</strong> ${reserva.cliente_telefono}
-                                        </div>
-                                        ` : ''}
-                                    </div>
-                                    
-                                    ${reserva.servicios_nombres ? `
-                                        <div class="mt-3">
-                                            <strong><i class="fas fa-cut me-1"></i>Servicios:</strong>
-                                            <div class="servicios-monitor mt-2">
-                                                ${reserva.servicios_nombres.split(',').map(servicio => 
-                                                    `<span class="servicio-monitor">${servicio.trim()}</span>`
-                                                ).join('')}
-                                            </div>
-                                        </div>
-                                    ` : ''}
-                                    
-                                    ${textoEstado}
-                                    
-                                    ${reserva.duracion_total ? `
-                                    <div class="mt-3 pt-3 border-top">
-                                        <small class="text-muted">
-                                            <i class="fas fa-clock me-1"></i>
-                                            Duración: ${reserva.duracion_total} minutos
-                                        </small>
-                                    </div>
-                                    ` : ''}
-                                    
-                                    ${reserva.notas ? `
-                                    <div class="mt-3 pt-3 border-top">
-                                        <small class="text-muted">
-                                            <i class="fas fa-sticky-note me-1"></i>
-                                            <strong>Notas:</strong> ${reserva.notas}
-                                        </small>
-                                    </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-            });
-            
-            $('#reservas-monitor').html(html);
-        }
+        });
+    };
+    
+    // Mostrar modal para completar reserva
+    window.mostrarModalCompletar = function(idReserva, botonElement) {
+        idReservaActual = idReserva;
+        botonActual = botonElement;
         
-        // Mostrar error
-        function mostrarErrorReservas(mensaje) {
+        $('#modalCompletarMensaje').html(`¿Marcar la reserva <strong>#${idReserva}</strong> como completada?`);
+        $('#modalCompletar').fadeIn(300);
+        
+        // Configurar botón de confirmar
+        $('#modalCompletarBtnConfirmar').off('click').on('click', function() {
+            $('#modalCompletar').fadeOut(200);
+            completarReserva(idReservaActual, botonActual);
+        });
+        
+        $('#modalCompletarBtnCancelar').off('click').on('click', function() {
+            $('#modalCompletar').fadeOut(200);
+        });
+        
+        $('#modalCompletar').off('click').on('click', function(e) {
+            if (e.target === this) {
+                $(this).fadeOut(200);
+            }
+        });
+    };
+    
+    // Mostrar modal para devolver reserva
+    window.mostrarModalDevolver = function(idReserva, botonElement) {
+        idReservaActual = idReserva;
+        botonActual = botonElement;
+        
+        $('#modalDevolver').fadeIn(300);
+        
+        // Configurar botón de confirmar
+        $('#modalDevolverBtnConfirmar').off('click').on('click', function() {
+            $('#modalDevolver').fadeOut(200);
+            devolverReserva(idReservaActual, botonActual);
+        });
+        
+        $('#modalDevolverBtnCancelar').off('click').on('click', function() {
+            $('#modalDevolver').fadeOut(200);
+        });
+        
+        $('#modalDevolver').off('click').on('click', function(e) {
+            if (e.target === this) {
+                $(this).fadeOut(200);
+            }
+        });
+    };
+    
+    // Mostrar alerta personalizada
+    window.mostrarAlerta = function(titulo, mensaje, tipo = 'info') {
+        const alerta = $('#alertaPersonalizada');
+        const tipos = {
+            'success': { icono: '✅', clase: 'alerta-success' },
+            'error': { icono: '❌', clase: 'alerta-error' },
+            'warning': { icono: '⚠️', clase: 'alerta-warning' },
+            'info': { icono: 'ℹ️', clase: 'alerta-info' }
+        };
+        
+        const config = tipos[tipo] || tipos.info;
+        
+        alerta.removeClass().addClass(`alerta-personalizada ${config.clase}`);
+        $('#alertaIcono').html(config.icono);
+        $('#alertaTitulo').text(titulo);
+        $('#alertaMensaje').html(mensaje);
+        
+        alerta.fadeIn(300);
+        
+        // Auto-cerrar después de 5 segundos
+        setTimeout(() => {
+            cerrarAlerta();
+        }, 5000);
+    };
+    
+    window.cerrarAlerta = function() {
+        $('#alertaPersonalizada').fadeOut(200);
+    };
+    
+    // ================= FUNCIONES PRINCIPALES =================
+    
+    // Actualizar reloj
+    function actualizarReloj() {
+        const ahora = new Date();
+        const hora = ahora.getHours().toString().padStart(2, '0');
+        const minutos = ahora.getMinutes().toString().padStart(2, '0');
+        const segundos = ahora.getSeconds().toString().padStart(2, '0');
+        const fecha = ahora.toLocaleDateString('es-ES', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        $('#reloj').text(`${hora}:${minutos}:${segundos}`);
+        $('#fecha').text(fecha.charAt(0).toUpperCase() + fecha.slice(1));
+    }
+    
+    // Cargar lista de empleados
+    function cargarEmpleados() {
+        return new Promise((resolve) => {
+            $.ajax({
+                url: '/api/monitor/empleados',
+                method: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        empleadosDisponibles = response.empleados;
+                        resolve();
+                    } else {
+                        resolve();
+                    }
+                },
+                error: function() {
+                    resolve();
+                }
+            });
+        });
+    }
+    
+    // Cargar reservas del monitor
+    function cargarReservasMonitor() {
+        $.ajax({
+            url: '/api/monitor/reservas',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    window.idEmpleadoActual = response.id_empleado_actual;
+                    mostrarReservasMonitor(response);
+                    actualizarUltimaActualizacion();
+                } else {
+                    mostrarReservasError(response.message || 'Error al cargar reservas');
+                }
+            },
+            error: function() {
+                mostrarReservasError('Error de conexión');
+            }
+        });
+    }
+    
+    // Mostrar reservas en el monitor
+    function mostrarReservasMonitor(data) {
+        const { pendientes, en_proceso, completadas, id_empleado_actual } = data;
+        
+        if (pendientes.length === 0 && en_proceso.length === 0 && completadas.length === 0) {
             $('#reservas-monitor').html(`
                 <div class="col-12">
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        ${mensaje}
-                        <button class="btn btn-sm btn-outline-danger ms-3" onclick="cargarReservas()">
-                            <i class="fas fa-redo me-1"></i>Reintentar
-                        </button>
+                    <div class="sin-reservas fade-in">
+                        <i class="fas fa-calendar-alt fa-4x text-muted mb-4"></i>
+                        <h3 class="text-muted mb-3">No hay reservas para hoy</h3>
+                        <p class="text-muted">Todavía no hay reservas programadas para hoy.</p>
                     </div>
                 </div>
             `);
+            return;
         }
         
-        // Actualizar última actualización
-        function actualizarUltimaActualizacion() {
-            const ahora = new Date();
-            const hora = ahora.getHours().toString().padStart(2, '0');
-            const minutos = ahora.getMinutes().toString().padStart(2, '0');
-            const segundos = ahora.getSeconds().toString().padStart(2, '0');
+        let html = '';
+        
+        
+        // Función para crear tarjeta de reserva - CORREGIDA
+function crearTarjetaReserva(reserva, tipo) {
+    let horaFormateada = '--:--';
+    
+    if (reserva.fecha_reserva) {
+        try {
+            // La fecha ahora viene en formato ISO desde MySQL
+            const fecha = new Date(reserva.fecha_reserva);
             
-            $('#ultima-actualizacion').text(`Última actualización: ${hora}:${minutos}:${segundos}`);
+            if (!isNaN(fecha.getTime())) {
+                // Convertir a hora local (JavaScript automáticamente convierte)
+                const hora = fecha.getHours().toString().padStart(2, '0');
+                const minutos = fecha.getMinutes().toString().padStart(2, '0');
+                horaFormateada = `${hora}:${minutos}`;
+            }
+        } catch (error) {
+            console.error('Error en fecha:', error, reserva.fecha_reserva);
+            horaFormateada = '--:--';
+        }
+    }
+    
+    const esDelAdminSistema = reserva.id_empleado === 1;
+    const esDelEmpleadoActual = parseInt(reserva.id_empleado) === parseInt(window.idEmpleadoActual);
+    
+    const estadoClass = {
+        'pendiente': 'pendiente',
+        'confirmada': 'pendiente',
+        'en_proceso': 'en_proceso',
+        'completada': 'completada'
+    }[reserva.estado] || 'pendiente';
+    
+    const estadoColores = {
+        'pendiente': 'warning',
+        'confirmada': 'info',
+        'en_proceso': 'primary',
+        'completada': 'success'
+    }[reserva.estado] || 'secondary';
+    
+    let textoEmpleado = reserva.empleado_asignado || 'Admin Sistema';
+    let claseEmpleado = esDelAdminSistema ? 'text-danger' : 
+                       esDelEmpleadoActual ? 'text-primary fw-bold' : 'text-success';
+    
+    // Selector de empleados solo para reservas del Admin Sistema
+    let selectorEmpleadosHTML = '';
+    if (tipo === 'pendiente' && esDelAdminSistema) {
+        selectorEmpleadosHTML = crearSelectorEmpleados(reserva.id_reserva);
+    }
+    
+    // Botones de acción
+    let botonesHTML = '';
+    if (tipo === 'en_proceso') {
+        if (esDelEmpleadoActual) {
+            // Si soy yo quien la está atendiendo, mostrar botones de acción
+            botonesHTML = `
+                <div class="mt-3 pt-3 border-top">
+                    <button class="btn btn-success btn-sm w-100 mb-2" 
+                            onclick="mostrarModalCompletar(${reserva.id_reserva}, this)">
+                        <i class="fas fa-check me-1"></i>
+                        COMPLETAR RESERVA
+                    </button>
+                    <button class="btn btn-warning btn-sm w-100" 
+                            onclick="mostrarModalDevolver(${reserva.id_reserva}, this)">
+                        <i class="fas fa-undo me-1"></i>
+                        DEVOLVER A DISPONIBLES
+                    </button>
+                </div>
+            `;
+        } else {
+            // Si otro empleado la está atendiendo, mostrar info
+            botonesHTML = `
+                <div class="mt-3 pt-3 border-top">
+                    <div class="alert alert-info p-2">
+                        <i class="fas fa-user-clock me-1"></i>
+                        Atendiendo: <strong>${reserva.empleado_asignado || 'Otro empleado'}</strong>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    return `
+        <div class="col-xl-4 col-lg-6 col-md-6 mb-4 columna-reserva fade-in">
+            <div class="reserva-card-monitor ${estadoClass}" id="reserva-${reserva.id_reserva}">
+                <span class="badge estado-monitor bg-${estadoColores}">
+                    ${reserva.estado.toUpperCase().replace('_', ' ')}
+                </span>
+                
+                <div class="hora-reserva">
+                    ${horaFormateada}
+                    <small class="text-muted fs-6">(${reserva.codigo_reserva})</small>
+                </div>
+                
+                <div class="mascota-nombre">
+                    <i class="fas ${reserva.especie === 'perro' ? 'fa-dog' : 
+                                  reserva.especie === 'gato' ? 'fa-cat' : 'fa-paw'} me-2"></i>
+                    ${reserva.mascota_nombre || 'Sin nombre'}
+                </div>
+                
+                <div class="info-cliente">
+                    <div>
+                        <i class="fas fa-user me-1"></i>
+                        <strong>Cliente:</strong> ${reserva.cliente_nombre || ''} ${reserva.cliente_apellido || ''}
+                    </div>
+                    ${reserva.cliente_telefono ? `
+                    <div class="mt-1">
+                        <i class="fas fa-phone me-1"></i>
+                        <strong>Teléfono:</strong> ${reserva.cliente_telefono}
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <div class="mt-2">
+                    <i class="fas fa-id-badge me-1"></i>
+                    <span class="${claseEmpleado}">
+                        <strong>${textoEmpleado}</strong>
+                    </span>
+                </div>
+                
+                ${selectorEmpleadosHTML}
+                
+                ${reserva.servicios_nombres ? `
+                    <div class="mt-3">
+                        <strong><i class="fas fa-cut me-1"></i>Servicios:</strong>
+                        <div class="servicios-monitor mt-2">
+                            ${reserva.servicios_nombres.split(',').map(servicio => 
+                                `<span class="servicio-monitor">${servicio.trim()}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${botonesHTML}
+            </div>
+        </div>
+    `;
+}
+        
+        function crearSelectorEmpleados(idReserva) {
+            if (empleadosDisponibles.length === 0) {
+                return `
+                    <div class="mt-3">
+                        <div class="alert alert-warning p-2">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            Cargando empleados...
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="mt-3">
+                    <div class="input-group input-group-sm">
+                        <select class="form-select" 
+                                id="select-empleado-${idReserva}"
+                                onchange="habilitarBotonAsignar(${idReserva})">
+                            <option value="">Seleccionar empleado...</option>
+                            ${empleadosDisponibles.map(empleado => `
+                                <option value="${empleado.id_empleado}">
+                                    ${empleado.nombre} ${empleado.apellido}
+                                    ${empleado.especialidad ? `(${empleado.especialidad})` : ''}
+                                </option>
+                            `).join('')}
+                        </select>
+                        <button class="btn btn-primary" 
+                                onclick="tomarReserva(${idReserva}, this)"
+                                id="btn-tomar-${idReserva}"
+                                disabled>
+                            <i class="fas fa-hand-paper me-1"></i>
+                            Asignar
+                        </button>
+                    </div>
+                </div>
+            `;
         }
         
-        // Botón de actualizar
-        $('#btnActualizar').on('click', function() {
-            const btn = $(this);
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Actualizando...');
-            
-            cargarReservas();
-            
-            setTimeout(() => {
-                btn.prop('disabled', false).html('<i class="fas fa-sync-alt me-1"></i>Actualizar');
-            }, 2000);
+        // Mostrar reservas
+        if (en_proceso.length > 0) {
+            en_proceso.forEach(reserva => {
+                html += crearTarjetaReserva(reserva, 'en_proceso');
+            });
+        }
+        
+        if (pendientes.length > 0) {
+            pendientes.forEach(reserva => {
+                html += crearTarjetaReserva(reserva, 'pendiente');
+            });
+        }
+        
+        if (completadas.length > 0) {
+            completadas.forEach(reserva => {
+                html += crearTarjetaReserva(reserva, 'completada');
+            });
+        }
+        
+        $('#reservas-monitor').html(html);
+    }
+    
+    function mostrarReservasError(mensaje) {
+        $('#reservas-monitor').html(`
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${mensaje}
+                    <button class="btn btn-sm btn-outline-danger ms-3" onclick="cargarReservasMonitor()">
+                        <i class="fas fa-redo me-1"></i>Reintentar
+                    </button>
+                </div>
+            </div>
+        `);
+    }
+    
+    function actualizarUltimaActualizacion() {
+        const ahora = new Date();
+        const hora = ahora.getHours().toString().padStart(2, '0');
+        const minutos = ahora.getMinutes().toString().padStart(2, '0');
+        const segundos = ahora.getSeconds().toString().padStart(2, '0');
+        $('#ultima-actualizacion').text(`Última actualización: ${hora}:${minutos}:${segundos}`);
+    }
+    
+    // ================= FUNCIONES GLOBALES =================
+    
+    window.habilitarBotonAsignar = function(idReserva) {
+        const select = document.getElementById(`select-empleado-${idReserva}`);
+        const btn = document.getElementById(`btn-tomar-${idReserva}`);
+        if (select && btn) {
+            btn.disabled = !select.value;
+            if (!select.value) {
+                btn.innerHTML = '<i class="fas fa-hand-paper me-1"></i>Asignar';
+            }
+        }
+    };
+    
+    window.tomarReserva = function(idReserva, botonElement) {
+        const select = document.getElementById(`select-empleado-${idReserva}`);
+        if (!select || !select.value) {
+            mostrarAlerta('Selección requerida', 'Primero selecciona un empleado', 'warning');
+            return;
+        }
+        
+        const idEmpleado = select.value;
+        const nombreEmpleado = select.options[select.selectedIndex].text;
+        
+        // Mostrar confirmación personalizada
+        mostrarConfirmacion(
+            'Asignar Reserva',
+            `¿Asignar esta reserva a <strong>${nombreEmpleado}</strong>?`,
+            function() {
+                // Deshabilitar botón mientras se procesa
+                if (botonElement) {
+                    botonElement.disabled = true;
+                    botonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Asignando...';
+                }
+                
+                $.ajax({
+                    url: `/api/monitor/reservas/${idReserva}/tomar`,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id_empleado: parseInt(idEmpleado) }),
+                    success: function(response) {
+                        if (response.success) {
+                            mostrarAlerta('Reserva Asignada', response.message, 'success');
+                            // Recargar las reservas después de 1 segundo
+                            setTimeout(() => {
+                                cargarReservasMonitor();
+                            }, 1000);
+                        } else {
+                            mostrarAlerta('Error', response.message, 'error');
+                            if (botonElement) {
+                                botonElement.disabled = false;
+                                botonElement.innerHTML = '<i class="fas fa-hand-paper me-1"></i>Asignar';
+                            }
+                        }
+                    },
+                    error: function() {
+                        mostrarAlerta('Error', 'Error al asignar la reserva', 'error');
+                        if (botonElement) {
+                            botonElement.disabled = false;
+                            botonElement.innerHTML = '<i class="fas fa-hand-paper me-1"></i>Asignar';
+                        }
+                    }
+                });
+            }
+        );
+    };
+    
+    // Función para completar reserva (CORREGIDA)
+    function completarReserva(idReserva, botonElement) {
+        // Deshabilitar botón mientras se procesa
+        if (botonElement) {
+            botonElement.disabled = true;
+            botonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Completando...';
+        }
+        
+        $.ajax({
+            url: `/reservas/cambiar-estado/${idReserva}`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ estado: 'completada' }),
+            success: function(response) {
+                if (response.success) {
+                    mostrarAlerta('Reserva Completada', response.message, 'success');
+                    // Recargar las reservas después de 1 segundo
+                    setTimeout(() => {
+                        cargarReservasMonitor();
+                    }, 1000);
+                } else {
+                    mostrarAlerta('Error', response.message, 'error');
+                    if (botonElement) {
+                        botonElement.disabled = false;
+                        botonElement.innerHTML = '<i class="fas fa-check me-1"></i>COMPLETAR RESERVA';
+                    }
+                }
+            },
+            error: function() {
+                mostrarAlerta('Error', 'Error al completar la reserva', 'error');
+                if (botonElement) {
+                    botonElement.disabled = false;
+                    botonElement.innerHTML = '<i class="fas fa-check me-1"></i>COMPLETAR RESERVA';
+                }
+            }
         });
+    }
+    
+    // Función para devolver reserva (CORREGIDA - debe volver a pendiente)
+    function devolverReserva(idReserva, botonElement) {
+        // Deshabilitar botón mientras se procesa
+        if (botonElement) {
+            botonElement.disabled = true;
+            botonElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Devolviendo...';
+        }
         
-        // Inicializar
-        actualizarReloj();
-        cargarInfoEmpleado();
-        cargarReservas();
-        
-        // Iniciar intervalos
-        intervaloReloj = setInterval(actualizarReloj, 1000);
-        intervaloReservas = setInterval(cargarReservas, 30000); // 30 segundos
-        
-        // Limpiar intervalos al salir
-        $(window).on('beforeunload', function() {
-            if (intervaloReloj) clearInterval(intervaloReloj);
-            if (intervaloReservas) clearInterval(intervaloReservas);
+        // IMPORTANTE: Devolver al Admin Sistema (ID 1) y estado "confirmada"
+        $.ajax({
+            url: `/reservas/devolver/${idReserva}`,
+            method: 'POST',
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    mostrarAlerta('Reserva Devuelta', response.message, 'success');
+                    // Recargar las reservas después de 1 segundo
+                    setTimeout(() => {
+                        cargarReservasMonitor();
+                    }, 1000);
+                } else {
+                    mostrarAlerta('Error', response.message, 'error');
+                    if (botonElement) {
+                        botonElement.disabled = false;
+                        botonElement.innerHTML = '<i class="fas fa-undo me-1"></i>DEVOLVER A DISPONIBLES';
+                    }
+                }
+            },
+            error: function() {
+                mostrarAlerta('Error', 'Error al devolver la reserva', 'error');
+                if (botonElement) {
+                    botonElement.disabled = false;
+                    botonElement.innerHTML = '<i class="fas fa-undo me-1"></i>DEVOLVER A DISPONIBLES';
+                }
+            }
         });
+    }
+    
+    // ================= INICIALIZACIÓN =================
+    
+    // Actualizar automáticamente cada 30 segundos
+    actualizarReloj();
+    
+    // Cargar empleados primero, luego reservas
+    cargarEmpleados().then(() => {
+        cargarReservasMonitor();
     });
-    </script>
+    
+    // Iniciar intervalos
+    intervaloReloj = setInterval(actualizarReloj, 1000);
+    intervaloReservas = setInterval(cargarReservasMonitor, 30000);
+    
+    // Limpiar intervalos al salir
+    $(window).on('beforeunload', function() {
+        clearInterval(intervaloReloj);
+        clearInterval(intervaloReservas);
+    });
+});
+</script>
 </body>
 </html>

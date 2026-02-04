@@ -498,32 +498,63 @@ document.addEventListener('DOMContentLoaded', function() {
 // ==================== FUNCIONES GLOBALES ====================
 
 // Función para abrir modal de edición
+// ==================== FUNCIONES GLOBALES ====================
+
+// Función para abrir modal de edición
 window.editarUsuario = function(id) {
+    console.log(`Editando usuario ID: ${id}`); // Para depuración
+    
     // Cargar datos del usuario
     fetch(`/api/usuarios/${id}`)
-        .then(response => response.json())
-        .then(usuario => {
-            if (usuario.error) {
-                throw new Error(usuario.error);
+        .then(response => {
+            console.log('Respuesta status:', response.status);
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
             }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Datos recibidos:', data); // Para depuración
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Error desconocido');
+            }
+            
+            const usuario = data.usuario;
             
             // Llenar formulario
             document.getElementById('editar_id_usuario').value = usuario.id_usuario;
             document.getElementById('editar_username').value = usuario.username;
             document.getElementById('editar_rol').value = usuario.rol;
-            document.getElementById('editar_activo').checked = usuario.activo;
+            document.getElementById('editar_activo').checked = usuario.activo === 1 || usuario.activo === true;
+            
+            // Limpiar contraseña
+            document.getElementById('editar_password').value = '';
             
             // Mostrar información del empleado si existe
             const infoEmpleado = document.getElementById('info-empleado');
-            if (infoEmpleado && usuario.empleado) {
-                infoEmpleado.innerHTML = `
-                    <div class="alert alert-info">
-                        <p><strong>Empleado:</strong> ${usuario.empleado.nombre} ${usuario.empleado.apellido}</p>
-                        <p><strong>DNI:</strong> ${usuario.empleado.dni}</p>
-                        <p><strong>Email:</strong> ${usuario.empleado.email}</p>
-                    </div>
-                `;
+            if (infoEmpleado) {
+                if (usuario.nombre && usuario.apellido) {
+                    infoEmpleado.innerHTML = `
+                        <div class="alert alert-info mb-3">
+                            <h6><i class="fas fa-user-tie me-2"></i>Empleado Asociado</h6>
+                            <p class="mb-1"><strong>Nombre:</strong> ${usuario.nombre} ${usuario.apellido}</p>
+                            ${usuario.dni ? `<p class="mb-1"><strong>DNI:</strong> ${usuario.dni}</p>` : ''}
+                            ${usuario.email ? `<p class="mb-0"><strong>Email:</strong> ${usuario.email}</p>` : ''}
+                        </div>
+                    `;
+                } else {
+                    infoEmpleado.innerHTML = `
+                        <div class="alert alert-warning mb-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Este usuario no está asociado a ningún empleado
+                        </div>
+                    `;
+                }
             }
+            
+            // Cargar historial de login
+            cargarHistorialLogin(id);
             
             // Mostrar modal
             const modal = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
@@ -531,7 +562,62 @@ window.editarUsuario = function(id) {
         })
         .catch(error => {
             console.error('Error cargando usuario:', error);
-            mostrarNotificacion('❌ Error al cargar usuario: ' + error.message, 'error');
+            alert('Error al cargar usuario: ' + error.message);
+        });
+}
+
+// Función para cargar historial de login
+function cargarHistorialLogin(idUsuario) {
+    const contenedor = document.getElementById('historial-login');
+    if (!contenedor) return;
+    
+    contenedor.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Cargando historial...</p>';
+    
+    fetch(`/api/usuarios/${idUsuario}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.usuario.historial_login && data.usuario.historial_login.length > 0) {
+                const historial = data.usuario.historial_login;
+                let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+                html += '<thead><tr><th>Fecha</th><th>IP</th><th>Dispositivo</th></tr></thead><tbody>';
+                
+                historial.forEach(login => {
+                    const fecha = new Date(login.fecha_login);
+                    const fechaStr = fecha.toLocaleDateString('es-ES');
+                    const horaStr = fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                    
+                    // Acortar user agent
+                    let dispositivo = login.user_agent || '';
+                    if (dispositivo.length > 50) {
+                        dispositivo = dispositivo.substring(0, 50) + '...';
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td><small>${fechaStr}<br>${horaStr}</small></td>
+                            <td><small>${login.ip_address || 'N/A'}</small></td>
+                            <td><small>${dispositivo}</small></td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table></div>';
+                contenedor.innerHTML = html;
+            } else {
+                contenedor.innerHTML = `
+                    <p class="text-muted text-center py-3">
+                        <i class="fas fa-history me-2"></i>No hay historial de login disponible
+                    </p>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando historial:', error);
+            contenedor.innerHTML = `
+                <p class="text-danger text-center py-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Error al cargar historial
+                </p>
+            `;
         });
 }
 

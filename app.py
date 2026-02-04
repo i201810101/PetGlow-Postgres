@@ -1,16 +1,66 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request
 from datetime import datetime, timedelta
+from xml.etree.ElementTree import Element, SubElement, tostring
+import re
+import json
 import os
+import smtplib
+from flask import current_app
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import mysql.connector
 import hashlib
 from functools import wraps
 from mysql.connector import Error
 
+# Importar configuración y base de datos
+from config.config import config
+from config.database import db
+
 # Cargar variables de entorno
 load_dotenv()
 
+# Inicializar la aplicación
+app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
+app.config['SECRET_KEY'] = config.SECRET_KEY
+app.config['SQLALCHEMY_DATABASE_URI'] = config.SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = config.SQLALCHEMY_TRACK_MODIFICATIONS
 
+# Configuración de correo directamente de config
+app.config['MAIL_SERVER'] = config.MAIL_SERVER
+app.config['MAIL_PORT'] = config.MAIL_PORT
+app.config['MAIL_USERNAME'] = config.MAIL_USERNAME
+app.config['MAIL_PASSWORD'] = config.MAIL_PASSWORD
+app.config['MAIL_DEFAULT_SENDER'] = config.MAIL_DEFAULT_SENDER
+app.config['ADMIN_EMAIL'] = config.ADMIN_EMAIL
+
+# TLS/SSL según configuración
+app.config['MAIL_USE_TLS'] = config.MAIL_USE_TLS
+app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
+
+def parse_xml(xml_string):
+    """Parse XML string to Element"""
+    from xml.etree.ElementTree import fromstring
+    return fromstring(xml_string)
+
+def nsdecls(*prefixes):
+    """Generate namespace declarations for Word XML"""
+    nsmap = {
+        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+        'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+        'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+        'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'
+    }
+    
+    declarations = []
+    for prefix in prefixes:
+        if prefix in nsmap:
+            declarations.append(f'xmlns:{prefix}="{nsmap[prefix]}"')
+    
+    return ' '.join(declarations)
 
 def login_required(f):
     """Decorador para requerir inicio de sesión"""
@@ -35,9 +85,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Inicializar la aplicación
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'petglow-secret-key-2025')
+
 
 # Configuración de la base de datos MySQL
 def get_db_connection():
@@ -69,6 +117,7 @@ def set_default_session():
     # Pasar la fecha/hora actual a todos los templates
     from datetime import datetime
     app.jinja_env.globals['now'] = datetime.now
+    app.jinja_env.globals.update(max=max, min=min, abs=abs, round=round)
 # ================= RUTAS =================
 
 @app.route('/')
@@ -188,9 +237,9 @@ def login():
         try:
             cursor = conn.cursor(dictionary=True)
             
-            # Buscar usuario
+            # Buscar usuario - ¡IMPORTANTE! Seleccionar id_empleado
             cursor.execute("""
-                SELECT u.*, e.nombre, e.apellido, e.email as empleado_email
+                SELECT u.*, e.id_empleado, e.nombre, e.apellido, e.email as empleado_email
                 FROM usuarios u
                 LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
                 WHERE u.username = %s AND u.activo = TRUE
@@ -259,13 +308,14 @@ def login():
             
             conn.commit()
             
-            # Configurar sesión
+            # Configurar sesión - ¡AGREGAR id_empleado!
             session['id_usuario'] = usuario['id_usuario']
             session['username'] = usuario['username']
             session['rol'] = usuario['rol']
             session['nombre'] = usuario.get('nombre', 'Administrador')
             session['apellido'] = usuario.get('apellido', '')
             session['email'] = usuario.get('empleado_email', '')
+            session['id_empleado'] = usuario.get('id_empleado')  # ¡ESTO ES LO QUE FALTA!
             session['last_activity'] = datetime.now().isoformat()
             
             # Configurar duración de sesión
@@ -319,7 +369,7 @@ def logout():
                 cursor.close()
                 conn.close()
     
-    # Limpiar sesión
+    # Limpiar sesión (esto eliminará también el acceso a reportes)
     session.clear()
     flash('Sesión cerrada exitosamente.', 'info')
     return redirect(url_for('login'))
@@ -404,29 +454,63 @@ def ventas():
 @app.route('/clientes')
 @login_required
 def clientes():
-    """Listar clientes"""
+    """Listar clientes con paginación"""
+    # Obtener parámetro de página (default: 1)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # Número de clientes por página
+    
     conn = get_db_connection()
     clientes_list = []
+    total_clientes = 0
+    total_pages = 0
     
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM clientes ORDER BY fecha_registro DESC LIMIT 50")
+            
+            # 1. Contar total de clientes
+            cursor.execute("SELECT COUNT(*) as total FROM clientes")
+            total_clientes = cursor.fetchone()['total']
+            
+            # 2. Calcular total de páginas
+            total_pages = (total_clientes + per_page - 1) // per_page
+            
+            # 3. Calcular offset para la paginación
+            offset = (page - 1) * per_page
+            
+            # 4. Obtener clientes paginados
+            cursor.execute("""
+                SELECT * FROM clientes 
+                ORDER BY fecha_registro DESC 
+                LIMIT %s OFFSET %s
+            """, (per_page, offset))
             clientes_list = cursor.fetchall()
+            
             cursor.close()
         except Error as e:
             flash(f'Error obteniendo clientes: {e}', 'danger')
         finally:
             conn.close()
     else:
-        # Datos demo
-        clientes_list = [
-            {'id_cliente': 1, 'nombre': 'Juan', 'apellido': 'Pérez', 'telefono': '555-1234', 'email': 'juan@email.com', 'fecha_registro': datetime.now()},
-            {'id_cliente': 2, 'nombre': 'María', 'apellido': 'García', 'telefono': '555-5678', 'email': 'maria@email.com', 'fecha_registro': datetime.now()},
-            {'id_cliente': 3, 'nombre': 'Carlos', 'apellido': 'Ruiz', 'telefono': '555-9012', 'email': 'carlos@email.com', 'fecha_registro': datetime.now()}
+        # Datos demo (con paginación simulada)
+        total_clientes = 25  # Simulamos 25 clientes
+        per_page = 10
+        total_pages = 3
+        
+        clientes_demo = [
+            {'id_cliente': i, 'nombre': f'Cliente {i}', 'apellido': f'Apellido {i}', 
+             'telefono': f'555-{i:04d}', 'email': f'cliente{i}@email.com', 
+             'fecha_registro': datetime.now(), 'dni': f'7{i:07d}' if i % 3 != 0 else None}
+            for i in range((page-1)*per_page + 1, min(page*per_page, total_clientes) + 1)
         ]
+        clientes_list = clientes_demo
     
-    return render_template('clientes/listar.html', clientes=clientes_list)
+    return render_template('clientes/listar.html', 
+                         clientes=clientes_list,
+                         page=page,
+                         per_page=per_page,
+                         total_clientes=total_clientes,
+                         total_pages=total_pages)
 
 @app.route('/clientes/crear', methods=['GET', 'POST'])
 def crear_cliente():
@@ -640,20 +724,39 @@ def ver_cliente(id):
 
 @app.route('/mascotas')
 def mascotas():
-    """Listar mascotas"""
+    """Listar mascotas con paginación"""
+    # Obtener parámetro de página (default: 1)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # Número de mascotas por página
+    
     conn = get_db_connection()
     mascotas_list = []
     
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
+            
+            # Contar total de mascotas
+            cursor.execute("SELECT COUNT(*) as total FROM mascotas")
+            total_result = cursor.fetchone()
+            total_mascotas = total_result['total'] if total_result else 0
+            
+            # Calcular total de páginas
+            total_pages = (total_mascotas + per_page - 1) // per_page
+            
+            # Calcular offset para la paginación
+            offset = (page - 1) * per_page
+            
+            # Obtener mascotas paginadas
             cursor.execute("""
                 SELECT m.*, c.nombre as cliente_nombre, c.apellido as cliente_apellido
                 FROM mascotas m
                 LEFT JOIN clientes c ON m.id_cliente = c.id_cliente
-                ORDER BY m.fecha_registro DESC LIMIT 50
-            """)
+                ORDER BY m.fecha_registro DESC 
+                LIMIT %s OFFSET %s
+            """, (per_page, offset))
             mascotas_list = cursor.fetchall()
+            
             cursor.close()
         except Error as e:
             flash(f'Error obteniendo mascotas: {e}', 'danger')
@@ -661,13 +764,20 @@ def mascotas():
             conn.close()
     else:
         # Datos demo
+        total_mascotas = 3
+        total_pages = 1
         mascotas_list = [
             {'id_mascota': 1, 'nombre': 'Max', 'especie': 'perro', 'raza': 'Labrador', 'cliente_nombre': 'Juan', 'cliente_apellido': 'Pérez', 'fecha_registro': datetime.now()},
             {'id_mascota': 2, 'nombre': 'Luna', 'especie': 'gato', 'raza': 'Siamés', 'cliente_nombre': 'María', 'cliente_apellido': 'García', 'fecha_registro': datetime.now()},
             {'id_mascota': 3, 'nombre': 'Rocky', 'especie': 'perro', 'raza': 'Bulldog', 'cliente_nombre': 'Carlos', 'cliente_apellido': 'Ruiz', 'fecha_registro': datetime.now()}
         ]
     
-    return render_template('mascotas/listar.html', mascotas=mascotas_list)
+    return render_template('mascotas/listar.html', 
+                         mascotas=mascotas_list,
+                         page=page,
+                         per_page=per_page,
+                         total_mascotas=total_mascotas,
+                         total_pages=total_pages)
     
 
 @app.route('/mascotas/crear', methods=['GET', 'POST'])
@@ -1313,16 +1423,84 @@ def ver_servicio(id):
         conn.close()
     
     return render_template('servicios/ver.html', servicio=servicio)
+# En tu app.py, agrega esta ruta al final
+@app.route('/api/calendario/reservas')
+def api_calendario_reservas():
+    """API para obtener reservas para el calendario"""
+    try:
+        # Datos de ejemplo - LUEGO REEMPLAZA CON DATOS REALES
+        from datetime import datetime, timedelta
+        
+        eventos = []
+        hoy = datetime.now()
+        
+        # Ejemplo 1: Hoy a las 10:00
+        eventos.append({
+            'title': 'RES-001 - Max (Baño completo)',
+            'start': hoy.replace(hour=10, minute=0, second=0).isoformat(),
+            'end': hoy.replace(hour=11, minute=0, second=0).isoformat(),
+            'backgroundColor': '#0dcaf0',
+            'estado': 'confirmada'
+        })
+        
+        # Ejemplo 2: Hoy a las 14:00
+        eventos.append({
+            'title': 'RES-002 - Luna (Corte y peinado)',
+            'start': hoy.replace(hour=14, minute=0, second=0).isoformat(),
+            'end': hoy.replace(hour=15, minute=30, second=0).isoformat(),
+            'backgroundColor': '#ffc107',
+            'estado': 'pendiente'
+        })
+        
+        # Ejemplo 3: Mañana
+        manana = hoy + timedelta(days=1)
+        eventos.append({
+            'title': 'RES-003 - Rocky (Limpieza dental)',
+            'start': manana.replace(hour=9, minute=0, second=0).isoformat(),
+            'end': manana.replace(hour=10, minute=0, second=0).isoformat(),
+            'backgroundColor': '#198754',
+            'estado': 'completada'
+        })
+        
+        return jsonify({
+            'success': True,
+            'eventos': eventos
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/reservas')
 def reservas():
     """Listar reservas"""
+    # Obtener parámetros de paginación
+    pagina = request.args.get('pagina', 1, type=int)
+    items_por_pagina = 10  # Cambia este número si quieres más/menos items por página
+    
     conn = get_db_connection()
     reservas_list = []
+    total_reservas = 0
+    total_paginas = 0
     
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
+            
+            # **PRIMERO: Contar el TOTAL de reservas**
+            cursor.execute("SELECT COUNT(*) as total FROM reservas")
+            total_reservas = cursor.fetchone()['total']
+            
+            # **Calcular total de páginas**
+            if total_reservas > 0:
+                total_paginas = (total_reservas + items_por_pagina - 1) // items_por_pagina
+            
+            # **Calcular OFFSET para paginación**
+            offset = (pagina - 1) * items_por_pagina
+            
+            # **SEGUNDO: Obtener reservas con LIMIT y OFFSET**
             cursor.execute("""
                 SELECT r.*, 
                        m.nombre as mascota_nombre, 
@@ -1340,11 +1518,12 @@ def reservas():
                 LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
                 GROUP BY r.id_reserva
                 ORDER BY r.fecha_reserva DESC 
-                LIMIT 50
-            """)
+                LIMIT %s OFFSET %s  # **AQUÍ ESTÁ LA PAGINACIÓN**
+            """, (items_por_pagina, offset))  # **Cambia LIMIT 50 por esto**
+            
             reservas_list = cursor.fetchall()
             
-            # Formatear datos
+            # Formatear datos (esto ya lo tienes)
             for reserva in reservas_list:
                 # Estado con clase CSS
                 estado_clases = {
@@ -1369,11 +1548,13 @@ def reservas():
             cursor.close()
         except Error as e:
             flash(f'Error obteniendo reservas: {e}', 'danger')
-            print(f"Error SQL: {e}")  # Para debug
+            print(f"Error SQL: {e}")
         finally:
             conn.close()
     else:
         # Datos demo
+        total_reservas = 1
+        total_paginas = 1
         reservas_list = [
             {
                 'id_reserva': 1, 
@@ -1392,7 +1573,11 @@ def reservas():
             }
         ]
     
-    return render_template('reservas/listar.html', reservas=reservas_list)
+    return render_template('reservas/listar.html', 
+                         reservas=reservas_list,
+                         pagina_actual=pagina,
+                         total_paginas=total_paginas,
+                         total_reservas=total_reservas)
 
 # ================= RUTAS DE RESERVAS =================
 
@@ -1933,6 +2118,95 @@ def eliminar_reserva(id):
     finally:
         cursor.close()
         conn.close()
+
+def obtener_correo_admin():
+    """Obtiene el correo del administrador del sistema"""
+    try:
+        # Usar el correo de configuración de Flask
+        correo = current_app.config.get('ADMIN_EMAIL')
+        if not correo:
+            correo = 'ayumu798@gmail.com'  # Correo por defecto
+        print(f"✅ Usando correo admin: {correo}")
+        return correo
+    except Exception as e:
+        print(f"⚠️ Error al obtener correo admin: {e}")
+        return 'ayumu798@gmail.com'
+
+def enviar_correo_reserva_completada(reserva_dict):
+    """Envía correo al administrador cuando una reserva se completa"""
+    try:
+        codigo_reserva = reserva_dict.get('codigo_reserva', 'Sin código')
+        print(f"📧 Preparando correo para: {codigo_reserva}")
+        
+        # Obtener correo del admin
+        correo_admin = obtener_correo_admin()
+        if not correo_admin:
+            print("❌ No se encontró correo de administrador")
+            return False
+        
+        # Preparar mensaje
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'✅ Reserva Completada - {codigo_reserva}'
+        msg['From'] = app.config.get('MAIL_DEFAULT_SENDER', 'PetGlow <ayumu798@gmail.com>')
+        msg['To'] = correo_admin
+        
+        # Contenido simple
+        text = f"""
+Reserva Completada: {codigo_reserva}
+Mascota: {reserva_dict.get('mascota_nombre', 'N/A')}
+Cliente: {reserva_dict.get('cliente_nombre', '')} {reserva_dict.get('cliente_apellido', '')}
+Total: S/ {float(reserva_dict.get('total', 0)):.2f}
+Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+"""
+        
+        msg.attach(MIMEText(text, 'plain'))
+        
+        # Obtener configuración
+        mail_server = app.config.get('MAIL_SERVER')
+        mail_port = app.config.get('MAIL_PORT', 587)
+        mail_username = app.config.get('MAIL_USERNAME')
+        mail_password = app.config.get('MAIL_PASSWORD')
+        mail_use_tls = app.config.get('MAIL_USE_TLS', True)
+        mail_use_ssl = app.config.get('MAIL_USE_SSL', False)
+        
+        print(f"📊 Configuración detectada:")
+        print(f"   Servidor: {mail_server}:{mail_port}")
+        print(f"   Usuario: {mail_username}")
+        print(f"   TLS: {mail_use_tls}, SSL: {mail_use_ssl}")
+        
+        if not all([mail_server, mail_username, mail_password]):
+            print("⚠️ Configuración SMTP incompleta")
+            return False
+        
+        # Enviar correo
+        print(f"📤 Enviando a {correo_admin}...")
+        
+        try:
+            if mail_use_ssl:
+                # SSL en puerto 465
+                server = smtplib.SMTP_SSL(mail_server, mail_port, timeout=10)
+            else:
+                # TLS en puerto 587 (GMAIL)
+                server = smtplib.SMTP(mail_server, mail_port, timeout=10)
+                server.ehlo()  # 🔥 Agregar esto
+                if mail_use_tls:
+                    server.starttls()
+                    server.ehlo()  # 🔥 Agregar esto también
+            
+            server.login(mail_username, mail_password)
+            server.send_message(msg)
+            server.quit()
+            
+            print(f"✅ Correo enviado exitosamente!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error SMTP: {str(e)}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error general: {str(e)}")
+        return False
 # ==================== RUTAS API PARA EMPLEADOS ====================
 
 @app.route('/api/empleado/info')
@@ -2227,6 +2501,271 @@ def api_reservas_hoy_empleado():
 def empleado_monitor():
     """Pantalla de monitor/kiosk para empleados (solo lectura, auto-refresh)"""
     return render_template('empleados/monitor.html')
+
+@app.route('/api/monitor/reservas/<int:id>/tomar', methods=['POST'])
+@login_required
+def api_tomar_reserva(id):
+    """API para que un empleado tome una reserva del monitor"""
+    
+    data = request.get_json()
+    id_empleado_seleccionado = data.get('id_empleado')
+    
+    # Si no se envía empleado, usar el de la sesión
+    if not id_empleado_seleccionado:
+        id_empleado_seleccionado = session.get('id_empleado')
+    
+    if not id_empleado_seleccionado:
+        return jsonify({'success': False, 'message': 'No se especificó empleado.'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'message': 'Error de conexión.'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Verificar que la reserva existe
+        cursor.execute("""
+            SELECT estado, id_empleado, codigo_reserva
+            FROM reservas 
+            WHERE id_reserva = %s
+        """, (id,))
+        
+        reserva = cursor.fetchone()
+        
+        if not reserva:
+            return jsonify({'success': False, 'message': 'Reserva no encontrada.'}), 404
+        
+        # 2. Verificar que está en estado correcto
+        if reserva['estado'] not in ['pendiente', 'confirmada']:
+            return jsonify({'success': False, 'message': 'Solo se pueden tomar reservas pendientes o confirmadas.'}), 400
+        
+        # 3. Verificar que no está ya asignada a otro empleado (que no sea Admin Sistema)
+        if reserva['id_empleado'] != 1 and reserva['id_empleado'] != id_empleado_seleccionado:
+            return jsonify({'success': False, 'message': 'Esta reserva ya está asignada a otro empleado.'}), 400
+        
+        # 4. Obtener nombre del empleado seleccionado
+        cursor.execute("SELECT nombre, apellido FROM empleados WHERE id_empleado = %s", (id_empleado_seleccionado,))
+        empleado_info = cursor.fetchone()
+        
+        if not empleado_info:
+            return jsonify({'success': False, 'message': 'Empleado no encontrado.'}), 404
+        
+        nombre_empleado = f"{empleado_info['nombre']} {empleado_info['apellido']}"
+        
+        # 5. Cambiar el empleado asignado y el estado
+        cursor.execute("""
+            UPDATE reservas 
+            SET id_empleado = %s,
+                estado = 'en_proceso',
+                fecha_modificacion = NOW()
+            WHERE id_reserva = %s
+        """, (id_empleado_seleccionado, id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Reserva asignada a {nombre_empleado} y en proceso.',
+            'estado': 'en_proceso',
+            'nuevo_empleado': nombre_empleado,
+            'id_empleado_nuevo': id_empleado_seleccionado
+        })
+            
+    except Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+    finally:
+        cursor.close()
+        conn.close()
+@app.route('/api/monitor/reservas')
+@login_required
+def api_monitor_reservas():
+    """API para obtener reservas para el monitor de empleados - TODAS LAS RESERVAS"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Error de conexión'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener ID del empleado actual DE LA SESIÓN
+        id_empleado = session.get('id_empleado')
+        nombre_empleado_actual = "Empleado"
+        
+        # Si no hay id_empleado en sesión, buscar por el usuario actual
+        if not id_empleado and 'id_usuario' in session:
+            cursor.execute("""
+                SELECT e.id_empleado, e.nombre, e.apellido 
+                FROM usuarios u
+                JOIN empleados e ON u.id_empleado = e.id_empleado
+                WHERE u.id_usuario = %s
+            """, (session['id_usuario'],))
+            usuario_info = cursor.fetchone()
+            
+            if usuario_info:
+                id_empleado = usuario_info['id_empleado']
+                nombre_empleado_actual = f"{usuario_info['nombre']} {usuario_info['apellido']}"
+                # Actualizar la sesión con el id_empleado encontrado
+                session['id_empleado'] = id_empleado
+        
+        # Si aún no hay id_empleado, usar el nombre de la sesión
+        if not id_empleado:
+            nombre_empleado_actual = session.get('nombre', 'Empleado')
+        
+        # Obtener TODAS las reservas de hoy
+        cursor.execute("""
+            SELECT 
+                r.id_reserva,
+                r.codigo_reserva,
+                DATE_FORMAT(r.fecha_reserva, '%Y-%m-%dT%H:%i:%s') as fecha_reserva,
+                r.estado,
+                r.id_empleado,
+                m.nombre as mascota_nombre,
+                m.especie,
+                m.raza,
+                m.color,
+                c.nombre as cliente_nombre,
+                c.apellido as cliente_apellido,
+                c.telefono as cliente_telefono,
+                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                CONCAT(e.nombre, ' ', e.apellido) as empleado_asignado,
+                e.nombre as empleado_nombre,
+                e.apellido as empleado_apellido
+            FROM reservas r
+            JOIN mascotas m ON r.id_mascota = m.id_mascota
+            JOIN clientes c ON m.id_cliente = c.id_cliente
+            LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+            LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
+            LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
+            WHERE DATE(r.fecha_reserva) = CURDATE()
+            AND r.estado IN ('pendiente', 'confirmada', 'en_proceso', 'completada')
+            GROUP BY r.id_reserva
+            ORDER BY 
+                CASE r.estado 
+                    WHEN 'pendiente' THEN 1
+                    WHEN 'confirmada' THEN 2
+                    WHEN 'en_proceso' THEN 3
+                    WHEN 'completada' THEN 4
+                    ELSE 5
+                END,
+                r.fecha_reserva ASC
+        """)
+        
+        todas_reservas = cursor.fetchall()
+        
+        # Separar por estado
+        pendientes = [r for r in todas_reservas if r['estado'] in ['pendiente', 'confirmada']]
+        en_proceso = [r for r in todas_reservas if r['estado'] == 'en_proceso']
+        completadas = [r for r in todas_reservas if r['estado'] == 'completada']
+        
+        return jsonify({
+            'success': True,
+            'pendientes': pendientes,
+            'en_proceso': en_proceso,
+            'completadas': completadas,
+            'id_empleado_actual': id_empleado,
+            'nombre_empleado_actual': nombre_empleado_actual
+        })
+        
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/monitor/empleados')
+def api_monitor_empleados():
+    """API para obtener lista de empleados para el monitor"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Error de conexión'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener todos los empleados activos (EXCLUYENDO al Admin Sistema - ID 1)
+        cursor.execute("""
+            SELECT id_empleado, dni, nombre, apellido, email, 
+                   especialidad, telefono, fecha_contratacion
+            FROM empleados
+            WHERE activo = TRUE AND id_empleado != 1  -- Excluir Admin Sistema
+            ORDER BY nombre, apellido
+        """)
+        
+        empleados = cursor.fetchall()
+        
+        return jsonify({
+            'success': True,
+            'empleados': empleados,
+            'total': len(empleados)
+        })
+        
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/reservas/devolver/<int:id>', methods=['POST'])
+@login_required
+def devolver_reserva(id):
+    """Devolver una reserva al Admin Sistema para que otros puedan tomarla"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'message': 'Error de conexión.'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Verificar que la reserva existe y está en_proceso
+        cursor.execute("""
+            SELECT estado, id_empleado, codigo_reserva
+            FROM reservas 
+            WHERE id_reserva = %s
+        """, (id,))
+        
+        reserva = cursor.fetchone()
+        
+        if not reserva:
+            return jsonify({'success': False, 'message': 'Reserva no encontrada.'}), 404
+        
+        # 2. Verificar que está en proceso
+        if reserva['estado'] != 'en_proceso':
+            return jsonify({'success': False, 'message': 'Solo se pueden devolver reservas en proceso.'}), 400
+        
+        # 3. Verificar que el empleado actual es el asignado
+        id_empleado_sesion = session.get('id_empleado')
+        if not id_empleado_sesion:
+            return jsonify({'success': False, 'message': 'No hay empleado en sesión.'}), 400
+        
+        if reserva['id_empleado'] != id_empleado_sesion:
+            return jsonify({'success': False, 'message': 'Solo puedes devolver reservas asignadas a ti.'}), 403
+        
+        # 4. Devolver al Admin Sistema (ID 1) y cambiar estado a "confirmada"
+        cursor.execute("""
+            UPDATE reservas 
+            SET id_empleado = 1,
+                estado = 'confirmada',
+                fecha_modificacion = NOW()
+            WHERE id_reserva = %s
+        """, (id,))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Reserva #{reserva["codigo_reserva"]} devuelta a disponibles.',
+            'nuevo_estado': 'confirmada',
+            'nuevo_empleado': 'Admin Sistema'
+        })
+            
+    except Error as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/api/mascota/<int:id>')
 def obtener_datos_mascota(id):
@@ -2629,47 +3168,224 @@ def ver_reserva(id):
         conn.close()
     
     return render_template('reservas/ver.html', reserva=reserva)
+# ================= FUNCIONES PARA CORREO =================
 
-@app.route('/reservas/cambiar-estado/<int:id>', methods=['POST'])
-def cambiar_estado_reserva(id):
-    """Cambiar estado de una reserva"""
-    conn = get_db_connection()
-    
-    if not conn:
-        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
-    
+def obtener_correo_admin():
+    """Obtiene el correo del administrador del sistema"""
     try:
+        # Simplemente devuelve el correo de configuración
+        correo = app.config.get('ADMIN_EMAIL')
+        if not correo:
+            correo = 'ayumu79@gmail.com'  # Correo por defecto
+        return correo
+    except Exception as e:
+        print(f"⚠️ Error en obtener_correo_admin: {e}")
+        return 'ayumu79@gmail.com'
+
+# En tu app.py, busca la función cambiar_estado_reserva y actualízala:
+@app.route('/reservas/cambiar-estado/<int:id>', methods=['POST'])
+@login_required
+def cambiar_estado_reserva(id):
+    """Cambiar estado de una reserva - VERSIÓN CORREGIDA"""
+    try:
+        print(f"\n📋 Intentando cambiar estado de reserva ID: {id}")
+        
         data = request.get_json()
         nuevo_estado = data.get('estado')
         
         if not nuevo_estado:
-            return jsonify({'success': False, 'message': 'Estado no especificado.'}), 400
+            return jsonify({'success': False, 'message': 'Estado no proporcionado'}), 400
         
-        estados_validos = ['pendiente', 'confirmada', 'en_proceso', 'completada', 'cancelada', 'no_show']
-        if nuevo_estado not in estados_validos:
-            return jsonify({'success': False, 'message': 'Estado no válido.'}), 400
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'message': 'No hay conexión a la base de datos'}), 500
         
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE reservas 
-            SET estado = %s, fecha_modificacion = NOW()
-            WHERE id_reserva = %s
-        """, (nuevo_estado, id))
-        conn.commit()
-        
-        if cursor.rowcount > 0:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # 1. Obtener la reserva actual
+            cursor.execute("""
+                SELECT r.*, 
+                       m.nombre as mascota_nombre, m.especie, m.raza,
+                       c.nombre as cliente_nombre, c.apellido as cliente_apellido,
+                       c.telefono as cliente_telefono, c.email as cliente_email,
+                       e.nombre as empleado_nombre, e.apellido as empleado_apellido,
+                       e.email as empleado_email
+                FROM reservas r
+                JOIN mascotas m ON r.id_mascota = m.id_mascota
+                JOIN clientes c ON m.id_cliente = c.id_cliente
+                JOIN empleados e ON r.id_empleado = e.id_empleado
+                WHERE r.id_reserva = %s
+            """, (id,))
+            
+            reserva = cursor.fetchone()
+            
+            if not reserva:
+                return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
+            
+            print(f"📌 Estado anterior: {reserva['estado']}")
+            print(f"🎯 Estado nuevo: {nuevo_estado}")
+            
+            # Guardar estado anterior
+            estado_anterior = reserva['estado']
+            
+            # 2. Actualizar reserva
+            cursor.execute("""
+                UPDATE reservas 
+                SET estado = %s, fecha_modificacion = NOW()
+                WHERE id_reserva = %s
+            """, (nuevo_estado, id))
+            
+            conn.commit()
+            
+            print(f"✅ Estado cambiado en base de datos")
+            
+            # 3. Si el nuevo estado es "completada", enviar correo al admin
+            if nuevo_estado == 'completada':
+                print("🎉 Reserva completada, preparando notificación...")
+                
+                # Obtener servicios de la reserva para el correo
+                cursor.execute("""
+                    SELECT s.nombre
+                    FROM reserva_servicios rs
+                    JOIN servicios s ON rs.id_servicio = s.id_servicio
+                    WHERE rs.id_reserva = %s
+                """, (id,))
+                
+                servicios = cursor.fetchall()
+                servicios_texto = ", ".join([s['nombre'] for s in servicios]) if servicios else "No especificados"
+                
+                # Calcular total
+                cursor.execute("""
+                    SELECT SUM(subtotal) as total
+                    FROM reserva_servicios
+                    WHERE id_reserva = %s
+                """, (id,))
+                
+                total_result = cursor.fetchone()
+                total = total_result['total'] if total_result and total_result['total'] else 0
+                
+                # Crear objeto reserva con los datos necesarios para el correo
+                # Crear diccionario con los datos necesarios para el correo
+                reserva_dict = {
+    'codigo_reserva': reserva['codigo_reserva'],
+    'fecha_reserva': reserva['fecha_reserva'],
+    'mascota_nombre': reserva['mascota_nombre'],
+    'especie': reserva['especie'],
+    'raza': reserva['raza'],
+    'cliente_nombre': reserva['cliente_nombre'],
+    'cliente_apellido': reserva['cliente_apellido'],
+    'cliente_telefono': reserva['cliente_telefono'],
+    'cliente_email': reserva['cliente_email'],
+    'empleado_nombre': reserva['empleado_nombre'],
+    'empleado_apellido': reserva['empleado_apellido'],
+    'empleado_especialidad': reserva.get('especialidad', 'No especificada'),
+    'notas': reserva.get('notas', 'No hay notas'),
+    'total': float(total)
+                }
+
+                resultado_correo = enviar_correo_reserva_completada(reserva_dict)
+                
+                if resultado_correo:
+                    print("✅ Notificación enviada exitosamente")
+                else:
+                    print("⚠️ Notificación no pudo ser enviada, pero la reserva se actualizó")
+            
+            cursor.close()
+            conn.close()
+            
             return jsonify({
                 'success': True, 
-                'message': f'Estado cambiado a {nuevo_estado.replace("_", " ").title()}'
+                'message': f'Reserva {reserva["codigo_reserva"]} actualizada a {nuevo_estado}',
+                'estado': nuevo_estado
             })
-        else:
-            return jsonify({'success': False, 'message': 'Reserva no encontrada.'}), 404
             
-    except Error as e:
-        return jsonify({'success': False, 'message': f'Error cambiando estado: {str(e)}'}), 500
-    finally:
+        except Error as e:
+            if conn:
+                conn.rollback()
+            print(f"❌ Error cambiando estado: {str(e)}")
+            return jsonify({'success': False, 'message': f'Error de base de datos: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"❌ Error general: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+        # ================= RUTA DE PRUEBA =================
+
+@app.route('/test-correo/<int:id>')
+@login_required
+def test_correo(id):
+    """Ruta para probar el envío de correo sin cambiar estado"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            flash('No hay conexión a la base de datos.', 'danger')
+            return redirect(url_for('reservas'))
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtener datos de la reserva
+        cursor.execute("""
+            SELECT r.*, 
+                   m.nombre as mascota_nombre, m.especie, m.raza,
+                   c.nombre as cliente_nombre, c.apellido as cliente_apellido,
+                   c.telefono as cliente_telefono, c.email as cliente_email,
+                   e.nombre as empleado_nombre, e.apellido as empleado_apellido,
+                   e.email as empleado_email
+            FROM reservas r
+            JOIN mascotas m ON r.id_mascota = m.id_mascota
+            JOIN clientes c ON m.id_cliente = c.id_cliente
+            JOIN empleados e ON r.id_empleado = e.id_empleado
+            WHERE r.id_reserva = %s
+        """, (id,))
+        
+        reserva = cursor.fetchone()
+        
+        if not reserva:
+            flash('Reserva no encontrada.', 'danger')
+            return redirect(url_for('reservas'))
+        
+        # Obtener total
+        cursor.execute("SELECT SUM(subtotal) as total FROM reserva_servicios WHERE id_reserva = %s", (id,))
+        total_result = cursor.fetchone()
+        total = total_result['total'] if total_result and total_result['total'] else 0
+        
         cursor.close()
         conn.close()
+        
+        # Crear objeto para el correo
+        # Crear diccionario para el correo
+        reserva_dict = {
+    'codigo_reserva': reserva['codigo_reserva'],
+    'fecha_reserva': reserva['fecha_reserva'],
+    'mascota_nombre': reserva['mascota_nombre'],
+    'especie': reserva['especie'],
+    'raza': reserva['raza'],
+    'cliente_nombre': reserva['cliente_nombre'],
+    'cliente_apellido': reserva['cliente_apellido'],
+    'cliente_telefono': reserva['cliente_telefono'],
+    'cliente_email': reserva['cliente_email'],
+    'empleado_nombre': reserva['empleado_nombre'],
+    'empleado_apellido': reserva['empleado_apellido'],
+    'empleado_especialidad': '',
+    'notas': reserva.get('notas', ''),
+    'total': float(total)
+        }
+
+        resultado = enviar_correo_reserva_completada(reserva_dict)
+        
+        if resultado:
+            flash(f'Correo de prueba generado para reserva {reserva["codigo_reserva"]}', 'success')
+        else:
+            flash('Error al generar correo de prueba', 'danger')
+            
+        return redirect(url_for('ver_reserva', id=id))
+        
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(url_for('reservas'))
 # ================= RUTAS DE FACTURACIÓN =================
 
 @app.route('/reservas/<int:id>/facturar', methods=['GET', 'POST'])
@@ -2811,15 +3527,16 @@ def facturar_reserva(id):
                          igv=round(igv, 2),
                          puede_factura=puede_factura)
 # ================= RUTAS DE REPORTES Y CONFIGURACIÓN =================
-@app.route('/reportes')
-def reportes():
-    """Página de reportes"""
-    return render_template('reportes/ventas.html')
 
+# Ruta para configuración PRINCIPAL
 @app.route('/config')
-def config():
-    """Configuración del sistema"""
+def config():  # <- NOMBRE ORIGINAL
+    """Página principal de configuración"""
+    if 'id_usuario' not in session:
+        return redirect(url_for('login'))
+    
     return render_template('config.html')
+
 
 # ================= MANEJO DE ERRORES =================
 
@@ -2836,6 +3553,7 @@ def internal_server_error(e):
 @app.context_processor
 def inject_now():
     """Inyectar fecha actual en todas las plantillas"""
+    from datetime import datetime
     return {'now': datetime.now()}
 
 @app.context_processor
@@ -2850,10 +3568,48 @@ def inject_user_data():
         },
         'user_role': 'admin'
     }
+# Ruta para configurar la contraseña
+@app.route('/configurar_password', methods=['POST'])
+def configurar_password():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'No autorizado'})
+    
+    data = request.get_json()
+    tipo = data.get('tipo', 'reportes')
+    password = data.get('password', '')
+    
+    config_path = 'config_reportes.json'
+    
+    try:
+        # Leer configuración existente
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        
+        # Actualizar contraseña
+        config[f'password_{tipo}'] = password
+        
+        # Guardar
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error guardando configuración: {e}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/check_session')
+def check_session():
+    """Verificar sesión para el modal"""
+    return jsonify({'logged_in': 'id_usuario' in session})
+
 
 # ============================================
 # RUTAS PARA MANEJO DE CAJA
 # ============================================
+
 
 @app.route('/caja/apertura', methods=['GET', 'POST'])
 def apertura_caja():
@@ -3745,6 +4501,7 @@ def api_create_usuario_empleado(id):
         conn.close()
 
 @app.route('/api/usuarios/<int:id>', methods=['PUT'])
+@login_required
 def api_update_usuario(id):
     """Actualizar usuario"""
     data = request.get_json()
@@ -4105,13 +4862,14 @@ def api_crear_usuario():
             return jsonify({'success': False, 'error': 'El nombre de usuario ya existe'}), 400
         
         # Crear usuario
+        password_hash = hash_password(data['password'])
         cursor.execute("""
-            INSERT INTO usuarios (username, password, id_empleado, rol, activo)
+            INSERT INTO usuarios (username, password_hash, id_empleado, rol, activo)
             VALUES (%s, %s, %s, %s, %s)
-        """, (data['username'], data['password'], 
-              data.get('id_empleado'), data['rol'], 
-              data.get('activo', True)))
-        
+        """, (data['username'], password_hash, 
+            data.get('id_empleado'), data['rol'], 
+            data.get('activo', True)))
+
         conn.commit()
         
         return jsonify({'success': True, 'message': 'Usuario creado exitosamente'})
@@ -4209,19 +4967,20 @@ def api_actualizar_usuario(id):
         
         # Actualizar usuario
         if 'password' in data and data['password']:
+            password_hash = hash_password(data['password'])
             cursor.execute("""
                 UPDATE usuarios 
-                SET username = %s, password = %s, rol = %s, activo = %s
+                SET username = %s, password_hash = %s, rol = %s, activo = %s
                 WHERE id_usuario = %s
-            """, (data['username'], data['password'], data['rol'], 
-                  data.get('activo', True), id))
+            """, (data['username'], password_hash, data['rol'], 
+                data.get('activo', True), id))
         else:
             cursor.execute("""
                 UPDATE usuarios 
                 SET username = %s, rol = %s, activo = %s
                 WHERE id_usuario = %s
             """, (data['username'], data['rol'], 
-                  data.get('activo', True), id))
+                data.get('activo', True), id))
         
         conn.commit()
         
@@ -4279,6 +5038,1554 @@ def api_eliminar_usuario(id):
     finally:
         cursor.close()
         conn.close()
+
+# ==================== CONFIGURACIÓN SIMPLE DE CONTRASEÑA ====================
+
+def obtener_contraseña_reportes():
+    """Obtener la contraseña desde un archivo simple"""
+    try:
+        if os.path.exists('clave_reportes.txt'):
+            with open('clave_reportes.txt', 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        else:
+            # Contraseña por defecto
+            contraseña_default = "medina123"
+            with open('clave_reportes.txt', 'w', encoding='utf-8') as f:
+                f.write(contraseña_default)
+            return contraseña_default
+    except Exception as e:
+        print(f"Error al obtener contraseña: {e}")
+        return "medina123"  # Fallback
+
+def cambiar_contraseña_reportes(nueva_contraseña):
+    """Cambiar la contraseña"""
+    try:
+        with open('clave_reportes.txt', 'w', encoding='utf-8') as f:
+            f.write(nueva_contraseña.strip())
+        return True
+    except Exception as e:
+        print(f"Error al cambiar contraseña: {e}")
+        return False
+
+@app.route('/verificar_contraseña_reportes', methods=['POST'])
+def verificar_contraseña_reportes():
+    """Verificar contraseña desde el modal (AJAX)"""
+    if 'id_usuario' not in session:
+        return jsonify({'success': False, 'message': 'No autorizado'})
+    
+    data = request.get_json()
+    password_ingresada = data.get('password', '')
+    
+    contraseña_correcta = obtener_contraseña_reportes()
+    
+    if password_ingresada == contraseña_correcta:
+        session['reportes_acceso'] = True
+        return jsonify({'success': True, 'message': 'Contraseña correcta'})
+    
+    return jsonify({'success': False, 'message': 'Contraseña incorrecta'})
+
+@app.route('/cambiar_contraseña_reportes', methods=['POST'])
+def cambiar_contraseña_reportes_route():
+    """Cambiar la contraseña desde la configuración"""
+    if 'id_usuario' not in session or session.get('rol') != 'admin':
+        flash('No autorizado', 'danger')
+        return redirect(url_for('config'))
+    
+    contraseña_actual = request.form.get('password_actual', '').strip()
+    nueva_contraseña = request.form.get('nueva_password', '').strip()
+    confirmar_contraseña = request.form.get('confirmar_password', '').strip()
+    
+    # Verificar que todos los campos estén completos
+    if not contraseña_actual or not nueva_contraseña or not confirmar_contraseña:
+        flash('Todos los campos son obligatorios', 'danger')
+        return redirect(url_for('config'))
+    
+    # Verificar contraseña actual
+    contraseña_guardada = obtener_contraseña_reportes()
+    
+    if contraseña_actual != contraseña_guardada:
+        flash('La contraseña actual es incorrecta', 'danger')
+        return redirect(url_for('config'))
+    
+    if nueva_contraseña != confirmar_contraseña:
+        flash('Las nuevas contraseñas no coinciden', 'danger')
+        return redirect(url_for('config'))
+    
+    if len(nueva_contraseña) < 4:
+        flash('La contraseña debe tener al menos 4 caracteres', 'danger')
+        return redirect(url_for('config'))
+    
+    # Cambiar contraseña
+    if cambiar_contraseña_reportes(nueva_contraseña):
+        flash('Contraseña actualizada correctamente', 'success')
+    else:
+        flash('Error al guardar la contraseña', 'danger')
+    
+    return redirect(url_for('config'))
+
+# ==================== RUTAS DE REPORTES CON VERIFICACIÓN SIMPLE ====================
+
+def verificar_acceso_reportes(f):
+    """Decorador simple para verificar acceso a reportes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 1. Verificar que sea admin
+        if session.get('rol') != 'admin':
+            flash('Solo los administradores pueden acceder a reportes', 'danger')
+            return redirect(url_for('dashboard'))
+        
+        # 2. Verificar si ya ingresó la contraseña en esta sesión
+        if not session.get('reportes_acceso'):
+            flash('Debe ingresar la contraseña para acceder a reportes', 'warning')
+            return redirect(url_for('dashboard'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ==================== RUTAS DE REPORTES ====================
+
+@app.route('/reportes')
+@login_required
+@verificar_acceso_reportes
+def reportes():
+    """Página principal de reportes"""
+    return render_template('reportes/generar.html')
+
+@app.route('/reportes/ventas')
+@login_required
+@verificar_acceso_reportes
+def reporte_ventas():
+    """Reporte de ventas"""
+    fecha_inicio = request.args.get('fecha_inicio', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    fecha_fin = request.args.get('fecha_fin', datetime.now().strftime('%Y-%m-%d'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('reportes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Estadísticas generales del período
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_facturas,
+                SUM(CASE WHEN estado = 'pagada' THEN total ELSE 0 END) as total_ingresos,
+                SUM(CASE WHEN estado = 'pendiente' THEN total ELSE 0 END) as total_pendiente,
+                SUM(CASE WHEN estado = 'credito' THEN saldo_pendiente ELSE 0 END) as total_credito,
+                AVG(total) as promedio_venta,
+                MAX(total) as venta_maxima,
+                MIN(total) as venta_minima
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+        """, (fecha_inicio, fecha_fin))
+        
+        estadisticas = cursor.fetchone()
+        
+        # 2. Ventas por día
+        cursor.execute("""
+            SELECT 
+                DATE(fecha_emision) as fecha,
+                COUNT(*) as cantidad_facturas,
+                SUM(total) as total_dia,
+                AVG(total) as promedio_dia
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+            GROUP BY DATE(fecha_emision)
+            ORDER BY fecha
+        """, (fecha_inicio, fecha_fin))
+        
+        ventas_por_dia = cursor.fetchall()
+        
+        # 3. Ventas por método de pago
+        cursor.execute("""
+            SELECT 
+                COALESCE(metodo_pago, 'no especificado') as metodo_pago,
+                COUNT(*) as cantidad,
+                SUM(total) as total_metodo
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+            GROUP BY metodo_pago
+            ORDER BY total_metodo DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        ventas_por_metodo = cursor.fetchall()
+        
+        # 4. Top 10 clientes
+        cursor.execute("""
+            SELECT 
+                c.id_cliente,
+                c.nombre,
+                c.apellido,
+                COUNT(f.id_factura) as cantidad_facturas,
+                SUM(f.total) as total_gastado
+            FROM facturas f
+            JOIN clientes c ON f.id_cliente = c.id_cliente
+            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                AND f.estado = 'pagada'
+            GROUP BY c.id_cliente, c.nombre, c.apellido
+            ORDER BY total_gastado DESC
+            LIMIT 10
+        """, (fecha_inicio, fecha_fin))
+        
+        top_clientes = cursor.fetchall()
+        
+        # 5. Servicios más vendidos
+        cursor.execute("""
+            SELECT 
+                s.id_servicio,
+                s.nombre,
+                s.categoria,
+                COUNT(fs.id_detalle) as veces_vendido,
+                SUM(fs.cantidad) as cantidad_total,
+                SUM(fs.subtotal) as ingresos_servicio,
+                AVG(fs.precio_unitario) as precio_promedio
+            FROM factura_servicios fs
+            JOIN servicios s ON fs.id_servicio = s.id_servicio
+            JOIN facturas f ON fs.id_factura = f.id_factura
+            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                AND f.estado = 'pagada'
+            GROUP BY s.id_servicio, s.nombre, s.categoria
+            ORDER BY ingresos_servicio DESC
+            LIMIT 15
+        """, (fecha_inicio, fecha_fin))
+        
+        top_servicios = cursor.fetchall()
+        
+        # Calcular totales
+        total_ingresos = estadisticas['total_ingresos'] or 0
+        total_facturas = estadisticas['total_facturas'] or 0
+        
+        # Preparar datos para gráficos
+        dias = []
+        ventas_diarias = []
+        
+        for v in ventas_por_dia:
+            if v['fecha']:
+                dias.append(v['fecha'].strftime('%d/%m'))
+                ventas_diarias.append(float(v['total_dia'] or 0))
+        
+        # Métodos de pago
+        metodos = []
+        totales_metodos = []
+        
+        for v in ventas_por_metodo:
+            metodos.append(v['metodo_pago'])
+            totales_metodos.append(float(v['total_metodo'] or 0))
+        
+    except Error as e:
+        flash(f'Error generando reporte: {e}', 'danger')
+        return redirect(url_for('reportes'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('reportes/ventas.html',
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         estadisticas=estadisticas,
+                         top_clientes=top_clientes,
+                         top_servicios=top_servicios,
+                         total_ingresos=total_ingresos,
+                         total_facturas=total_facturas,
+                         dias=json.dumps(dias) if dias else '[]',
+                         ventas_diarias=json.dumps(ventas_diarias) if ventas_diarias else '[]',
+                         metodos=json.dumps(metodos) if metodos else '[]',
+                         totales_metodos=json.dumps(totales_metodos) if totales_metodos else '[]')
+
+@app.route('/reportes/caja')
+@login_required
+@verificar_acceso_reportes
+def reporte_caja():
+    """Reporte de caja"""
+    fecha_inicio = request.args.get('fecha_inicio', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    fecha_fin = request.args.get('fecha_fin', datetime.now().strftime('%Y-%m-%d'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('reportes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Cierres de caja en el período
+        cursor.execute("""
+            SELECT 
+                c.*,
+                CONCAT(e.nombre, ' ', e.apellido) as cajero
+            FROM caja_diaria c
+            JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
+            WHERE c.fecha BETWEEN %s AND %s
+            ORDER BY c.fecha DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        cierres_caja = cursor.fetchall()
+        
+        # 2. Estadísticas de caja
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_dias,
+                SUM(c.monto_apertura) as total_aperturas,
+                SUM(c.monto_cierre) as total_cierres,
+                SUM(c.venta_efectivo) as total_efectivo,
+                SUM(c.venta_tarjeta) as total_tarjeta,
+                SUM(c.venta_digital) as total_digital,
+                SUM(c.total_ventas) as total_ventas,
+                AVG(c.diferencia) as diferencia_promedio,
+                SUM(CASE WHEN c.diferencia > 0 THEN c.diferencia ELSE 0 END) as total_sobrantes,
+                SUM(CASE WHEN c.diferencia < 0 THEN ABS(c.diferencia) ELSE 0 END) as total_faltantes
+            FROM caja_diaria c
+            WHERE c.fecha BETWEEN %s AND %s
+                AND c.estado = 'cerrada'
+        """, (fecha_inicio, fecha_fin))
+        
+        estadisticas = cursor.fetchone()
+        
+        # 3. Resumen por día
+        cursor.execute("""
+            SELECT 
+                c.fecha,
+                SUM(c.venta_efectivo) as efectivo,
+                SUM(c.venta_tarjeta) as tarjeta,
+                SUM(c.venta_digital) as digital,
+                SUM(c.total_ventas) as total
+            FROM caja_diaria c
+            WHERE c.fecha BETWEEN %s AND %s
+                AND c.estado = 'cerrada'
+            GROUP BY c.fecha
+            ORDER BY c.fecha
+        """, (fecha_inicio, fecha_fin))
+        
+        resumen_diario = cursor.fetchall()
+        
+        # 4. Top cajeros
+        cursor.execute("""
+            SELECT 
+                e.id_empleado,
+                CONCAT(e.nombre, ' ', e.apellido) as cajero,
+                COUNT(c.id_caja) as dias_trabajados,
+                SUM(c.total_ventas) as total_manejado,
+                AVG(c.diferencia) as diferencia_promedio
+            FROM caja_diaria c
+            JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
+            WHERE c.fecha BETWEEN %s AND %s
+                AND c.estado = 'cerrada'
+            GROUP BY e.id_empleado, e.nombre, e.apellido
+            ORDER BY total_manejado DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        top_cajeros = cursor.fetchall()
+        
+        # Preparar datos para gráficos
+        fechas = []
+        ventas_diarias = []
+        
+        for dia in resumen_diario:
+            if dia['fecha']:
+                fechas.append(dia['fecha'].strftime('%d/%m'))
+                ventas_diarias.append(float(dia['total'] or 0))
+        
+    except Error as e:
+        flash(f'Error generando reporte: {e}', 'danger')
+        return redirect(url_for('reportes'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('reportes/caja.html',
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         cierres_caja=cierres_caja,
+                         estadisticas=estadisticas,
+                         resumen_diario=resumen_diario,
+                         top_cajeros=top_cajeros,
+                         fechas=json.dumps(fechas) if fechas else '[]',
+                         ventas_diarias=json.dumps(ventas_diarias) if ventas_diarias else '[]')
+
+@app.route('/reportes/empleados')
+@login_required
+@verificar_acceso_reportes
+def reporte_empleados():
+    """Reporte de rendimiento de empleados"""
+    fecha_inicio = request.args.get('fecha_inicio', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    fecha_fin = request.args.get('fecha_fin', datetime.now().strftime('%Y-%m-%d'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('reportes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Estadísticas generales de empleados
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_empleados,
+                SUM(CASE WHEN activo = TRUE THEN 1 ELSE 0 END) as activos,
+                SUM(CASE WHEN activo = FALSE THEN 1 ELSE 0 END) as inactivos,
+                COUNT(DISTINCT especialidad) as especialidades
+            FROM empleados
+        """)
+        
+        estadisticas = cursor.fetchone()
+        
+        # 2. Rendimiento por empleado
+        cursor.execute("""
+            SELECT 
+                e.id_empleado,
+                CONCAT(e.nombre, ' ', e.apellido) as empleado,
+                e.especialidad,
+                COUNT(r.id_reserva) as total_reservas,
+                SUM(CASE WHEN r.estado = 'completada' THEN 1 ELSE 0 END) as reservas_completadas,
+                SUM(CASE WHEN f.estado = 'pagada' THEN f.total ELSE 0 END) as ingresos_generados
+            FROM empleados e
+            LEFT JOIN reservas r ON e.id_empleado = r.id_empleado
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            LEFT JOIN facturas f ON r.id_reserva = f.id_reserva
+                AND DATE(f.fecha_emision) BETWEEN %s AND %s
+            WHERE e.activo = TRUE
+            GROUP BY e.id_empleado, e.nombre, e.apellido, e.especialidad
+            ORDER BY ingresos_generados DESC
+        """, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+        
+        rendimiento_empleados = cursor.fetchall()
+        
+        # 3. Calcular métricas adicionales
+        for empleado in rendimiento_empleados:
+            total_reservas = empleado['total_reservas'] or 0
+            completadas = empleado['reservas_completadas'] or 0
+            
+            if total_reservas > 0:
+                empleado['tasa_exito'] = (completadas / total_reservas) * 100
+            else:
+                empleado['tasa_exito'] = 0
+            
+            # Calcular promedio por reserva
+            ingresos = empleado['ingresos_generados'] or 0
+            if completadas > 0:
+                empleado['promedio_reserva'] = ingresos / completadas
+            else:
+                empleado['promedio_reserva'] = 0
+        
+        # 4. Distribución por especialidad
+        cursor.execute("""
+            SELECT 
+                e.especialidad,
+                COUNT(DISTINCT e.id_empleado) as cantidad_empleados,
+                COUNT(r.id_reserva) as total_reservas,
+                SUM(CASE WHEN r.estado = 'completada' THEN 1 ELSE 0 END) as reservas_completadas,
+                SUM(f.total) as ingresos_especialidad
+            FROM empleados e
+            LEFT JOIN reservas r ON e.id_empleado = r.id_empleado
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            LEFT JOIN facturas f ON r.id_reserva = f.id_reserva
+                AND f.estado = 'pagada'
+                AND DATE(f.fecha_emision) BETWEEN %s AND %s
+            WHERE e.activo = TRUE
+            GROUP BY e.especialidad
+            ORDER BY ingresos_especialidad DESC
+        """, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+        
+        por_especialidad = cursor.fetchall()
+        
+        # 5. Top empleados del mes
+        cursor.execute("""
+            SELECT 
+                CONCAT(e.nombre, ' ', e.apellido) as empleado,
+                COUNT(r.id_reserva) as reservas_mes,
+                SUM(f.total) as ingresos_mes
+            FROM empleados e
+            LEFT JOIN reservas r ON e.id_empleado = r.id_empleado
+                AND MONTH(r.fecha_reserva) = MONTH(CURDATE())
+                AND YEAR(r.fecha_reserva) = YEAR(CURDATE())
+            LEFT JOIN facturas f ON r.id_reserva = f.id_reserva
+                AND f.estado = 'pagada'
+                AND MONTH(f.fecha_emision) = MONTH(CURDATE())
+                AND YEAR(f.fecha_emision) = YEAR(CURDATE())
+            WHERE e.activo = TRUE
+            GROUP BY e.id_empleado, e.nombre, e.apellido
+            ORDER BY ingresos_mes DESC
+            LIMIT 5
+        """)
+        
+        top_mes = cursor.fetchall()
+        
+        # Preparar datos para gráficos
+        nombres_empleados = []
+        ingresos_empleados = []
+        especialidades_nombres = []
+        especialidades_cantidades = []
+        
+        for empleado in rendimiento_empleados[:10]:  # Top 10 empleados
+            if empleado['empleado']:
+                nombres_empleados.append(empleado['empleado'])
+                ingresos_empleados.append(float(empleado['ingresos_generados'] or 0))
+        
+        for esp in por_especialidad:
+            if esp['especialidad']:
+                especialidades_nombres.append(esp['especialidad'])
+                especialidades_cantidades.append(esp['cantidad_empleados'])
+        
+    except Error as e:
+        flash(f'Error generando reporte: {e}', 'danger')
+        return redirect(url_for('reportes'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('reportes/empleados.html',
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         estadisticas=estadisticas,
+                         rendimiento_empleados=rendimiento_empleados,
+                         por_especialidad=por_especialidad,
+                         top_mes=top_mes,
+                         nombres_empleados=json.dumps(nombres_empleados) if nombres_empleados else '[]',
+                         ingresos_empleados=json.dumps(ingresos_empleados) if ingresos_empleados else '[]',
+                         especialidades_nombres=json.dumps(especialidades_nombres) if especialidades_nombres else '[]',
+                         especialidades_cantidades=json.dumps(especialidades_cantidades) if especialidades_cantidades else '[]')
+
+@app.route('/reportes/servicios')
+@login_required
+@verificar_acceso_reportes
+def reporte_servicios():
+    """Reporte de servicios"""
+    fecha_inicio = request.args.get('fecha_inicio', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    fecha_fin = request.args.get('fecha_fin', datetime.now().strftime('%Y-%m-%d'))
+    
+    conn = get_db_connection()
+    if not conn:
+        flash('No hay conexión a la base de datos.', 'danger')
+        return redirect(url_for('reportes'))
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Estadísticas generales de servicios
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_servicios,
+                SUM(CASE WHEN activo = TRUE THEN 1 ELSE 0 END) as activos,
+                SUM(CASE WHEN activo = FALSE THEN 1 ELSE 0 END) as inactivos,
+                COUNT(DISTINCT categoria) as categorias,
+                AVG(precio) as precio_promedio,
+                MIN(precio) as precio_minimo,
+                MAX(precio) as precio_maximo,
+                SUM(precio - costo) as ganancia_potencial
+            FROM servicios
+        """)
+        
+        estadisticas = cursor.fetchone()
+        
+        # 2. Servicios más vendidos
+        cursor.execute("""
+            SELECT 
+                s.id_servicio,
+                s.nombre,
+                s.categoria,
+                s.precio,
+                s.costo,
+                (s.precio - s.costo) as margen,
+                COUNT(rs.id_detalle) as veces_vendido,
+                SUM(rs.cantidad) as cantidad_total,
+                SUM(rs.subtotal) as ingresos_totales,
+                (SUM(rs.subtotal) - (SUM(rs.cantidad) * s.costo)) as ganancia_real
+            FROM servicios s
+            LEFT JOIN reserva_servicios rs ON s.id_servicio = rs.id_servicio
+            LEFT JOIN reservas r ON rs.id_reserva = r.id_reserva
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            WHERE s.activo = TRUE
+            GROUP BY s.id_servicio, s.nombre, s.categoria, s.precio, s.costo
+            ORDER BY ingresos_totales DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        servicios_vendidos = cursor.fetchall()
+        
+        # 3. Servicios por categoría
+        cursor.execute("""
+            SELECT 
+                s.categoria,
+                COUNT(DISTINCT s.id_servicio) as cantidad_servicios,
+                COUNT(rs.id_detalle) as veces_vendido,
+                SUM(rs.cantidad) as cantidad_total,
+                SUM(rs.subtotal) as ingresos_categoria,
+                AVG(s.precio) as precio_promedio_categoria,
+                AVG(s.precio - s.costo) as margen_promedio
+            FROM servicios s
+            LEFT JOIN reserva_servicios rs ON s.id_servicio = rs.id_servicio
+            LEFT JOIN reservas r ON rs.id_reserva = r.id_reserva
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            WHERE s.activo = TRUE
+            GROUP BY s.categoria
+            ORDER BY ingresos_categoria DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        por_categoria = cursor.fetchall()
+        
+        # 4. Servicios por mascota
+        cursor.execute("""
+            SELECT 
+                m.especie,
+                COUNT(rs.id_detalle) as servicios_realizados,
+                SUM(rs.subtotal) as ingresos_especie,
+                AVG(s.precio) as precio_promedio_especie
+            FROM reserva_servicios rs
+            JOIN servicios s ON rs.id_servicio = s.id_servicio
+            JOIN reservas r ON rs.id_reserva = r.id_reserva
+            JOIN mascotas m ON r.id_mascota = m.id_mascota
+            WHERE DATE(r.fecha_reserva) BETWEEN %s AND %s
+                AND s.activo = TRUE
+            GROUP BY m.especie
+            ORDER BY servicios_realizados DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        servicios_por_especie = cursor.fetchall()
+        
+        # Preparar datos para gráficos
+        categorias_nombres = []
+        categorias_ingresos = []
+        top_servicios_nombres = []
+        top_servicios_cantidades = []
+        
+        for cat in por_categoria:
+            if cat['categoria']:
+                categorias_nombres.append(cat['categoria'])
+                categorias_ingresos.append(float(cat['ingresos_categoria'] or 0))
+        
+        for servicio in servicios_vendidos[:10]:  # Top 10 servicios
+            if servicio['nombre']:
+                top_servicios_nombres.append(servicio['nombre'][:20])  # Limitar longitud
+                top_servicios_cantidades.append(servicio['veces_vendido'] or 0)
+        
+    except Error as e:
+        flash(f'Error generando reporte: {e}', 'danger')
+        return redirect(url_for('reportes'))
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return render_template('reportes/servicios.html',
+                         fecha_inicio=fecha_inicio,
+                         fecha_fin=fecha_fin,
+                         estadisticas=estadisticas,
+                         servicios_vendidos=servicios_vendidos,
+                         por_categoria=por_categoria,
+                         servicios_por_especie=servicios_por_especie,
+                         categorias_nombres=json.dumps(categorias_nombres) if categorias_nombres else '[]',
+                         categorias_ingresos=json.dumps(categorias_ingresos) if categorias_ingresos else '[]',
+                         top_servicios_nombres=json.dumps(top_servicios_nombres) if top_servicios_nombres else '[]',
+                         top_servicios_cantidades=json.dumps(top_servicios_cantidades) if top_servicios_cantidades else '[]')
+
+# ==================== APIs para estadísticas ====================
+
+@app.route('/api/reportes/estadisticas-dia')
+@login_required
+def api_estadisticas_dia():
+    """API para obtener estadísticas del día actual"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Ventas del día
+        cursor.execute("""
+            SELECT COALESCE(SUM(total), 0) as ventas_hoy
+            FROM facturas
+            WHERE DATE(fecha_emision) = CURDATE()
+                AND estado = 'pagada'
+        """)
+        ventas = cursor.fetchone()
+        
+        # Reservas del día
+        cursor.execute("""
+            SELECT COUNT(*) as reservas_hoy
+            FROM reservas
+            WHERE DATE(fecha_reserva) = CURDATE()
+        """)
+        reservas = cursor.fetchone()
+        
+        # Servicios del día
+        cursor.execute("""
+            SELECT COUNT(*) as servicios_hoy
+            FROM reserva_servicios rs
+            JOIN reservas r ON rs.id_reserva = r.id_reserva
+            WHERE DATE(r.fecha_reserva) = CURDATE()
+        """)
+        servicios = cursor.fetchone()
+        
+        # Empleados activos
+        cursor.execute("""
+            SELECT COUNT(*) as empleados_activos
+            FROM empleados
+            WHERE activo = TRUE
+        """)
+        empleados = cursor.fetchone()
+        
+        return jsonify({
+            'success': True,
+            'ventas_hoy': float(ventas['ventas_hoy'] or 0),
+            'reservas_hoy': int(reservas['reservas_hoy'] or 0),
+            'servicios_hoy': int(servicios['servicios_hoy'] or 0),
+            'empleados_activos': int(empleados['empleados_activos'] or 0)
+        })
+        
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ==================== Exportación de reportes ====================
+
+@app.route('/api/reportes/exportar/<tipo>')
+@login_required
+@admin_required
+def exportar_reporte(tipo):
+    """Exportar reporte a diferentes formatos"""
+    formatos = ['excel', 'pdf', 'word']
+    
+    if tipo not in formatos:
+        return jsonify({'success': False, 'error': 'Formato no válido'}), 400
+    
+    # Obtener parámetros
+    reporte = request.args.get('reporte', 'ventas')
+    fecha_inicio = request.args.get('fecha_inicio', '')
+    fecha_fin = request.args.get('fecha_fin', '')
+    
+    try:
+        if tipo == 'excel':
+            if reporte == 'ventas':
+                return exportar_excel(reporte, fecha_inicio, fecha_fin)
+            elif reporte == 'caja':
+                return exportar_excel_caja(fecha_inicio, fecha_fin)
+            elif reporte == 'empleados':
+                return exportar_excel_empleados(fecha_inicio, fecha_fin)
+            elif reporte == 'servicios':
+                return exportar_excel_servicios(fecha_inicio, fecha_fin)
+            else:
+                return jsonify({'success': False, 'error': 'Reporte no válido'}), 400
+                
+        elif tipo == 'pdf':
+            # Para PDF y Word, puedes usar versiones simplificadas como hicimos para ventas
+            # O crear funciones específicas para cada reporte
+            return exportar_pdf_simple(reporte, fecha_inicio, fecha_fin)
+            
+        elif tipo == 'word':
+            return exportar_word_simple(reporte, fecha_inicio, fecha_fin)
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+    return redirect(url_for('reportes'))
+
+def exportar_excel(reporte, fecha_inicio, fecha_fin):
+    """Exportar a Excel - IMPLEMENTACIÓN COMPLETA"""
+    try:
+        import pandas as pd
+        from io import BytesIO
+        from flask import send_file
+        from datetime import datetime
+        
+        # Obtener datos según el tipo de reporte
+        conn = get_db_connection()
+        if not conn:
+            flash('Error de conexión.', 'danger')
+            return redirect(url_for('reportes'))
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        if reporte == 'ventas':
+            # Datos principales de ventas
+            cursor.execute("""
+                SELECT 
+                    f.numero as 'N° Factura',
+                    f.tipo_comprobante as 'Tipo',
+                    DATE(f.fecha_emision) as 'Fecha',
+                    f.metodo_pago as 'Método Pago',
+                    CONCAT(c.nombre, ' ', c.apellido) as 'Cliente',
+                    f.subtotal as 'Subtotal',
+                    f.igv as 'IGV',
+                    f.total as 'Total',
+                    f.estado as 'Estado',
+                    CASE 
+                        WHEN f.estado = 'pagada' THEN 'Pagado'
+                        WHEN f.estado = 'pendiente' THEN 'Pendiente'
+                        WHEN f.estado = 'credito' THEN 'Crédito'
+                        ELSE f.estado
+                    END as 'Estado Texto'
+                FROM facturas f
+                LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+                WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                ORDER BY f.fecha_emision DESC
+            """, (fecha_inicio, fecha_fin))
+            
+            datos_principales = cursor.fetchall()
+            
+            # Resumen por método de pago
+            cursor.execute("""
+                SELECT 
+                    COALESCE(metodo_pago, 'No especificado') as 'Método de Pago',
+                    COUNT(*) as 'Cantidad Facturas',
+                    SUM(total) as 'Total Recaudado',
+                    ROUND(AVG(total), 2) as 'Promedio por Factura'
+                FROM facturas
+                WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                    AND estado = 'pagada'
+                GROUP BY metodo_pago
+                ORDER BY SUM(total) DESC
+            """, (fecha_inicio, fecha_fin))
+            
+            resumen_metodos = cursor.fetchall()
+            
+            # Resumen por día
+            cursor.execute("""
+                SELECT 
+                    DATE(fecha_emision) as 'Fecha',
+                    COUNT(*) as 'Facturas del Día',
+                    SUM(total) as 'Total del Día',
+                    ROUND(AVG(total), 2) as 'Promedio del Día',
+                    SUM(CASE WHEN metodo_pago = 'efectivo' THEN total ELSE 0 END) as 'Efectivo',
+                    SUM(CASE WHEN metodo_pago = 'tarjeta' THEN total ELSE 0 END) as 'Tarjeta',
+                    SUM(CASE WHEN metodo_pago IN ('yape', 'plin', 'transferencia') THEN total ELSE 0 END) as 'Digital'
+                FROM facturas
+                WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                    AND estado = 'pagada'
+                GROUP BY DATE(fecha_emision)
+                ORDER BY DATE(fecha_emision)
+            """, (fecha_inicio, fecha_fin))
+            
+            resumen_diario = cursor.fetchall()
+            
+            # Top servicios
+            cursor.execute("""
+                SELECT 
+                    s.nombre as 'Servicio',
+                    s.categoria as 'Categoría',
+                    COUNT(fs.id_detalle) as 'Veces Vendido',
+                    SUM(fs.cantidad) as 'Cantidad Total',
+                    SUM(fs.subtotal) as 'Ingresos Totales',
+                    ROUND(AVG(fs.precio_unitario), 2) as 'Precio Promedio'
+                FROM factura_servicios fs
+                JOIN servicios s ON fs.id_servicio = s.id_servicio
+                JOIN facturas f ON fs.id_factura = f.id_factura
+                WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                    AND f.estado = 'pagada'
+                GROUP BY s.id_servicio, s.nombre, s.categoria
+                ORDER BY SUM(fs.subtotal) DESC
+                LIMIT 20
+            """, (fecha_inicio, fecha_fin))
+            
+            top_servicios = cursor.fetchall()
+            
+        cursor.close()
+        conn.close()
+        
+        # Crear archivo Excel en memoria
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Hoja 1: Detalle de ventas
+            if datos_principales:
+                df_principales = pd.DataFrame(datos_principales)
+                df_principales.to_excel(writer, sheet_name='Ventas Detalladas', index=False)
+            
+            # Hoja 2: Resumen por método de pago
+            if resumen_metodos:
+                df_metodos = pd.DataFrame(resumen_metodos)
+                df_metodos.to_excel(writer, sheet_name='Por Método de Pago', index=False)
+            
+            # Hoja 3: Resumen diario
+            if resumen_diario:
+                df_diario = pd.DataFrame(resumen_diario)
+                df_diario.to_excel(writer, sheet_name='Resumen Diario', index=False)
+            
+            # Hoja 4: Top servicios
+            if top_servicios:
+                df_servicios = pd.DataFrame(top_servicios)
+                df_servicios.to_excel(writer, sheet_name='Servicios Más Vendidos', index=False)
+            
+            # Hoja 5: Estadísticas generales
+            estadisticas_data = [{
+                'Período': f'{fecha_inicio} al {fecha_fin}',
+                'Total Facturas': len(datos_principales) if datos_principales else 0,
+                'Total Recaudado': sum(float(d['Total'] or 0) for d in datos_principales if d.get('Estado') == 'pagada'),
+                'Total Pendiente': sum(float(d['Total'] or 0) for d in datos_principales if d.get('Estado') == 'pendiente'),
+                'Facturas Pagadas': sum(1 for d in datos_principales if d.get('Estado') == 'pagada'),
+                'Facturas Pendientes': sum(1 for d in datos_principales if d.get('Estado') == 'pendiente'),
+                'Fecha Generación': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }]
+            
+            df_estadisticas = pd.DataFrame(estadisticas_data)
+            df_estadisticas.to_excel(writer, sheet_name='Estadísticas', index=False)
+        
+        output.seek(0)
+        
+        # Devolver archivo
+        nombre_archivo = f"reporte_ventas_{fecha_inicio}_{fecha_fin}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except ImportError:
+        flash('Error: Para exportar a Excel necesitas instalar pandas y openpyxl.', 'danger')
+        return redirect(url_for('reporte_ventas'))
+    except Exception as e:
+        flash(f'Error exportando a Excel: {str(e)}', 'danger')
+        return redirect(url_for('reporte_ventas'))
+
+def exportar_pdf(reporte, fecha_inicio, fecha_fin):
+    """Exportar a PDF usando FPDF - VERSIÓN MEJORADA"""
+    try:
+        from fpdf import FPDF
+        from io import BytesIO
+        from flask import send_file
+        import datetime as dt
+        
+        # Obtener datos
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        # Datos principales
+        cursor.execute("""
+            SELECT 
+                f.numero,
+                f.tipo_comprobante,
+                DATE(f.fecha_emision) as fecha,
+                f.metodo_pago,
+                CONCAT(c.nombre, ' ', c.apellido) as cliente,
+                f.subtotal,
+                f.igv,
+                f.total,
+                f.estado
+            FROM facturas f
+            LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                AND f.estado = 'pagada'
+            ORDER BY f.fecha_emision DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        ventas = cursor.fetchall()
+        
+        # Métodos de pago
+        cursor.execute("""
+            SELECT 
+                COALESCE(metodo_pago, 'No especificado') as metodo_pago,
+                COUNT(*) as cantidad,
+                SUM(total) as total
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+            GROUP BY metodo_pago
+            ORDER BY SUM(total) DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        metodos = cursor.fetchall()
+        
+        # Estadísticas
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_facturas,
+                SUM(total) as total_ingresos,
+                AVG(total) as promedio_venta,
+                MIN(total) as venta_minima,
+                MAX(total) as venta_maxima
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+        """, (fecha_inicio, fecha_fin))
+        
+        estadisticas = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        # Crear PDF con diseño profesional
+        pdf = FPDF(orientation='L')  # Horizontal
+        pdf.add_page()
+        
+        # Configuración de márgenes
+        pdf.set_margins(10, 10, 10)
+        pdf.set_auto_page_break(True, margin=15)
+        
+        # Título con estilo
+        pdf.set_font('Arial', 'B', 18)
+        pdf.set_text_color(102, 126, 234)  # Color PetGlow
+        pdf.cell(0, 15, 'REPORTE DE VENTAS', 0, 1, 'C')
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 8, 'PetGlow Peluquería Canina', 0, 1, 'C')
+        
+        # Información del período
+        pdf.set_font('Arial', '', 10)
+        pdf.cell(0, 6, f'Período: {fecha_inicio} al {fecha_fin}', 0, 1, 'C')
+        pdf.cell(0, 6, f'Generado: {dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}', 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Línea decorativa
+        pdf.set_draw_color(102, 126, 234)
+        pdf.set_line_width(0.5)
+        pdf.line(10, pdf.get_y(), 280, pdf.get_y())
+        pdf.ln(8)
+        
+        # Estadísticas generales en una tabla
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(0, 10, 'ESTADÍSTICAS GENERALES', 0, 1, 'L', True)
+        pdf.ln(2)
+        
+        pdf.set_font('Arial', '', 10)
+        col_widths = [60, 40, 60, 40, 40]
+        headers = ['Total Facturas', 'Ingresos Totales', 'Ticket Promedio', 'Venta Mínima', 'Venta Máxima']
+        valores = [
+            f"{estadisticas['total_facturas'] or 0}",
+            f"S/ {float(estadisticas['total_ingresos'] or 0):,.2f}",
+            f"S/ {float(estadisticas['promedio_venta'] or 0):,.2f}",
+            f"S/ {float(estadisticas['venta_minima'] or 0):,.2f}",
+            f"S/ {float(estadisticas['venta_maxima'] or 0):,.2f}"
+        ]
+        
+        for i, (header, valor) in enumerate(zip(headers, valores)):
+            pdf.set_font('Arial', 'B', 9)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.cell(col_widths[i], 8, header, 1, 0, 'L', True)
+        pdf.ln()
+        
+        for i, valor in enumerate(valores):
+            pdf.set_font('Arial', '', 9)
+            pdf.set_fill_color(255, 255, 255)
+            pdf.cell(col_widths[i], 8, valor, 1, 0, 'C', True)
+        pdf.ln(10)
+        
+        # Métodos de pago
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(0, 10, 'DISTRIBUCIÓN POR MÉTODO DE PAGO', 0, 1, 'L', True)
+        pdf.ln(2)
+        
+        # Tabla de métodos de pago
+        col_widths_metodos = [80, 50, 60]
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(118, 75, 162)  # Color morado
+        pdf.set_text_color(255, 255, 255)
+        
+        headers_metodos = ['Método de Pago', 'Cantidad', 'Total (S/)']
+        for i, header in enumerate(headers_metodos):
+            pdf.cell(col_widths_metodos[i], 8, header, 1, 0, 'C', True)
+        pdf.ln()
+        
+        pdf.set_text_color(0, 0, 0)
+        total_general = 0
+        for i, metodo in enumerate(metodos):
+            # Alternar colores de fondo
+            if i % 2 == 0:
+                pdf.set_fill_color(255, 255, 255)
+            else:
+                pdf.set_fill_color(248, 249, 250)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.cell(col_widths_metodos[0], 8, metodo['metodo_pago'], 1, 0, 'L', True)
+            pdf.cell(col_widths_metodos[1], 8, str(metodo['cantidad']), 1, 0, 'C', True)
+            pdf.cell(col_widths_metodos[2], 8, f"{float(metodo['total'] or 0):,.2f}", 1, 0, 'R', True)
+            pdf.ln()
+            total_general += float(metodo['total'] or 0)
+        
+        # Total general
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_fill_color(67, 233, 123)  # Color verde
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(col_widths_metodos[0] + col_widths_metodos[1], 8, 'TOTAL GENERAL', 1, 0, 'R', True)
+        pdf.cell(col_widths_metodos[2], 8, f"S/ {total_general:,.2f}", 1, 0, 'R', True)
+        pdf.ln(12)
+        
+        # Detalle de ventas
+        if ventas:
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_fill_color(240, 240, 240)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(0, 10, 'DETALLE DE VENTAS', 0, 1, 'L', True)
+            pdf.ln(2)
+            
+            # Encabezados de la tabla de ventas
+            col_widths_ventas = [30, 30, 25, 60, 30, 30, 30, 25]
+            headers_ventas = ['N° Factura', 'Tipo', 'Fecha', 'Cliente', 'Método', 'Subtotal', 'IGV', 'Total']
+            
+            pdf.set_fill_color(245, 111, 108)  # Color rojo
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font('Arial', 'B', 8)
+            
+            for i, header in enumerate(headers_ventas):
+                pdf.cell(col_widths_ventas[i], 8, header, 1, 0, 'C', True)
+            pdf.ln()
+            
+            # Datos de ventas
+            pdf.set_text_color(0, 0, 0)
+            for i, venta in enumerate(ventas[:80]):  # Limitar a 80 registros
+                if i % 2 == 0:
+                    pdf.set_fill_color(255, 255, 255)
+                else:
+                    pdf.set_fill_color(248, 249, 250)
+                
+                pdf.set_font('Arial', '', 7)
+                pdf.cell(col_widths_ventas[0], 8, venta['numero'][:12], 1, 0, 'L', True)
+                pdf.cell(col_widths_ventas[1], 8, venta['tipo_comprobante'][:1].upper(), 1, 0, 'C', True)
+                pdf.cell(col_widths_ventas[2], 8, str(venta['fecha']), 1, 0, 'C', True)
+                pdf.cell(col_widths_ventas[3], 8, (venta['cliente'] or 'N/A')[:25], 1, 0, 'L', True)
+                pdf.cell(col_widths_ventas[4], 8, venta['metodo_pago'][:8], 1, 0, 'C', True)
+                pdf.cell(col_widths_ventas[5], 8, f"{float(venta['subtotal'] or 0):,.2f}", 1, 0, 'R', True)
+                pdf.cell(col_widths_ventas[6], 8, f"{float(venta['igv'] or 0):,.2f}", 1, 0, 'R', True)
+                pdf.cell(col_widths_ventas[7], 8, f"{float(venta['total'] or 0):,.2f}", 1, 0, 'R', True)
+                pdf.ln()
+        
+        # Pie de página
+        pdf.set_y(-20)
+        pdf.set_font('Arial', 'I', 8)
+        pdf.set_text_color(128, 128, 128)
+        pdf.cell(0, 10, f'Página {pdf.page_no()}', 0, 0, 'C')
+        pdf.ln(5)
+        pdf.cell(0, 10, 'PetGlow Peluquería Canina - Sistema de Gestión Integral', 0, 0, 'C')
+        
+        # Guardar en buffer
+        buffer = BytesIO()
+        pdf_output = pdf.output(dest='S').encode('latin1')
+        buffer.write(pdf_output)
+        buffer.seek(0)
+        
+        # Enviar archivo
+        nombre_archivo = f"reporte_ventas_{fecha_inicio}_{fecha_fin}.pdf"
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except Exception as e:
+        flash(f'Error exportando a PDF: {str(e)}', 'danger')
+        return redirect(url_for('reporte_ventas'))
+
+def exportar_word(reporte, fecha_inicio, fecha_fin):
+    """Exportar a Word - VERSIÓN SIMPLIFICADA"""
+    try:
+        from docx import Document
+        from docx.shared import Inches, Pt
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from io import BytesIO
+        from flask import send_file
+        
+        # Obtener datos
+        conn = get_db_connection()
+        if not conn:
+            flash('Error de conexión.', 'danger')
+            return redirect(url_for('reporte_ventas'))
+        
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Estadísticas generales
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_facturas,
+                SUM(total) as total_ingresos,
+                AVG(total) as promedio_venta,
+                MIN(total) as venta_minima,
+                MAX(total) as venta_maxima
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+        """, (fecha_inicio, fecha_fin))
+        
+        estadisticas = cursor.fetchone()
+        
+        # 2. Métodos de pago
+        cursor.execute("""
+            SELECT 
+                COALESCE(metodo_pago, 'No especificado') as metodo_pago,
+                COUNT(*) as cantidad,
+                SUM(total) as total
+            FROM facturas
+            WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                AND estado = 'pagada'
+            GROUP BY metodo_pago
+            ORDER BY SUM(total) DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        metodos = cursor.fetchall()
+        
+        # 3. Top 10 clientes
+        cursor.execute("""
+            SELECT 
+                c.nombre,
+                c.apellido,
+                COUNT(f.id_factura) as cantidad_facturas,
+                SUM(f.total) as total_gastado
+            FROM facturas f
+            JOIN clientes c ON f.id_cliente = c.id_cliente
+            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                AND f.estado = 'pagada'
+            GROUP BY c.id_cliente, c.nombre, c.apellido
+            ORDER BY total_gastado DESC
+            LIMIT 10
+        """, (fecha_inicio, fecha_fin))
+        
+        clientes = cursor.fetchall()
+        
+        # 4. Top 10 servicios
+        cursor.execute("""
+            SELECT 
+                s.nombre,
+                COUNT(fs.id_detalle) as veces_vendido,
+                SUM(fs.subtotal) as ingresos_totales
+            FROM factura_servicios fs
+            JOIN servicios s ON fs.id_servicio = s.id_servicio
+            JOIN facturas f ON fs.id_factura = f.id_factura
+            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                AND f.estado = 'pagada'
+            GROUP BY s.id_servicio, s.nombre
+            ORDER BY SUM(fs.subtotal) DESC
+            LIMIT 10
+        """, (fecha_inicio, fecha_fin))
+        
+        servicios = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Crear documento Word MUY SIMPLE
+        doc = Document()
+        
+        # Título
+        title = doc.add_heading('REPORTE DE VENTAS', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Subtítulo
+        subtitle = doc.add_heading('PetGlow Peluquería Canina', 1)
+        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Información del período
+        doc.add_paragraph(f'Período: {fecha_inicio} al {fecha_fin}')
+        doc.add_paragraph(f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
+        doc.add_paragraph()
+        
+        # 1. Estadísticas generales
+        doc.add_heading('ESTADÍSTICAS GENERALES', level=1)
+        
+        stats_data = [
+            ('Total Facturas', f"{estadisticas['total_facturas'] or 0}"),
+            ('Ingresos Totales', f"S/ {float(estadisticas['total_ingresos'] or 0):,.2f}"),
+            ('Ticket Promedio', f"S/ {float(estadisticas['promedio_venta'] or 0):,.2f}"),
+            ('Venta Mínima', f"S/ {float(estadisticas['venta_minima'] or 0):,.2f}"),
+            ('Venta Máxima', f"S/ {float(estadisticas['venta_maxima'] or 0):,.2f}")
+        ]
+        
+        for label, value in stats_data:
+            p = doc.add_paragraph()
+            p.add_run(f'{label}: ').bold = True
+            p.add_run(value)
+        
+        doc.add_paragraph()
+        
+        # 2. Métodos de pago
+        doc.add_heading('DISTRIBUCIÓN POR MÉTODO DE PAGO', level=1)
+        
+        if metodos:
+            table = doc.add_table(rows=len(metodos) + 1, cols=3)
+            table.style = 'Table Grid'
+            
+            # Encabezado
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = 'Método'
+            hdr_cells[1].text = 'Cantidad'
+            hdr_cells[2].text = 'Total (S/)'
+            
+            # Datos
+            for i, metodo in enumerate(metodos, 1):
+                row_cells = table.rows[i].cells
+                row_cells[0].text = metodo['metodo_pago']
+                row_cells[1].text = str(metodo['cantidad'])
+                row_cells[2].text = f"{float(metodo['total'] or 0):,.2f}"
+        else:
+            doc.add_paragraph('No hay datos de métodos de pago')
+        
+        doc.add_paragraph()
+        
+        # 3. Top clientes
+        doc.add_heading('TOP 10 CLIENTES', level=1)
+        
+        if clientes:
+            table_clientes = doc.add_table(rows=len(clientes) + 1, cols=3)
+            table_clientes.style = 'Table Grid'
+            
+            # Encabezado
+            hdr_cells = table_clientes.rows[0].cells
+            hdr_cells[0].text = 'Cliente'
+            hdr_cells[1].text = 'Facturas'
+            hdr_cells[2].text = 'Total Gastado (S/)'
+            
+            # Datos
+            for i, cliente in enumerate(clientes, 1):
+                row_cells = table_clientes.rows[i].cells
+                row_cells[0].text = f"{cliente['nombre']} {cliente['apellido']}"
+                row_cells[1].text = str(cliente['cantidad_facturas'])
+                row_cells[2].text = f"{float(cliente['total_gastado'] or 0):,.2f}"
+        else:
+            doc.add_paragraph('No hay datos de clientes')
+        
+        doc.add_paragraph()
+        
+        # 4. Top servicios
+        doc.add_heading('TOP 10 SERVICIOS', level=1)
+        
+        if servicios:
+            table_servicios = doc.add_table(rows=len(servicios) + 1, cols=3)
+            table_servicios.style = 'Table Grid'
+            
+            # Encabezado
+            hdr_cells = table_servicios.rows[0].cells
+            hdr_cells[0].text = 'Servicio'
+            hdr_cells[1].text = 'Veces Vendido'
+            hdr_cells[2].text = 'Ingresos Totales (S/)'
+            
+            # Datos
+            for i, servicio in enumerate(servicios, 1):
+                row_cells = table_servicios.rows[i].cells
+                row_cells[0].text = servicio['nombre']
+                row_cells[1].text = str(servicio['veces_vendido'])
+                row_cells[2].text = f"{float(servicio['ingresos_totales'] or 0):,.2f}"
+        else:
+            doc.add_paragraph('No hay datos de servicios')
+        
+        # Pie de página
+        doc.add_page_break()
+        doc.add_paragraph('---')
+        doc.add_paragraph('PetGlow Peluquería Canina')
+        doc.add_paragraph('Sistema de Gestión Integral')
+        doc.add_paragraph(f'Documento generado el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}')
+        
+        # Guardar en buffer
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        # Enviar archivo
+        nombre_archivo = f"reporte_ventas_{fecha_inicio}_{fecha_fin}.docx"
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except ImportError:
+        flash('Error: Para exportar a Word necesitas instalar python-docx.', 'danger')
+        return redirect(url_for('reporte_ventas'))
+    except Exception as e:
+        flash(f'Error exportando a Word: {str(e)}', 'danger')
+        return redirect(url_for('reporte_ventas'))
+
+def exportar_excel_caja(fecha_inicio, fecha_fin):
+    """Exportar reporte de caja a Excel"""
+    try:
+        import pandas as pd
+        from io import BytesIO
+        from flask import send_file
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Cierres de caja
+        cursor.execute("""
+            SELECT 
+                c.fecha,
+                CONCAT(e.nombre, ' ', e.apellido) as cajero,
+                c.monto_apertura,
+                c.venta_efectivo,
+                c.venta_tarjeta,
+                c.venta_digital,
+                c.total_ventas,
+                c.diferencia,
+                c.estado
+            FROM caja_diaria c
+            JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
+            WHERE c.fecha BETWEEN %s AND %s
+            ORDER BY c.fecha DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        cierres = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Crear DataFrame
+        df = pd.DataFrame(cierres)
+        
+        # Crear archivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Cierres de Caja', index=False)
+        
+        output.seek(0)
+        
+        nombre_archivo = f"reporte_caja_{fecha_inicio}_{fecha_fin}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except Exception as e:
+        flash(f'Error exportando a Excel: {str(e)}', 'danger')
+        return redirect(url_for('reporte_caja'))
+
+def exportar_excel_empleados(fecha_inicio, fecha_fin):
+    """Exportar reporte de empleados a Excel"""
+    try:
+        import pandas as pd
+        from io import BytesIO
+        from flask import send_file
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Rendimiento de empleados
+        cursor.execute("""
+            SELECT 
+                CONCAT(e.nombre, ' ', e.apellido) as empleado,
+                e.especialidad,
+                COUNT(r.id_reserva) as total_reservas,
+                SUM(CASE WHEN r.estado = 'completada' THEN 1 ELSE 0 END) as reservas_completadas,
+                SUM(CASE WHEN f.estado = 'pagada' THEN f.total ELSE 0 END) as ingresos_generados
+            FROM empleados e
+            LEFT JOIN reservas r ON e.id_empleado = r.id_empleado
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            LEFT JOIN facturas f ON r.id_reserva = f.id_reserva
+                AND DATE(f.fecha_emision) BETWEEN %s AND %s
+            WHERE e.activo = TRUE
+            GROUP BY e.id_empleado, e.nombre, e.apellido, e.especialidad
+            ORDER BY ingresos_generados DESC
+        """, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+        
+        empleados = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Calcular métricas adicionales
+        for emp in empleados:
+            total = emp['total_reservas'] or 0
+            completadas = emp['reservas_completadas'] or 0
+            ingresos = emp['ingresos_generados'] or 0
+            
+            if total > 0:
+                emp['tasa_exito'] = (completadas / total) * 100
+            else:
+                emp['tasa_exito'] = 0
+            
+            if completadas > 0:
+                emp['promedio_reserva'] = ingresos / completadas
+            else:
+                emp['promedio_reserva'] = 0
+        
+        df = pd.DataFrame(empleados)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Empleados', index=False)
+        
+        output.seek(0)
+        
+        nombre_archivo = f"reporte_empleados_{fecha_inicio}_{fecha_fin}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except Exception as e:
+        flash(f'Error exportando a Excel: {str(e)}', 'danger')
+        return redirect(url_for('reporte_empleados'))
+
+def exportar_excel_servicios(fecha_inicio, fecha_fin):
+    """Exportar reporte de servicios a Excel"""
+    try:
+        import pandas as pd
+        from io import BytesIO
+        from flask import send_file
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Servicios más vendidos
+        cursor.execute("""
+            SELECT 
+                s.nombre,
+                s.categoria,
+                s.precio,
+                s.costo,
+                COUNT(rs.id_detalle) as veces_vendido,
+                SUM(rs.cantidad) as cantidad_total,
+                SUM(rs.subtotal) as ingresos_totales
+            FROM servicios s
+            LEFT JOIN reserva_servicios rs ON s.id_servicio = rs.id_servicio
+            LEFT JOIN reservas r ON rs.id_reserva = r.id_reserva
+                AND DATE(r.fecha_reserva) BETWEEN %s AND %s
+            WHERE s.activo = TRUE
+            GROUP BY s.id_servicio, s.nombre, s.categoria, s.precio, s.costo
+            ORDER BY ingresos_totales DESC
+        """, (fecha_inicio, fecha_fin))
+        
+        servicios = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Calcular ganancia y margen
+        for serv in servicios:
+            ingresos = serv['ingresos_totales'] or 0
+            costo_total = (serv['cantidad_total'] or 0) * (serv['costo'] or 0)
+            serv['ganancia'] = ingresos - costo_total
+            
+            if serv['costo'] > 0:
+                serv['margen'] = ((serv['precio'] - serv['costo']) / serv['costo']) * 100
+            else:
+                serv['margen'] = 0
+        
+        df = pd.DataFrame(servicios)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Servicios', index=False)
+        
+        output.seek(0)
+        
+        nombre_archivo = f"reporte_servicios_{fecha_inicio}_{fecha_fin}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nombre_archivo
+        )
+        
+    except Exception as e:
+        flash(f'Error exportando a Excel: {str(e)}', 'danger')
+        return redirect(url_for('reporte_servicios'))
+
+
 # ================= EJECUCIÓN =================
 
 if __name__ == '__main__':

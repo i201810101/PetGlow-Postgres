@@ -1,0 +1,453 @@
+{% extends "reportes/base.html" %}
+
+{% block title %}Reporte de Ventas - PetGlow{% endblock %}
+{% block page_title %}Reporte de Ventas{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="date-range-picker">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" 
+                           value="{{ fecha_inicio }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" 
+                           value="{{ fecha_fin }}" required>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-1"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">S/ {{ "%.2f"|format(total_ingresos) }}</div>
+            <div class="stat-label">Ingresos Totales</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ total_facturas }}</div>
+            <div class="stat-label">Facturas Emitidas</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">S/ {{ "%.2f"|format(estadisticas.promedio_venta or 0) }}</div>
+            <div class="stat-label">Ticket Promedio</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">S/ {{ "%.2f"|format(estadisticas.venta_maxima or 0) }}</div>
+            <div class="stat-label">Venta Más Alta</div>
+        </div>
+    </div>
+</div>
+
+<!-- Botones de exportación -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-excel me-2" onclick="exportarExcel()">
+                <i class="fas fa-file-excel me-1"></i> Excel
+            </button>
+            <button class="btn btn-pdf me-2" onclick="exportarPDF()">
+                <i class="fas fa-file-pdf me-1"></i> PDF
+            </button>
+            <button class="btn btn-word" onclick="exportarWord()">
+                <i class="fas fa-file-word me-1"></i> Word
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <h5 class="mb-3">Ingresos Diarios</h5>
+            <canvas id="chartVentasDiarias"></canvas>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="chart-container">
+            <h5 class="mb-3">Métodos de Pago</h5>
+            <canvas id="chartMetodosPago"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tablas -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Top 10 Clientes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Facturas</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cliente in top_clientes %}
+                            <tr>
+                                <td>{{ cliente.nombre }} {{ cliente.apellido }}</td>
+                                <td>{{ cliente.cantidad_facturas }}</td>
+                                <td>S/ {{ "%.2f"|format(cliente.total_gastado or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Top 5 Servicios</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Servicio</th>
+                                <th>Veces</th>
+                                <th>Ingresos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for servicio in top_servicios[:5] %}
+                            <tr>
+                                <td>{{ servicio.nombre }}</td>
+                                <td>{{ servicio.veces_vendido }}</td>
+                                <td>S/ {{ "%.2f"|format(servicio.ingresos_servicio or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar alertas -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">
+                    <i class="fas fa-info-circle me-2"></i>Información
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                <!-- El contenido se llena con JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de carga -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h5 class="mb-2">Generando Documento</h5>
+                <p class="text-muted mb-0" id="loadingText">Preparando el archivo para descarga...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Funciones de exportación mejoradas
+function exportarExcel() {
+    showLoading('Preparando archivo Excel...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    // Ocultar loading después de un tiempo (por si hay error)
+    setTimeout(() => {
+        hideLoading();
+    }, 5000);
+    
+    // Redirigir a la descarga
+    window.location.href = `/api/reportes/exportar/excel?reporte=ventas&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`;
+}
+
+function exportarPDF() {
+    showLoading('Generando archivo PDF...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    // Hacer petición AJAX para generar PDF
+    fetch(`/api/reportes/exportar/pdf?reporte=ventas&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                // Si la respuesta es exitosa, descargar el archivo
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            // Crear enlace para descargar el PDF
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_ventas_${fecha_inicio}_${fecha_fin}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Mostrar mensaje de éxito
+            showAlert('Éxito', 'El archivo PDF se ha generado correctamente y se está descargando.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo PDF. Asegúrate de que el servidor tenga instaladas las dependencias necesarias.', 'error');
+        });
+}
+
+function exportarWord() {
+    showLoading('Generando archivo Word...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    // Hacer petición AJAX para generar Word
+    fetch(`/api/reportes/exportar/word?reporte=ventas&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                // Si la respuesta es exitosa, descargar el archivo
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            // Crear enlace para descargar el Word
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_ventas_${fecha_inicio}_${fecha_fin}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Mostrar mensaje de éxito
+            showAlert('Éxito', 'El archivo Word se ha generado correctamente y se está descargando.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo Word. Asegúrate de que el servidor tenga instaladas las dependencias necesarias.', 'error');
+        });
+}
+
+// Funciones auxiliares para mostrar alertas bonitas
+function showAlert(title, message, type = 'info') {
+    const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    
+    // Configurar título y mensaje
+    document.getElementById('alertModalTitle').innerHTML = getAlertIcon(type) + ' ' + title;
+    document.getElementById('alertModalBody').innerHTML = message;
+    
+    // Configurar colores según el tipo
+    const modalHeader = document.querySelector('#alertModal .modal-header');
+    modalHeader.className = 'modal-header ' + getAlertClass(type);
+    
+    modal.show();
+}
+
+function showLoading(message = 'Procesando...') {
+    document.getElementById('loadingText').textContent = message;
+    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    modal.show();
+}
+
+function hideLoading() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success':
+            return '<i class="fas fa-check-circle me-2"></i>';
+        case 'error':
+            return '<i class="fas fa-exclamation-circle me-2"></i>';
+        case 'warning':
+            return '<i class="fas fa-exclamation-triangle me-2"></i>';
+        default:
+            return '<i class="fas fa-info-circle me-2"></i>';
+    }
+}
+
+function getAlertClass(type) {
+    switch(type) {
+        case 'success':
+            return 'bg-success text-white';
+        case 'error':
+            return 'bg-danger text-white';
+        case 'warning':
+            return 'bg-warning text-dark';
+        default:
+            return 'bg-primary text-white';
+    }
+}
+
+// Gráfico de ventas diarias
+const ctx1 = document.getElementById('chartVentasDiarias');
+if (ctx1) {
+    try {
+        const diasData = JSON.parse('{{ dias|safe }}');
+        const ventasData = JSON.parse('{{ ventas_diarias|safe }}');
+        
+        new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: diasData,
+                datasets: [{
+                    label: 'Ingresos Diarios (S/)',
+                    data: ventasData,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'S/ ' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'S/ ' + value.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de ventas diarias:', error);
+        ctx1.parentElement.innerHTML += '<p class="text-danger">Error cargando gráfico</p>';
+    }
+}
+
+// Gráfico de métodos de pago
+const ctx2 = document.getElementById('chartMetodosPago');
+if (ctx2) {
+    try {
+        const metodosData = JSON.parse('{{ metodos|safe }}');
+        const totalesData = JSON.parse('{{ totales_metodos|safe }}');
+        
+        // Colores para los métodos de pago
+        const colores = [
+            '#667eea',  // efectivo
+            '#764ba2',  // tarjeta
+            '#f093fb',  // yape
+            '#f5576c',  // plin
+            '#43e97b',  // transferencia
+            '#ffd166',  // mixto
+            '#8ecae6'   // no especificado
+        ];
+        
+        new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: metodosData,
+                datasets: [{
+                    data: totalesData,
+                    backgroundColor: colores.slice(0, metodosData.length)
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                return `${label}: S/ ${value.toFixed(2)} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de métodos de pago:', error);
+        ctx2.parentElement.innerHTML += '<p class="text-danger">Error cargando gráfico</p>';
+    }
+}
+</script>
+{% endblock %}

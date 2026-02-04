@@ -400,6 +400,152 @@
         </div>
     </div>
 </div>
+<!-- Modal: Crear Usuario -->
+<div class="modal fade" id="modalCrearUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>Crear Usuario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formCrearUsuario">
+                <input type="hidden" id="crear_usuario_id_empleado">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="crear_usuario_username" class="form-label required">Username *</label>
+                        <input type="text" class="form-control" id="crear_usuario_username" 
+                               required pattern="[a-zA-Z0-9_]{3,20}"
+                               placeholder="min. 3 caracteres, solo letras, números y _">
+                        <div class="invalid-feedback">
+                            El username es obligatorio (3-20 caracteres, solo letras, números y _)
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="crear_usuario_password" class="form-label required">Contraseña *</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="crear_usuario_password" 
+                                   required minlength="6"
+                                   placeholder="min. 6 caracteres">
+                            <button class="btn btn-outline-secondary password-toggle" type="button">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-info" type="button" id="btnGenerarPassword">
+                                <i class="fas fa-key"></i>
+                            </button>
+                        </div>
+                        <div class="invalid-feedback">
+                            La contraseña debe tener al menos 6 caracteres
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="crear_usuario_rol" class="form-label required">Rol *</label>
+                        <select class="form-select" id="crear_usuario_rol" required>
+                            <option value="">Seleccionar rol...</option>
+                            <option value="admin">Administrador</option>
+                            <option value="gerente">Gerente</option>
+                            <option value="empleado">Empleado</option>
+                            <option value="cajero">Cajero</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Debes seleccionar un rol
+                        </div>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="crear_usuario_activo" checked>
+                        <label class="form-check-label" for="crear_usuario_activo">
+                            Usuario activo
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-1"></i>Crear Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Editar Usuario -->
+<div class="modal fade" id="modalEditarUsuarioEmpleado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-edit me-2"></i>Editar Usuario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarUsuarioEmpleado">
+                <input type="hidden" id="editar_usuario_id">
+                <input type="hidden" id="editar_usuario_id_empleado">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Editando usuario del empleado: <strong id="empleado_usuario_nombre"></strong>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="editar_usuario_username" readonly>
+                        <div class="form-text">
+                            El username no se puede cambiar por seguridad
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editar_usuario_rol" class="form-label required">Rol *</label>
+                        <select class="form-select" id="editar_usuario_rol" required>
+                            <option value="">Seleccionar rol...</option>
+                            <option value="admin">Administrador</option>
+                            <option value="gerente">Gerente</option>
+                            <option value="empleado">Empleado</option>
+                            <option value="cajero">Cajero</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Debes seleccionar un rol
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editar_usuario_password" class="form-label">Nueva Contraseña</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="editar_usuario_password" 
+                                   minlength="6"
+                                   placeholder="Dejar vacío para no cambiar">
+                            <button class="btn btn-outline-secondary password-toggle" type="button">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Dejar vacío para mantener la contraseña actual
+                        </div>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="editar_usuario_activo">
+                        <label class="form-check-label" for="editar_usuario_activo">
+                            Usuario activo
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save me-1"></i>Actualizar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

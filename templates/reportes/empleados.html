@@ -1,0 +1,464 @@
+{% extends "reportes/base.html" %}
+
+{% block title %}Reporte de Empleados - PetGlow{% endblock %}
+{% block page_title %}Reporte de Empleados{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="date-range-picker">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" 
+                           value="{{ fecha_inicio }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" 
+                           value="{{ fecha_fin }}" required>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-1"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ estadisticas.total_empleados or 0 }}</div>
+            <div class="stat-label">Total Empleados</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ estadisticas.activos or 0 }}</div>
+            <div class="stat-label">Empleados Activos</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ estadisticas.inactivos or 0 }}</div>
+            <div class="stat-label">Empleados Inactivos</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ estadisticas.especialidades or 0 }}</div>
+            <div class="stat-label">Especialidades</div>
+        </div>
+    </div>
+</div>
+
+<!-- Botones de exportación -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-excel me-2" onclick="exportarExcel('empleados')">
+                <i class="fas fa-file-excel me-1"></i> Excel
+            </button>
+            <button class="btn btn-pdf me-2" onclick="exportarPDF('empleados')">
+                <i class="fas fa-file-pdf me-1"></i> PDF
+            </button>
+            <button class="btn btn-word" onclick="exportarWord('empleados')">
+                <i class="fas fa-file-word me-1"></i> Word
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="mb-3">Ingresos por Empleado</h5>
+            <canvas id="chartIngresosEmpleados"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="mb-3">Distribución por Especialidad</h5>
+            <canvas id="chartEspecialidades"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de rendimiento de empleados -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-tie me-2"></i>Rendimiento de Empleados
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Especialidad</th>
+                                <th>Reservas</th>
+                                <th>Completadas</th>
+                                <th>Tasa Éxito</th>
+                                <th>Ingresos</th>
+                                <th>Prom. por Reserva</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for empleado in rendimiento_empleados %}
+                            <tr>
+                                <td>{{ empleado.empleado }}</td>
+                                <td>
+                                    <span class="badge bg-info">{{ empleado.especialidad }}</span>
+                                </td>
+                                <td>{{ empleado.total_reservas or 0 }}</td>
+                                <td>{{ empleado.reservas_completadas or 0 }}</td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: {{ empleado.tasa_exito or 0 }}%;" 
+                                             aria-valuenow="{{ empleado.tasa_exito or 0 }}" 
+                                             aria-valuemin="0" aria-valuemax="100">
+                                            {{ "%.1f"|format(empleado.tasa_exito or 0) }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>S/ {{ "%.2f"|format(empleado.ingresos_generados or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(empleado.promedio_reserva or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Distribución por especialidad -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Por Especialidad</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Especialidad</th>
+                                <th>Empleados</th>
+                                <th>Reservas</th>
+                                <th>Ingresos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for esp in por_especialidad %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-info">{{ esp.especialidad }}</span>
+                                </td>
+                                <td>{{ esp.cantidad_empleados }}</td>
+                                <td>{{ esp.total_reservas or 0 }}</td>
+                                <td>S/ {{ "%.2f"|format(esp.ingresos_especialidad or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Top 5 del Mes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Reservas</th>
+                                <th>Ingresos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for top in top_mes %}
+                            <tr>
+                                <td>{{ top.empleado }}</td>
+                                <td>{{ top.reservas_mes or 0 }}</td>
+                                <td>S/ {{ "%.2f"|format(top.ingresos_mes or 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar alertas -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">
+                    <i class="fas fa-info-circle me-2"></i>Información
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                <!-- El contenido se llena con JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de carga -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h5 class="mb-2">Generando Documento</h5>
+                <p class="text-muted mb-0" id="loadingText">Preparando el archivo para descarga...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Gráfico de ingresos por empleado
+const ctx1 = document.getElementById('chartIngresosEmpleados');
+if (ctx1) {
+    try {
+        const empleados = JSON.parse('{{ nombres_empleados|safe }}');
+        const ingresos = JSON.parse('{{ ingresos_empleados|safe }}');
+        
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: empleados,
+                datasets: [{
+                    label: 'Ingresos Generados (S/)',
+                    data: ingresos,
+                    backgroundColor: '#667eea',
+                    borderColor: '#667eea',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'S/ ' + value.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de ingresos:', error);
+    }
+}
+
+// Gráfico de especialidades
+const ctx2 = document.getElementById('chartEspecialidades');
+if (ctx2) {
+    try {
+        const especialidades = JSON.parse('{{ especialidades_nombres|safe }}');
+        const cantidades = JSON.parse('{{ especialidades_cantidades|safe }}');
+        
+        new Chart(ctx2, {
+            type: 'pie',
+            data: {
+                labels: especialidades,
+                datasets: [{
+                    data: cantidades,
+                    backgroundColor: [
+                        '#667eea',  // baño
+                        '#764ba2',  // corte
+                        '#f093fb',  // ambos
+                        '#f5576c',  // ventas
+                        '#43e97b'   // otros
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de especialidades:', error);
+    }
+}
+
+// Funciones de exportación (igual que en caja.html)
+function exportarExcel(tipo) {
+    showLoading('Preparando archivo Excel...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    setTimeout(() => {
+        hideLoading();
+    }, 5000);
+    
+    window.location.href = `/api/reportes/exportar/excel?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`;
+}
+
+function exportarPDF(tipo) {
+    showLoading('Generando archivo PDF...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    fetch(`/api/reportes/exportar/pdf?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_${tipo}_${fecha_inicio}_${fecha_fin}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showAlert('Éxito', 'El archivo PDF se ha generado correctamente.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo PDF.', 'error');
+        });
+}
+
+function exportarWord(tipo) {
+    showLoading('Generando archivo Word...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    fetch(`/api/reportes/exportar/word?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_${tipo}_${fecha_inicio}_${fecha_fin}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showAlert('Éxito', 'El archivo Word se ha generado correctamente.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo Word.', 'error');
+        });
+}
+
+// Funciones auxiliares (igual que en caja.html)
+function showAlert(title, message, type = 'info') {
+    const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    
+    document.getElementById('alertModalTitle').innerHTML = getAlertIcon(type) + ' ' + title;
+    document.getElementById('alertModalBody').innerHTML = message;
+    
+    const modalHeader = document.querySelector('#alertModal .modal-header');
+    modalHeader.className = 'modal-header ' + getAlertClass(type);
+    
+    modal.show();
+}
+
+function showLoading(message = 'Procesando...') {
+    document.getElementById('loadingText').textContent = message;
+    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    modal.show();
+}
+
+function hideLoading() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success': return '<i class="fas fa-check-circle me-2"></i>';
+        case 'error': return '<i class="fas fa-exclamation-circle me-2"></i>';
+        case 'warning': return '<i class="fas fa-exclamation-triangle me-2"></i>';
+        default: return '<i class="fas fa-info-circle me-2"></i>';
+    }
+}
+
+function getAlertClass(type) {
+    switch(type) {
+        case 'success': return 'bg-success text-white';
+        case 'error': return 'bg-danger text-white';
+        case 'warning': return 'bg-warning text-dark';
+        default: return 'bg-primary text-white';
+    }
+}
+</script>
+{% endblock %}

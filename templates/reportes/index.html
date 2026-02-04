@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes - PetGlow{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i> Sistema de Reportes
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-4">
+                            <div class="card text-center h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-money-bill-wave fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Reporte de Ventas</h5>
+                                    <p class="card-text">Análisis de ingresos y facturación.</p>
+                                    <a href="#" class="btn btn-outline-success">Ver Reporte</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card text-center h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-cash-register fa-3x text-info mb-3"></i>
+                                    <h5 class="card-title">Reporte de Caja</h5>
+                                    <p class="card-text">Movimientos diarios y cierres.</p>
+                                    <a href="#" class="btn btn-outline-info">Ver Reporte</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card text-center h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-user-tie fa-3x text-warning mb-3"></i>
+                                    <h5 class="card-title">Reporte de Empleados</h5>
+                                    <p class="card-text">Rendimiento y productividad.</p>
+                                    <a href="#" class="btn btn-outline-warning">Ver Reporte</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card text-center h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-cut fa-3x text-danger mb-3"></i>
+                                    <h5 class="card-title">Reporte de Servicios</h5>
+                                    <p class="card-text">Servicios más solicitados.</p>
+                                    <a href="#" class="btn btn-outline-danger">Ver Reporte</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Acceso verificado:</strong> Has ingresado correctamente al módulo de reportes.
+                            La contraseña se recordará durante esta sesión.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

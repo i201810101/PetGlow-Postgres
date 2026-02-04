@@ -21,6 +21,154 @@
     color: white;
 }
 
+/* ===== CORRECCIÓN PARA TABLA ALINEADA ===== */
+.table-usuarios tbody tr {
+    transition: background-color 0.3s;
+}
+
+/* Asegurar que todas las celdas se alineen verticalmente al centro */
+.table-usuarios td {
+    vertical-align: middle !important;
+    padding: 0.75rem !important;
+}
+
+/* Avatar de usuario CORREGIDO */
+.usuario-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color, #473D86) 0%, var(--primary-light, #6A5FB5) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+/* Contenedor para usuario con avatar y texto */
+.usuario-info {
+    display: flex;
+    align-items: center;
+    min-height: 50px;
+}
+
+/* Contenedor para empleado */
+.empleado-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 50px;
+}
+
+/* Asegurar que todas las filas tengan la misma altura mínima */
+.table-usuarios tbody td {
+    min-height: 60px;
+    display: table-cell !important;
+}
+
+/* Estilos para badges */
+.table-usuarios .badge {
+    display: inline-block;
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+}
+
+/* Botones de acción alineados */
+.acciones-usuario {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 50px;
+}
+
+.acciones-usuario .btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Estado de login */
+.login-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 50px;
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+    .usuario-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+        margin-right: 8px;
+    }
+    
+    .table-usuarios {
+        font-size: 0.85rem;
+    }
+    
+    .table-usuarios .badge {
+        font-size: 0.7rem;
+        padding: 0.25em 0.5em;
+    }
+    
+    .acciones-usuario .btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Asegurar que las celdas de fecha también estén alineadas */
+.fecha-login {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 50px;
+}
+
+/* Para la columna de acciones */
+td:last-child {
+    text-align: center;
+    vertical-align: middle !important;
+}
+
+/* Hover effect suave */
+.table-usuarios tbody tr:hover {
+    background-color: rgba(71, 61, 134, 0.03);
+}
+
+/* ===== ANIMACIONES ===== */
+@keyframes fadeIn {
+    from { 
+        opacity: 0; 
+        transform: translateY(10px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.usuario-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* ===== ESTILOS EXISTENTES MANTENIDOS ===== */
 /* Tarjetas de usuario */
 .usuario-card {
     transition: all 0.3s ease;
@@ -31,21 +179,6 @@
     transform: translateY(-5px);
     box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     border-color: #007bff;
-}
-
-/* Avatar de usuario */
-.usuario-avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
-    margin: 0 auto;
 }
 
 /* Indicadores de estado */
@@ -67,42 +200,10 @@
     color: #007bff;
 }
 
-/* Tabla de usuarios */
-.table-usuarios tbody tr {
-    transition: background-color 0.3s;
-}
-
-.table-usuarios tbody tr:hover {
-    background-color: rgba(0,123,255,0.05);
-}
-
 /* Modal de confirmación */
 #modalEliminarUsuario .modal-header {
     background-color: #dc3545;
     color: white;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .usuario-card .card-body {
-        text-align: center;
-    }
-    
-    .usuario-avatar {
-        width: 60px;
-        height: 60px;
-        font-size: 18px;
-    }
-}
-
-/* Animaciones */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.usuario-fade-in {
-    animation: fadeIn 0.5s ease-out;
 }
 
 /* Estilos para permisos */
@@ -134,4 +235,10 @@
 
 .login-history-item:last-child {
     border-bottom: none;
+}
+
+/* Mejorar visualización de filas vacías */
+.fila-vacia td {
+    padding: 2rem !important;
+    text-align: center;
 }

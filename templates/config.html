@@ -1,63 +1,122 @@
+<!-- templates/config.html -->
 {% extends "base.html" %}
 
-{% block title %}Configuración - PetGlow{% endblock %}
+{% block title %}Configuración{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Configuración del Sistema</h1>
-</div>
-
-<div class="row">
-    <div class="col-md-6">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Base de Datos</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Estado:</strong> 
-                    {% if 'user_name' in session and 'Demo' in session['user_name'] %}
-                    <span class="badge bg-warning">MODO DEMO</span>
-                    {% else %}
-                    <span class="badge bg-success">CONECTADO</span>
-                    {% endif %}
-                </p>
-                <p><strong>Base de datos:</strong> {{ config.DB_NAME if config else 'petglowbd' }}</p>
-                <p><strong>Host:</strong> {{ config.DB_HOST if config else 'localhost' }}</p>
-                <button class="btn btn-outline-primary btn-sm">Probar conexión</button>
-            </div>
-        </div>
-    </div>
+<div class="container py-4">
+    <h1 class="mb-4">Configuración del Sistema</h1>
     
-    <div class="col-md-6">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Sistema</h5>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-key me-2"></i> Configuración de Contraseña para Reportes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+                                    <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% elif category == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Información:</strong> Esta contraseña es requerida para acceder al módulo de Reportes.
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('cambiar_contraseña_reportes_route') }}">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="password_actual" class="form-label">Contraseña Actual</label>
+                                <input type="password" class="form-control" id="password_actual" 
+                                       name="password_actual" required placeholder="Ingrese la contraseña actual">
+                                <div class="form-text">Contraseña actual para verificar</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="nueva_password" class="form-label">Nueva Contraseña</label>
+                                <input type="password" class="form-control" id="nueva_password" 
+                                       name="nueva_password" required placeholder="Ingrese nueva contraseña">
+                                <div class="form-text">Mínimo 4 caracteres</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="confirmar_password" class="form-label">Confirmar Contraseña</label>
+                                <input type="password" class="form-control" id="confirmar_password" 
+                                       name="confirmar_password" required placeholder="Confirme nueva contraseña">
+                                <div class="form-text">Debe coincidir con la nueva</div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Importante:</strong> 
+                            <ul class="mb-0 mt-2">
+                                <li>La contraseña debe tener al menos 4 caracteres</li>
+                                <li>Guarde la nueva contraseña en un lugar seguro</li>
+                                <li>Contraseña por defecto: <strong>medina123</strong></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Cambiar Contraseña
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="card-body">
-                <p><strong>Versión:</strong> 1.0.0</p>
-                <p><strong>Desarrollador:</strong> Adrian</p>
-                <p><strong>Tipo:</strong> Sistema de Groomers</p>
-                <a href="#" class="btn btn-outline-primary btn-sm">Ver documentación</a>
+            
+            <!-- Otras configuraciones pueden ir aquí -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Otras Configuraciones</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Aquí puedes agregar otras configuraciones del sistema según sea necesario.</p>
+                </div>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="card shadow">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Información de Usuario</h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Usuario actual:</strong> {{ current_user.nombre }}</p>
-                <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-                <p><strong>Username:</strong> {{ current_user.username }}</p>
-            </div>
-            <div class="col-md-6">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-warning">Cambiar contraseña</button>
-                    <button class="btn btn-outline-secondary">Editar perfil</button>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Información del Sistema</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6><i class="fas fa-info-circle me-2 text-primary"></i>Estado de Acceso</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="badge bg-{% if session.get('reportes_acceso') %}success{% else %}warning{% endif %} me-2">
+                                <i class="fas fa-{% if session.get('reportes_acceso') %}lock-open{% else %}lock{% endif %}"></i>
+                            </div>
+                            <span>Reportes: {% if session.get('reportes_acceso') %}Acceso activo{% else %}Requiere contraseña{% endif %}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6><i class="fas fa-user-shield me-2 text-primary"></i>Tu Rol</h6>
+                        <p class="mb-0">{{ session.get('rol', 'admin')|upper }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6><i class="fas fa-clock me-2 text-primary"></i>Sesión Actual</h6>
+                        <p class="mb-0">{{ now.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger w-100">
+                            <i class="fas fa-sign-out-alt me-1"></i> Cerrar Sesión
+                        </a>
+                        <small class="text-muted d-block mt-2">Al cerrar sesión, deberás ingresar la contraseña de reportes nuevamente.</small>
+                    </div>
                 </div>
             </div>
         </div>

@@ -255,3 +255,25 @@
 .reservas-table td {
     vertical-align: middle;
 }
+/* Paginación */
+.card-footer {
+    padding: 1rem;
+}
+
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-item.active .page-link {
+    background-color: #473D86;
+    border-color: #473D86;
+}
+
+.page-link {
+    color: #473D86;
+}
+
+.page-link:hover {
+    color: #2D2661;
+    background-color: #f8f9fa;
+}

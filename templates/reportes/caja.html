@@ -1,0 +1,493 @@
+{% extends "reportes/base.html" %}
+
+{% block title %}Reporte de Caja - PetGlow{% endblock %}
+{% block page_title %}Reporte de Caja{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="date-range-picker">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" 
+                           value="{{ fecha_inicio }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" 
+                           value="{{ fecha_fin }}" required>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-1"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">S/ {{ "%.2f"|format(estadisticas.total_ventas or 0) }}</div>
+            <div class="stat-label">Ventas Totales</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ estadisticas.total_dias or 0 }}</div>
+            <div class="stat-label">Días Reportados</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">S/ {{ "%.2f"|format(estadisticas.diferencia_promedio or 0) }}</div>
+            <div class="stat-label">Diferencia Promedio</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-number">{{ cierres_caja|length }}</div>
+            <div class="stat-label">Cierres de Caja</div>
+        </div>
+    </div>
+</div>
+
+<!-- Botones de exportación -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-excel me-2" onclick="exportarExcel('caja')">
+                <i class="fas fa-file-excel me-1"></i> Excel
+            </button>
+            <button class="btn btn-pdf me-2" onclick="exportarPDF('caja')">
+                <i class="fas fa-file-pdf me-1"></i> PDF
+            </button>
+            <button class="btn btn-word" onclick="exportarWord('caja')">
+                <i class="fas fa-file-word me-1"></i> Word
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="mb-3">Ventas por Día</h5>
+            <canvas id="chartVentasDiarias"></canvas>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h5 class="mb-3">Distribución por Método</h5>
+            <canvas id="chartDistribucionMetodos"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de cierres de caja -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cash-register me-2"></i>Cierres de Caja
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Cajero</th>
+                                <th>Apertura</th>
+                                <th>Efectivo</th>
+                                <th>Tarjeta</th>
+                                <th>Digital</th>
+                                <th>Total</th>
+                                <th>Diferencia</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cierre in cierres_caja %}
+                            <tr>
+                                <td>{{ cierre.fecha.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ cierre.cajero }}</td>
+                                <td>S/ {{ "%.2f"|format(cierre.monto_apertura or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(cierre.venta_efectivo or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(cierre.venta_tarjeta or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(cierre.venta_digital or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(cierre.total_ventas or 0) }}</td>
+                                <td>
+                                    {% if cierre.diferencia > 0 %}
+                                        <span class="badge bg-success">+S/ {{ "%.2f"|format(cierre.diferencia) }}</span>
+                                    {% elif cierre.diferencia < 0 %}
+                                        <span class="badge bg-danger">-S/ {{ "%.2f"|format(cierre.diferencia|abs) }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">S/ {{ "%.2f"|format(cierre.diferencia) }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cierre.estado == 'cerrada' %}
+                                        <span class="badge bg-success">Cerrada</span>
+                                    {% elif cierre.estado == 'abierta' %}
+                                        <span class="badge bg-warning">Abierta</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ cierre.estado }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top cajeros -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Top Cajeros</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cajero</th>
+                                <th>Días</th>
+                                <th>Total Manejado</th>
+                                <th>Diferencia Prom.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cajero in top_cajeros %}
+                            <tr>
+                                <td>{{ cajero.cajero }}</td>
+                                <td>{{ cajero.dias_trabajados }}</td>
+                                <td>S/ {{ "%.2f"|format(cajero.total_manejado or 0) }}</td>
+                                <td>
+                                    {% if cajero.diferencia_promedio > 0 %}
+                                        <span class="text-success">+S/ {{ "%.2f"|format(cajero.diferencia_promedio) }}</span>
+                                    {% elif cajero.diferencia_promedio < 0 %}
+                                        <span class="text-danger">-S/ {{ "%.2f"|format(cajero.diferencia_promedio|abs) }}</span>
+                                    {% else %}
+                                        S/ {{ "%.2f"|format(cajero.diferencia_promedio) }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card card-report">
+            <div class="card-header">
+                <h5 class="mb-0">Resumen Diario</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-report table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Ingresos</th>
+                                <th>Egresos</th>
+                                <th>Neto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dia in resumen_diario %}
+                            <tr>
+                                <td>{{ dia.fecha.strftime('%d/%m') }}</td>
+                                <td>S/ {{ "%.2f"|format(dia.ingresos or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format(dia.egresos or 0) }}</td>
+                                <td>S/ {{ "%.2f"|format((dia.ingresos or 0) - (dia.egresos or 0)) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar alertas -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">
+                    <i class="fas fa-info-circle me-2"></i>Información
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                <!-- El contenido se llena con JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de carga -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h5 class="mb-2">Generando Documento</h5>
+                <p class="text-muted mb-0" id="loadingText">Preparando el archivo para descarga...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Gráfico de ventas diarias
+const ctx1 = document.getElementById('chartVentasDiarias');
+if (ctx1) {
+    try {
+        const fechas = JSON.parse('{{ fechas|safe }}');
+        const ventas = JSON.parse('{{ ventas_diarias|safe }}');
+        
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: fechas,
+                datasets: [{
+                    label: 'Ventas Diarias (S/)',
+                    data: ventas,
+                    backgroundColor: '#667eea',
+                    borderColor: '#667eea',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'S/ ' + value.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de ventas diarias:', error);
+    }
+}
+
+// Gráfico de distribución por método
+const ctx2 = document.getElementById('chartDistribucionMetodos');
+if (ctx2) {
+    try {
+        const metodos = ['Efectivo', 'Tarjeta', 'Digital'];
+        const totales = [
+            {{ estadisticas.total_efectivo or 0 }},
+            {{ estadisticas.total_tarjeta or 0 }},
+            {{ estadisticas.total_digital or 0 }}
+        ];
+        
+        new Chart(ctx2, {
+            type: 'pie',
+            data: {
+                labels: metodos,
+                datasets: [{
+                    data: totales,
+                    backgroundColor: [
+                        '#667eea',  // efectivo
+                        '#764ba2',  // tarjeta
+                        '#f093fb'   // digital
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                return `${label}: S/ ${value.toFixed(2)} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error cargando gráfico de distribución:', error);
+    }
+}
+
+// Funciones de exportación
+function exportarExcel(tipo) {
+    showLoading('Preparando archivo Excel...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    setTimeout(() => {
+        hideLoading();
+    }, 5000);
+    
+    window.location.href = `/api/reportes/exportar/excel?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`;
+}
+
+function exportarPDF(tipo) {
+    showLoading('Generando archivo PDF...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    fetch(`/api/reportes/exportar/pdf?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_${tipo}_${fecha_inicio}_${fecha_fin}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showAlert('Éxito', 'El archivo PDF se ha generado correctamente.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo PDF.', 'error');
+        });
+}
+
+function exportarWord(tipo) {
+    showLoading('Generando archivo Word...');
+    const fecha_inicio = document.getElementById('fecha_inicio').value;
+    const fecha_fin = document.getElementById('fecha_fin').value;
+    
+    fetch(`/api/reportes/exportar/word?reporte=${tipo}&fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`)
+        .then(response => {
+            hideLoading();
+            
+            if (response.ok) {
+                return response.blob();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(text);
+                });
+            }
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_${tipo}_${fecha_inicio}_${fecha_fin}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showAlert('Éxito', 'El archivo Word se ha generado correctamente.', 'success');
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error:', error);
+            showAlert('Error', 'No se pudo generar el archivo Word.', 'error');
+        });
+}
+
+// Funciones auxiliares
+function showAlert(title, message, type = 'info') {
+    const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+    
+    document.getElementById('alertModalTitle').innerHTML = getAlertIcon(type) + ' ' + title;
+    document.getElementById('alertModalBody').innerHTML = message;
+    
+    const modalHeader = document.querySelector('#alertModal .modal-header');
+    modalHeader.className = 'modal-header ' + getAlertClass(type);
+    
+    modal.show();
+}
+
+function showLoading(message = 'Procesando...') {
+    document.getElementById('loadingText').textContent = message;
+    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    modal.show();
+}
+
+function hideLoading() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success': return '<i class="fas fa-check-circle me-2"></i>';
+        case 'error': return '<i class="fas fa-exclamation-circle me-2"></i>';
+        case 'warning': return '<i class="fas fa-exclamation-triangle me-2"></i>';
+        default: return '<i class="fas fa-info-circle me-2"></i>';
+    }
+}
+
+function getAlertClass(type) {
+    switch(type) {
+        case 'success': return 'bg-success text-white';
+        case 'error': return 'bg-danger text-white';
+        case 'warning': return 'bg-warning text-dark';
+        default: return 'bg-primary text-white';
+    }
+}
+</script>
+{% endblock %}

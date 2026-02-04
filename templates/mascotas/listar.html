@@ -16,9 +16,6 @@
         <a href="{{ url_for('crear_mascota') }}" class="btn btn-primary">
             <i class="fas fa-plus me-1"></i>Nueva Mascota
         </a>
-        <button class="btn btn-outline-secondary" id="btn-exportar">
-            <i class="fas fa-download me-1"></i>Exportar
-        </button>
     </div>
 </div>
 
@@ -60,7 +57,12 @@
 <div class="card">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Lista de Mascotas</h5>
-        <span class="badge bg-primary" id="total-mascotas">{{ mascotas|length }}</span>
+        <span class="badge bg-primary" id="total-mascotas">
+            {{ mascotas|length }}
+            {% if total_mascotas > per_page %}
+            <span class="badge bg-secondary ms-1">de {{ total_mascotas }}</span>
+            {% endif %}
+        </span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -157,6 +159,36 @@
             </table>
         </div>
     </div>
+    
+    <!-- Paginación -->
+    {% if total_pages > 1 %}
+    <div class="card-footer bg-white border-top">
+        <nav aria-label="Paginación de mascotas">
+            <ul class="pagination justify-content-center mb-0">
+                <!-- Botón Anterior -->
+                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{% if page > 1 %}{{ url_for('mascotas', page=page-1) }}{% else %}#{% endif %}">
+                        &laquo; Anterior
+                    </a>
+                </li>
+                
+                <!-- Páginas -->
+                {% for p in range(1, total_pages + 1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('mascotas', page=p) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+                
+                <!-- Botón Siguiente -->
+                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="{% if page < total_pages %}{{ url_for('mascotas', page=page+1) }}{% else %}#{% endif %}">
+                        Siguiente &raquo;
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Modal de confirmación de eliminación -->

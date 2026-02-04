@@ -207,35 +207,35 @@
                                     <div class="usuario-avatar me-3">
                                         {{ usuario.username[:2]|upper }}
                                     </div>
-                                    <div>
-                                        <strong>{{ usuario.username }}</strong>
-                                        <div class="text-muted small">{{ usuario.email or '' }}</div>
-                                    </div>
+        <div>
+            <strong class="d-block">{{ usuario.username }}</strong>
+            <small class="text-muted">{{ usuario.email or '' }}</small>
+        </div>
                                 </div>
                             </td>
                             <td>
-                                {% if usuario.empleado_nombre %}
-                                <div>
-                                    <strong>{{ usuario.empleado_nombre }} {{ usuario.empleado_apellido }}</strong>
-                                    <div class="text-muted small">ID: {{ usuario.id_empleado }}</div>
-                                </div>
-                                {% else %}
-                                <span class="text-muted">No asignado</span>
-                                {% endif %}
-                            </td>
+    <div class="empleado-info">
+        {% if usuario.empleado_nombre %}
+            <strong class="d-block">{{ usuario.empleado_nombre }} {{ usuario.empleado_apellido }}</strong>
+            <small class="text-muted">ID: {{ usuario.id_empleado }}</small>
+        {% else %}
+            <span class="text-muted d-block">No asignado</span>
+        {% endif %}
+    </div>
+</td>
                             <td>
-                                {% if usuario.rol == 'admin' %}
-                                <span class="badge badge-rol-admin">Administrador</span>
-                                {% elif usuario.rol == 'gerente' %}
-                                <span class="badge badge-rol-gerente">Gerente</span>
-                                {% elif usuario.rol == 'empleado' %}
-                                <span class="badge badge-rol-empleado">Empleado</span>
-                                {% elif usuario.rol == 'cajero' %}
-                                <span class="badge badge-rol-cajero">Cajero</span>
-                                {% else %}
-                                <span class="badge bg-secondary">{{ usuario.rol }}</span>
-                                {% endif %}
-                            </td>
+    {% if usuario.rol == 'admin' %}
+    <span class="badge badge-rol-admin">Administrador</span>
+    {% elif usuario.rol == 'gerente' %}
+    <span class="badge badge-rol-gerente">Gerente</span>
+    {% elif usuario.rol == 'empleado' %}
+    <span class="badge badge-rol-empleado">Empleado</span>
+    {% elif usuario.rol == 'cajero' %}
+    <span class="badge badge-rol-cajero">Cajero</span>
+    {% else %}
+    <span class="badge bg-secondary">{{ usuario.rol }}</span>
+    {% endif %}
+</td>
                             <td>
                                 {% if usuario.activo %}
                                 <span class="badge bg-success">Activo</span>

@@ -215,3 +215,87 @@
         display: none !important;
     }
 }
+/* ==================== ESTILOS PARA MODALES DE USUARIO ==================== */
+
+/* Estilos para los nuevos modales */
+.modal .form-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.modal .password-toggle {
+    border-color: #ced4da;
+}
+
+.modal .password-toggle:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+/* Mejoras para los formularios de usuario */
+#formCrearUsuario .form-control:focus,
+#formEditarUsuarioEmpleado .form-control:focus {
+    border-color: #198754;
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+}
+
+#formCrearUsuario .form-select:focus,
+#formEditarUsuarioEmpleado .form-select:focus {
+    border-color: #198754;
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+}
+
+/* Estilos para el botón de generar contraseña */
+#btnGenerarPassword {
+    border-color: #0dcaf0;
+    color: #0dcaf0;
+}
+
+#btnGenerarPassword:hover {
+    background-color: #0dcaf0;
+    color: white;
+}
+
+/* Alertas dentro de modales */
+.modal .alert {
+    margin-bottom: 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.modal .alert-info {
+    background-color: #e7f1ff;
+    border-left: 4px solid #0d6efd;
+}
+
+.modal .alert-warning {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+/* Responsive para modales */
+@media (max-width: 576px) {
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .modal-content {
+        border-radius: 0.5rem;
+    }
+}
+
+/* Animación para notificaciones */
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.position-fixed.bottom-0.end-0 {
+    animation: slideInUp 0.3s ease-out;
+}

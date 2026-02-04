@@ -53,7 +53,7 @@ function buscarReservas() {
     
     // Manejar resultados
     manejarSinResultados(encontrados, filas.length);
-    configurarPaginacion();
+    // configurarPaginacion();
 }
 
 function mostrarModalCambioEstado(reservaId, codigoReserva, nuevoEstado) {
@@ -257,7 +257,7 @@ function limpiarErrorCampo(elemento) {
 
 // ================= PAGINACIÓN =================
 
-function configurarPaginacion() {
+/*function configurarPaginacion() {
     const filasVisibles = Array.from(document.querySelectorAll('.reserva-fila'))
         .filter(fila => fila.style.display !== 'none' && fila.id !== 'sin-resultados-filtro');
     
@@ -335,7 +335,7 @@ function mostrarTodasLasFilas(filasVisibles) {
     const registrosMostrados = document.getElementById('registros-mostrados');
     if (registrosMostrados) registrosMostrados.textContent = `1-${filasVisibles.length}`;
 }
-
+*/
 // ================= UTILIDADES =================
 
 function manejarSinResultados(encontrados, totalFilas) {
@@ -484,6 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btn-confirmar-cambio')?.addEventListener('click', cambiarEstadoReserva);
     
     // Paginación - eventos delegados
+    /*
     document.addEventListener('click', function(e) {
         if (e.target.closest('#pagina-anterior')) {
             e.preventDefault();
@@ -499,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const pagina = parseInt(e.target.closest('.page-link[data-pagina]').getAttribute('data-pagina'));
             cambiarPagina(pagina);
         }
-    });
+    }); */
     
     // ================= VALIDACIÓN DE FORMULARIO DE NUEVA RESERVA =================
     const formCrearReserva = document.getElementById('form-crear-reserva');
@@ -546,3 +547,22 @@ document.addEventListener('DOMContentLoaded', function() {
         buscarReservas();
     }
 });
+// Función para mostrar mensajes en el calendario
+function mostrarMensajeCalendario(mensaje) {
+    const calendarEl = document.getElementById('calendario-reservas');
+    if (calendarEl) {
+        // Crear elemento de mensaje
+        const mensajeDiv = document.createElement('div');
+        mensajeDiv.className = 'alert alert-info mt-3';
+        mensajeDiv.innerHTML = `
+            <i class="fas fa-info-circle me-2"></i>
+            ${mensaje}
+            <button class="btn btn-sm btn-outline-primary ms-3" onclick="inicializarCalendario()">
+                <i class="fas fa-redo me-1"></i> Reintentar
+            </button>
+        `;
+        
+        // Insertar después del calendario
+        calendarEl.parentNode.insertBefore(mensajeDiv, calendarEl.nextSibling);
+    }
+}

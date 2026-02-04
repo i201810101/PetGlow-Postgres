@@ -4,6 +4,120 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reservas.css') }}">
+<!-- FullCalendar CSS -->
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+<style>
+/* Estilos para el calendario */
+#calendario {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    min-height: 600px;
+}
+
+.fc .fc-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.fc .fc-button {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    font-weight: 500;
+}
+
+.fc .fc-button:hover {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+.fc .fc-button-active {
+    background-color: #0a58ca;
+    border-color: #0a58ca;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Colores para eventos según estado */
+.fc-event-pendiente {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.fc-event-confirmada {
+    background-color: #0dcaf0;
+    border-color: #0dcaf0;
+    color: white;
+}
+
+.fc-event-en_proceso {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+.fc-event-completada {
+    background-color: #198754;
+    border-color: #198754;
+    color: white;
+}
+
+.fc-event-cancelada {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.fc-event-no_show {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.fc-event {
+    cursor: pointer;
+    transition: transform 0.2s;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin: 1px;
+}
+
+.fc-event:hover {
+    transform: scale(1.02);
+    z-index: 1000 !important;
+}
+
+/* Botones de vista activos */
+#btn-vista-lista.active,
+#btn-vista-calendario.active {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .fc .fc-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .fc .fc-toolbar .fc-toolbar-chunk {
+        margin-bottom: 10px;
+    }
+    
+    .fc .fc-toolbar-title {
+        font-size: 1.2rem;
+    }
+    
+    #calendario {
+        min-height: 500px;
+    }
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -41,8 +155,7 @@
             <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-search"></i></span>
-                    <input type="text" class="form-control" id="buscador-reservas" 
-                           placeholder="Buscar por código, mascota, cliente...">
+                    <input type="text" class="form-control" id="buscador-reservas" placeholder="Buscar por código, mascota, cliente...">
                     <button class="btn btn-outline-secondary" id="btn-limpiar-busqueda" type="button" title="Limpiar búsqueda">
                         <i class="fas fa-times"></i>
                     </button>
@@ -60,18 +173,17 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <input type="date" class="form-control" id="filtro-fecha" 
-                       placeholder="Filtrar por fecha...">
+                <input type="date" class="form-control" id="filtro-fecha" placeholder="Filtrar por fecha...">
             </div>
         </div>
         <div class="row mt-3">
             <div class="col-12">
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary active" data-vista="lista">
-                        <i class="fas fa-list"></i> Lista
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-primary active" id="btn-vista-lista">
+                        <i class="fas fa-list me-1"></i> Lista
                     </button>
-                    <button class="btn btn-outline-primary" data-vista="calendario">
-                        <i class="fas fa-calendar"></i> Calendario
+                    <button type="button" class="btn btn-outline-primary" id="btn-vista-calendario">
+                        <i class="fas fa-calendar me-1"></i> Calendario
                     </button>
                 </div>
                 <button class="btn btn-sm btn-outline-secondary ms-2" id="btn-reset-filtros">
@@ -82,7 +194,7 @@
     </div>
 </div>
 
-<!-- Vista de lista -->
+<!-- Vista de lista (visible por defecto) -->
 <div id="vista-lista">
     <!-- Resumen rápido -->
     <div class="row mb-4">
@@ -92,7 +204,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="mb-0">Total Reservas</h6>
-                            <h4 class="mb-0" id="total-reservas">0</h4>
+                            <h4 class="mb-0" id="total-reservas">{{ reservas|length }}</h4>
                         </div>
                         <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
                     </div>
@@ -195,17 +307,17 @@
                                 </td>
                                 <td>
                                     {% if reserva.servicios_nombres %}
-                                        <div class="servicios-contenedor">
-                                            {% set servicios_list = reserva.servicios_nombres.split(',') %}
-                                            {% for servicio in servicios_list[:2] %}
-                                                <span class="badge-servicio">{{ servicio|trim }}</span>
-                                            {% endfor %}
-                                            {% if servicios_list|length > 2 %}
-                                                <small class="text-muted">+{{ servicios_list|length - 2 }} más</small>
-                                            {% endif %}
-                                        </div>
+                                    <div class="servicios-contenedor">
+                                        {% set servicios_list = reserva.servicios_nombres.split(',') %}
+                                        {% for servicio in servicios_list[:2] %}
+                                        <span class="badge-servicio">{{ servicio|trim }}</span>
+                                        {% endfor %}
+                                        {% if servicios_list|length > 2 %}
+                                        <small class="text-muted">+{{ servicios_list|length - 2 }} más</small>
+                                        {% endif %}
+                                    </div>
                                     {% else %}
-                                        <small class="text-muted">Sin servicios</small>
+                                    <small class="text-muted">Sin servicios</small>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -221,40 +333,39 @@
                                 </td>
                                 <td class="text-center">
                                     <div class="btn-action-group">
-                                        <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" 
-                                           class="btn btn-sm btn-info btn-action" 
-                                           title="Ver detalles"
-                                           data-bs-toggle="tooltip">
+                                        <a href="{{ url_for('ver_reserva', id=reserva.id_reserva) }}" class="btn btn-sm btn-info btn-action" title="Ver detalles" data-bs-toggle="tooltip">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" 
-                                           class="btn btn-sm btn-warning btn-action" 
-                                           title="Editar"
-                                           data-bs-toggle="tooltip">
+                                        <a href="{{ url_for('editar_reserva', id=reserva.id_reserva) }}" class="btn btn-sm btn-warning btn-action" title="Editar" data-bs-toggle="tooltip">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                         <div class="dropdown">
-                                            <button class="btn btn-sm btn-secondary btn-action dropdown-toggle" 
-                                                    type="button" 
-                                                    data-bs-toggle="dropdown"
-                                                    title="Cambiar estado">
+                                            <button class="btn btn-sm btn-secondary btn-action dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Cambiar estado">
                                                 <i class="fas fa-exchange-alt"></i>
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li><h6 class="dropdown-header">Cambiar estado a:</h6></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="confirmada">
-                                                    <span class="badge bg-info me-2">●</span> Confirmada
-                                                </a></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="en_proceso">
-                                                    <span class="badge bg-primary me-2">●</span> En Proceso
-                                                </a></li>
-                                                <li><a class="dropdown-item cambiar-estado" href="#" data-estado="completada">
-                                                    <span class="badge bg-success me-2">●</span> Completada
-                                                </a></li>
+                                                <li>
+                                                    <a class="dropdown-item cambiar-estado" href="#" data-estado="confirmada">
+                                                        <span class="badge bg-info me-2">●</span> Confirmada
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item cambiar-estado" href="#" data-estado="en_proceso">
+                                                        <span class="badge bg-primary me-2">●</span> En Proceso
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item cambiar-estado" href="#" data-estado="completada">
+                                                        <span class="badge bg-success me-2">●</span> Completada
+                                                    </a>
+                                                </li>
                                                 <li><hr class="dropdown-divider"></li>
-                                                <li><a class="dropdown-item cambiar-estado text-danger" href="#" data-estado="cancelada">
-                                                    <i class="fas fa-ban me-2"></i> Cancelar
-                                                </a></li>
+                                                <li>
+                                                    <a class="dropdown-item cambiar-estado text-danger" href="#" data-estado="cancelada">
+                                                        <i class="fas fa-ban me-2"></i> Cancelar
+                                                    </a>
+                                                </li>
                                             </ul>
                                         </div>
                                     </div>
@@ -279,17 +390,51 @@
                 </table>
             </div>
         </div>
-        
         <div class="card-footer bg-light">
             <div class="row align-items-center">
                 <div class="col-md-6">
+                    {% if total_paginas > 1 %}
                     <nav aria-label="Paginación de reservas">
-                        <ul class="pagination pagination-sm mb-0" id="paginacion-reservas"></ul>
+                        <ul class="pagination pagination-sm mb-0" id="paginacion-reservas">
+                            {% if pagina_actual > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('reservas', pagina=pagina_actual-1) }}">
+                                    &laquo; Anterior
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for num in range(1, total_paginas + 1) %}
+                                {% if num == pagina_actual %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                                {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('reservas', pagina=num) }}">{{ num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if pagina_actual < total_paginas %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('reservas', pagina=pagina_actual+1) }}">
+                                    Siguiente &raquo;
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
                     </nav>
+                    {% endif %}
                 </div>
                 <div class="col-md-6 text-end">
                     <small class="text-muted">
-                        Mostrando <span id="registros-mostrados">1-10</span> de <span id="total-filtradas">{{ reservas|length }}</span> reservas
+                        {% set inicio = ((pagina_actual - 1) * 10) + 1 %}
+                        {% set fin = min(pagina_actual * 10, total_reservas) %}
+                        Mostrando {{ inicio }}-{{ fin }} de {{ total_reservas }} reservas
+                        {% if total_paginas > 1 %}
+                        (Página {{ pagina_actual }} de {{ total_paginas }})
+                        {% endif %}
                     </small>
                 </div>
             </div>
@@ -297,14 +442,14 @@
     </div>
 </div>
 
-<!-- Vista de calendario -->
-<div id="vista-calendario" class="d-none">
+<!-- Vista de calendario (oculta inicialmente) -->
+<div id="vista-calendario" style="display: none;">
     <div class="card">
         <div class="card-header bg-light">
             <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Calendario de Reservas</h5>
         </div>
         <div class="card-body">
-            <div id="calendario-reservas" style="min-height: 600px;"></div>
+            <div id="calendario"></div>
         </div>
     </div>
 </div>
@@ -314,17 +459,27 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Cambiar Estado</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-exchange-alt me-2"></i>Cambiar Estado
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas cambiar el estado de la reserva <strong id="codigo-reserva-cambio">[Código]</strong> a <strong id="nuevo-estado-texto">[Estado]</strong>?</p>
+                <p>
+                    ¿Estás seguro de que deseas cambiar el estado de la reserva
+                    <strong id="codigo-reserva-cambio">[Código]</strong> a
+                    <strong id="nuevo-estado-texto">[Estado]</strong>?
+                </p>
                 <div id="mensaje-confirmacion">
-                    <p class="text-muted">Esta acción actualizará el estado de la reserva en el sistema.</p>
+                    <p class="text-muted">
+                        Esta acción actualizará el estado de la reserva en el sistema.
+                    </p>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
                 <button type="button" class="btn btn-primary" id="btn-confirmar-cambio">
                     <i class="fas fa-check me-1"></i>Confirmar Cambio
                 </button>
@@ -336,4 +491,222 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/reservas.js') }}"></script>
+<!-- FullCalendar JS -->
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/es.min.js'></script>
+<script>
+// Variable global para el calendario
+let calendario = null;
+
+// ================= FUNCIÓN PARA CAMBIAR VISTA =================
+function cambiarVista(vista) {
+    const vistaLista = document.getElementById('vista-lista');
+    const vistaCalendario = document.getElementById('vista-calendario');
+    const btnLista = document.getElementById('btn-vista-lista');
+    const btnCalendario = document.getElementById('btn-vista-calendario');
+    
+    if (vista === 'lista') {
+        // Mostrar lista, ocultar calendario
+        vistaLista.style.display = 'block';
+        vistaCalendario.style.display = 'none';
+        
+        // Cambiar estilos de botones
+        btnLista.classList.remove('btn-outline-primary');
+        btnLista.classList.add('btn-primary');
+        btnCalendario.classList.remove('btn-primary');
+        btnCalendario.classList.add('btn-outline-primary');
+        
+    } else if (vista === 'calendario') {
+        // Mostrar calendario, ocultar lista
+        vistaLista.style.display = 'none';
+        vistaCalendario.style.display = 'block';
+        
+        // Cambiar estilos de botones
+        btnLista.classList.remove('btn-primary');
+        btnLista.classList.add('btn-outline-primary');
+        btnCalendario.classList.remove('btn-outline-primary');
+        btnCalendario.classList.add('btn-primary');
+        
+        // Inicializar calendario si no está inicializado
+        if (!calendario) {
+            inicializarCalendario();
+        }
+    }
+}
+
+// ================= FUNCIÓN PARA INICIALIZAR CALENDARIO =================
+function inicializarCalendario() {
+    console.log('Inicializando calendario...');
+    
+    const calendarEl = document.getElementById('calendario');
+    
+    if (!calendarEl) {
+        console.error('No se encontró el elemento del calendario');
+        return;
+    }
+    
+    // Crear datos de ejemplo basados en las reservas actuales
+    const eventos = [
+        {
+            title: 'Reserva #001 - Max (Baño completo)',
+            start: new Date().toISOString().split('T')[0] + 'T10:00:00',
+            end: new Date().toISOString().split('T')[0] + 'T11:00:00',
+            extendedProps: {
+                estado: 'confirmada',
+                codigo: 'RES-001',
+                mascota: 'Max',
+                cliente: 'Juan Pérez'
+            }
+        },
+        {
+            title: 'Reserva #002 - Luna (Corte y peinado)',
+            start: new Date().toISOString().split('T')[0] + 'T14:00:00',
+            end: new Date().toISOString().split('T')[0] + 'T15:30:00',
+            extendedProps: {
+                estado: 'pendiente',
+                codigo: 'RES-002',
+                mascota: 'Luna',
+                cliente: 'María López'
+            }
+        },
+        {
+            title: 'Reserva #003 - Rocky (Limpieza dental)',
+            start: (() => {
+                const fecha = new Date();
+                fecha.setDate(fecha.getDate() + 1);
+                return fecha.toISOString().split('T')[0] + 'T09:00:00';
+            })(),
+            end: (() => {
+                const fecha = new Date();
+                fecha.setDate(fecha.getDate() + 1);
+                return fecha.toISOString().split('T')[0] + 'T10:00:00';
+            })(),
+            extendedProps: {
+                estado: 'completada',
+                codigo: 'RES-003',
+                mascota: 'Rocky',
+                cliente: 'Pedro Gómez'
+            }
+        }
+    ];
+    
+    // Si hay reservas reales, puedes agregarlas aquí
+    {% if reservas %}
+        {% for reserva in reservas[:3] %}  // Tomar las primeras 3 reservas como ejemplo
+        eventos.push({
+            title: '{{ reserva.codigo_reserva }} - {{ reserva.mascota_nombre }}',
+            start: '{{ reserva.fecha_reserva.isoformat() }}',
+            end: (() => {
+                const fecha = new Date('{{ reserva.fecha_reserva.isoformat() }}');
+                fecha.setHours(fecha.getHours() + 1); // Agregar 1 hora
+                return fecha.toISOString();
+            })(),
+            extendedProps: {
+                estado: '{{ reserva.estado }}',
+                codigo: '{{ reserva.codigo_reserva }}',
+                mascota: '{{ reserva.mascota_nombre }}',
+                cliente: '{{ reserva.cliente_nombre }} {{ reserva.cliente_apellido }}'
+            }
+        });
+        {% endfor %}
+    {% endif %}
+    
+    try {
+        calendario = new FullCalendar.Calendar(calendarEl, {
+            locale: 'es',
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            buttonText: {
+                today: 'Hoy',
+                month: 'Mes',
+                week: 'Semana',
+                day: 'Día'
+            },
+            firstDay: 1, // Lunes
+            weekNumbers: true,
+            navLinks: true,
+            editable: false,
+            dayMaxEvents: true,
+            events: eventos,
+            eventClick: function(info) {
+                console.log('Evento clickeado:', info.event);
+                // Aquí puedes mostrar un modal con los detalles si quieres
+                alert('Reserva: ' + info.event.extendedProps.codigo + 
+                      '\nMascota: ' + info.event.extendedProps.mascota +
+                      '\nCliente: ' + info.event.extendedProps.cliente +
+                      '\nEstado: ' + info.event.extendedProps.estado);
+            },
+            eventDidMount: function(info) {
+                // Añadir clase según estado
+                const estado = info.event.extendedProps.estado;
+                if (estado) {
+                    info.el.classList.add('fc-event-' + estado);
+                }
+                
+                // Añadir tooltip
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    new bootstrap.Tooltip(info.el, {
+                        title: `
+                            <div style="min-width: 200px;">
+                                <strong>${info.event.extendedProps.codigo}</strong><br>
+                                <strong>Mascota:</strong> ${info.event.extendedProps.mascota}<br>
+                                <strong>Cliente:</strong> ${info.event.extendedProps.cliente}<br>
+                                <strong>Hora:</strong> ${info.event.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                        `,
+                        placement: 'top',
+                        trigger: 'hover',
+                        container: 'body',
+                        html: true
+                    });
+                }
+            },
+            datesSet: function(info) {
+                console.log('Vista del calendario cambiada:', info.view.type);
+            }
+        });
+        
+        calendario.render();
+        console.log('Calendario inicializado correctamente');
+        
+    } catch (error) {
+        console.error('Error al crear el calendario:', error);
+        calendarEl.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-exclamation-triangle me-2"></i>Error al cargar el calendario</h5>
+                <p>${error.message}</p>
+                <button class="btn btn-primary mt-2" onclick="inicializarCalendario()">
+                    <i class="fas fa-redo me-1"></i> Reintentar
+                </button>
+            </div>
+        `;
+    }
+}
+
+// ================= INICIALIZACIÓN CUANDO SE CARGA LA PÁGINA =================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Página de reservas cargada');
+    
+    // Configurar botones de vista
+    document.getElementById('btn-vista-lista').addEventListener('click', function() {
+        cambiarVista('lista');
+    });
+    
+    document.getElementById('btn-vista-calendario').addEventListener('click', function() {
+        cambiarVista('calendario');
+    });
+    
+    // Inicializar vista de lista por defecto
+    cambiarVista('lista');
+    
+    // Tus funciones existentes de reservas.js funcionarán aquí
+    // ya que están incluidas en el script reservas.js
+    
+    // Si necesitas inicializar algo más, hazlo aquí
+});
+</script>
 {% endblock %}

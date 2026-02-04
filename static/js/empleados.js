@@ -404,43 +404,76 @@ switch(empleado.especialidad) {
     }
     
     function cargarInfoUsuario(idEmpleado) {
-        const infoUsuarioDiv = document.getElementById('info_usuario');
-        
-        fetch(`/api/empleados/${idEmpleado}/usuario`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                if (data.existe) {
-                    infoUsuarioDiv.innerHTML = `
-                        <div class="alert alert-info">
-                            <p><strong>Username:</strong> ${data.usuario.username}</p>
-                            <p><strong>Rol:</strong> ${data.usuario.rol}</p>
-                            <p><strong>Último login:</strong> ${data.usuario.ultimo_login || 'Nunca'}</p>
-                            <p><strong>Estado:</strong> ${data.usuario.activo ? 'Activo' : 'Inactivo'}</p>
-                            <button class="btn btn-sm btn-outline-warning" onclick="editarUsuario(${data.usuario.id_usuario})">
-                                <i class="fas fa-key me-1"></i>Editar Usuario
-                            </button>
+    const infoUsuarioDiv = document.getElementById('info_usuario');
+    
+    fetch(`/api/empleados/${idEmpleado}/usuario`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            if (data.existe && data.usuario) {
+                infoUsuarioDiv.innerHTML = `
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-user-circle me-2 text-info"></i>Información del Usuario
+                            </h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Username:</strong></p>
+                                    <p class="mb-1"><strong>Rol:</strong></p>
+                                    <p class="mb-1"><strong>Último login:</strong></p>
+                                    <p class="mb-0"><strong>Estado:</strong></p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="mb-1">${data.usuario.username}</p>
+                                    <p class="mb-1">
+                                        <span class="badge bg-info">${data.usuario.rol}</span>
+                                    </p>
+                                    <p class="mb-1">${data.usuario.ultimo_login || 'Nunca'}</p>
+                                    <p class="mb-0">
+                                        ${data.usuario.activo ? 
+                                            '<span class="badge bg-success">Activo</span>' : 
+                                            '<span class="badge bg-secondary">Inactivo</span>'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-sm btn-outline-warning" onclick="editarUsuario(${data.usuario.id_usuario})">
+                                    <i class="fas fa-edit me-1"></i>Editar Usuario
+                                </button>
+                            </div>
                         </div>
-                    `;
-                } else {
-                    infoUsuarioDiv.innerHTML = `
-                        <div class="alert alert-warning">
-                            <p>Este empleado no tiene usuario para el sistema.</p>
-                            <button class="btn btn-sm btn-outline-success" onclick="crearUsuario(${idEmpleado})">
+                    </div>
+                `;
+            } else {
+                infoUsuarioDiv.innerHTML = `
+                    <div class="card border-warning">
+                        <div class="card-body text-center">
+                            <i class="fas fa-user-slash fa-2x text-warning mb-3"></i>
+                            <h6 class="card-title text-warning">Sin Usuario</h6>
+                            <p class="card-text">Este empleado no tiene usuario para el sistema.</p>
+                            <button class="btn btn-sm btn-success" onclick="crearUsuario(${idEmpleado})">
                                 <i class="fas fa-plus me-1"></i>Crear Usuario
                             </button>
                         </div>
-                    `;
-                }
-            })
-            .catch(error => {
-                console.error('Error cargando usuario:', error);
-                infoUsuarioDiv.innerHTML = '<p class="text-danger">Error al cargar información del usuario</p>';
-            });
-    }
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando usuario:', error);
+            infoUsuarioDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error al cargar información del usuario
+                </div>
+            `;
+        });
+}
     
     function actualizarEmpleado(e) {
         e.preventDefault();
@@ -590,28 +623,188 @@ window.cambiarPagina = function(nuevaPagina) {
     document.dispatchEvent(event);
 }
 
-// Función para crear usuario
+// Función para crear usuario con modal
 window.crearUsuario = function(idEmpleado) {
-    const username = prompt('Ingrese el username para el empleado:');
-    if (!username) return;
+    // Guardar ID del empleado
+    document.getElementById('crear_usuario_id_empleado').value = idEmpleado;
     
-    const password = prompt('Ingrese la contraseña inicial (mínimo 6 caracteres):');
-    if (!password || password.length < 6) {
-        alert('La contraseña debe tener al menos 6 caracteres');
-        return;
+    // Resetear formulario
+    const form = document.getElementById('formCrearUsuario');
+    form.reset();
+    form.classList.remove('was-validated');
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalCrearUsuario'));
+    modal.show();
+}
+
+// Función para editar usuario con modal
+window.editarUsuario = function(idUsuario) {
+    // Cargar datos del usuario
+    fetch(`/api/usuarios/${idUsuario}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const usuario = data.usuario;
+                
+                // Rellenar formulario
+                document.getElementById('editar_usuario_id').value = usuario.id_usuario;
+                document.getElementById('editar_usuario_id_empleado').value = usuario.id_empleado;
+                document.getElementById('editar_usuario_username').value = usuario.username;
+                document.getElementById('editar_usuario_rol').value = usuario.rol;
+                document.getElementById('editar_usuario_activo').checked = usuario.activo;
+                
+                // Limpiar campo de contraseña
+                document.getElementById('editar_usuario_password').value = '';
+                
+                // Mostrar nombre del empleado si está disponible
+                const nombreEmpleado = document.getElementById('empleado_usuario_nombre');
+                if (nombreEmpleado && usuario.nombre && usuario.apellido) {
+                    nombreEmpleado.textContent = `${usuario.nombre} ${usuario.apellido}`;
+                }
+                
+                // Mostrar modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarUsuarioEmpleado'));
+                modal.show();
+            } else {
+                throw new Error(data.error || 'Error al cargar usuario');
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando usuario:', error);
+            mostrarNotificacionModal('❌ Error: ' + error.message, 'error');
+        });
+}
+// ==================== MANEJO DE MODALES DE USUARIO ====================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar formulario para crear usuario
+    const formCrearUsuario = document.getElementById('formCrearUsuario');
+    if (formCrearUsuario) {
+        formCrearUsuario.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!this.checkValidity()) {
+                this.classList.add('was-validated');
+                return;
+            }
+            
+            const idEmpleado = document.getElementById('crear_usuario_id_empleado').value;
+            const datos = {
+                username: document.getElementById('crear_usuario_username').value,
+                password: document.getElementById('crear_usuario_password').value,
+                rol: document.getElementById('crear_usuario_rol').value,
+                activo: document.getElementById('crear_usuario_activo').checked
+            };
+            
+            crearUsuarioAPI(idEmpleado, datos);
+        });
     }
     
-    const rol = prompt('Ingrese el rol (admin, gerente, empleado, cajero):');
-    if (!['admin', 'gerente', 'empleado', 'cajero'].includes(rol)) {
-        alert('Rol inválido. Debe ser: admin, gerente, empleado o cajero');
-        return;
+    // Configurar formulario para editar usuario
+    const formEditarUsuarioEmpleado = document.getElementById('formEditarUsuarioEmpleado');
+    if (formEditarUsuarioEmpleado) {
+        formEditarUsuarioEmpleado.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!this.checkValidity()) {
+                this.classList.add('was-validated');
+                return;
+            }
+            
+            const idUsuario = document.getElementById('editar_usuario_id').value;
+            const idEmpleado = document.getElementById('editar_usuario_id_empleado').value;
+            
+            const datos = {
+                rol: document.getElementById('editar_usuario_rol').value,
+                activo: document.getElementById('editar_usuario_activo').checked
+            };
+            
+            // Agregar contraseña solo si se proporcionó
+            const nuevaPassword = document.getElementById('editar_usuario_password').value;
+            if (nuevaPassword && nuevaPassword.trim() !== '') {
+                datos.password = nuevaPassword;
+            }
+            
+            editarUsuarioAPI(idUsuario, datos, idEmpleado);
+        });
     }
     
-    const datos = {
-        username: username,
-        password: password,
-        rol: rol
-    };
+    // Generador de contraseña
+    const btnGenerarPassword = document.getElementById('btnGenerarPassword');
+    if (btnGenerarPassword) {
+        btnGenerarPassword.addEventListener('click', function() {
+            const password = generarPasswordSegura(12);
+            document.getElementById('crear_usuario_password').value = password;
+            
+            // Mostrar contraseña temporalmente
+            const input = document.getElementById('crear_usuario_password');
+            input.type = 'text';
+            
+            // Cambiar icono
+            const iconos = document.querySelectorAll('.password-toggle i');
+            iconos.forEach(icon => {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            });
+            
+            // Volver a ocultar después de 5 segundos
+            setTimeout(() => {
+                input.type = 'password';
+                iconos.forEach(icon => {
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                });
+            }, 5000);
+        });
+    }
+    
+    // Toggle para mostrar/ocultar contraseña
+    document.querySelectorAll('.password-toggle').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const input = this.closest('.input-group').querySelector('input');
+            const icon = this.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
+    });
+});
+
+// Función para generar contraseña segura
+function generarPasswordSegura(longitud = 12) {
+    const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let password = '';
+    
+    // Asegurar al menos una mayúscula, una minúscula, un número y un símbolo
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+    password += '0123456789'[Math.floor(Math.random() * 10)];
+    password += '!@#$%^&*'[Math.floor(Math.random() * 8)];
+    
+    // Completar el resto
+    for (let i = password.length; i < longitud; i++) {
+        password += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    }
+    
+    // Mezclar la contraseña
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// Función para crear usuario via API
+function crearUsuarioAPI(idEmpleado, datos) {
+    const btnSubmit = document.querySelector('#formCrearUsuario button[type="submit"]');
+    const originalText = btnSubmit.innerHTML;
+    
+    btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creando...';
+    btnSubmit.disabled = true;
     
     fetch(`/api/empleados/${idEmpleado}/usuario`, {
         method: 'POST',
@@ -623,8 +816,14 @@ window.crearUsuario = function(idEmpleado) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('✅ Usuario creado exitosamente');
-            // Recargar información del usuario
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCrearUsuario'));
+            modal.hide();
+            
+            // Mostrar notificación
+            mostrarNotificacionModal('✅ Usuario creado exitosamente', 'success');
+            
+            // Recargar información del usuario en el modal de empleado
             if (typeof cargarInfoUsuario === 'function') {
                 cargarInfoUsuario(idEmpleado);
             }
@@ -634,31 +833,21 @@ window.crearUsuario = function(idEmpleado) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('❌ ' + error.message);
+        mostrarNotificacionModal('❌ ' + error.message, 'error');
+    })
+    .finally(() => {
+        btnSubmit.innerHTML = originalText;
+        btnSubmit.disabled = false;
     });
 }
 
-// Función para editar usuario
-window.editarUsuario = function(idUsuario) {
-    const nuevoRol = prompt('Ingrese el nuevo rol (admin, gerente, empleado, cajero):');
-    if (!nuevoRol || !['admin', 'gerente', 'empleado', 'cajero'].includes(nuevoRol)) {
-        alert('Rol inválido. Debe ser: admin, gerente, empleado o cajero');
-        return;
-    }
+// Función para editar usuario via API
+function editarUsuarioAPI(idUsuario, datos, idEmpleado) {
+    const btnSubmit = document.querySelector('#formEditarUsuarioEmpleado button[type="submit"]');
+    const originalText = btnSubmit.innerHTML;
     
-    const resetPassword = confirm('¿Desea resetear la contraseña?');
-    let datos = { rol: nuevoRol };
-    
-    if (resetPassword) {
-        const nuevaPassword = prompt('Ingrese la nueva contraseña (dejar vacío para no cambiar):');
-        if (nuevaPassword) {
-            if (nuevaPassword.length < 6) {
-                alert('La contraseña debe tener al menos 6 caracteres');
-                return;
-            }
-            datos.password = nuevaPassword;
-        }
-    }
+    btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Actualizando...';
+    btnSubmit.disabled = true;
     
     fetch(`/api/usuarios/${idUsuario}`, {
         method: 'PUT',
@@ -670,14 +859,16 @@ window.editarUsuario = function(idUsuario) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('✅ Usuario actualizado exitosamente');
-            // Recargar información del usuario
-            const modalEditar = document.getElementById('modalEditarEmpleado');
-            if (bootstrap.Modal.getInstance(modalEditar)) {
-                const idInput = document.getElementById('editar_id');
-                if (idInput && typeof cargarInfoUsuario === 'function') {
-                    cargarInfoUsuario(parseInt(idInput.value));
-                }
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuarioEmpleado'));
+            modal.hide();
+            
+            // Mostrar notificación
+            mostrarNotificacionModal('✅ Usuario actualizado exitosamente', 'success');
+            
+            // Recargar información del usuario en el modal de empleado
+            if (typeof cargarInfoUsuario === 'function' && idEmpleado) {
+                cargarInfoUsuario(idEmpleado);
             }
         } else {
             throw new Error(data.error || 'Error al actualizar usuario');
@@ -685,10 +876,37 @@ window.editarUsuario = function(idUsuario) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('❌ ' + error.message);
+        mostrarNotificacionModal('❌ ' + error.message, 'error');
+    })
+    .finally(() => {
+        btnSubmit.innerHTML = originalText;
+        btnSubmit.disabled = false;
     });
 }
 
+// Función para mostrar notificaciones en modales
+function mostrarNotificacionModal(mensaje, tipo = 'info') {
+    // Crear notificación
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${tipo} alert-dismissible fade show position-fixed bottom-0 end-0 m-3`;
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+            <div class="flex-grow-1">${mensaje}</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Auto-eliminar después de 5 segundos
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
 // Exponer funciones al scope global
 window.verEmpleado = verEmpleado;
 window.editarEmpleado = editarEmpleado;

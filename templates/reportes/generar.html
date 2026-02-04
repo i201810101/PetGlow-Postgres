@@ -1,0 +1,184 @@
+{% extends "reportes/base.html" %}
+
+{% block title %}Generar Reportes - PetGlow{% endblock %}
+{% block page_title %}Generar Reportes{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Tarjetas de opciones -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card card-report h-100">
+            <div class="card-body text-center">
+                <div class="report-card-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <h5 class="card-title">Reporte de Ventas</h5>
+                <p class="card-text text-muted">Análisis detallado de ingresos, facturación y ganancias.</p>
+                <a href="{{ url_for('reporte_ventas') }}" class="btn btn-primary">
+                    <i class="fas fa-chart-line me-1"></i> Generar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card card-report h-100">
+            <div class="card-body text-center">
+                <div class="report-card-icon">
+                    <i class="fas fa-cash-register"></i>
+                </div>
+                <h5 class="card-title">Reporte de Caja</h5>
+                <p class="card-text text-muted">Movimientos diarios, aperturas, cierres y diferencias.</p>
+                <a href="{{ url_for('reporte_caja') }}" class="btn btn-primary">
+                    <i class="fas fa-calculator me-1"></i> Generar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card card-report h-100">
+            <div class="card-body text-center">
+                <div class="report-card-icon">
+                    <i class="fas fa-user-tie"></i>
+                </div>
+                <h5 class="card-title">Reporte de Empleados</h5>
+                <p class="card-text text-muted">Rendimiento, productividad y comisiones por empleado.</p>
+                <a href="{{ url_for('reporte_empleados') }}" class="btn btn-primary">
+                    <i class="fas fa-chart-pie me-1"></i> Generar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card card-report h-100">
+            <div class="card-body text-center">
+                <div class="report-card-icon">
+                    <i class="fas fa-cut"></i>
+                </div>
+                <h5 class="card-title">Reporte de Servicios</h5>
+                <p class="card-text text-muted">Servicios más solicitados, ingresos por categoría.</p>
+                <a href="{{ url_for('reporte_servicios') }}" class="btn btn-primary">
+                    <i class="fas fa-chart-bar me-1"></i> Generar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reporte Rápido del Día -->
+<div class="row mt-4">
+    <div class="col-12">
+    </div>
+</div>
+
+<!-- Modal para mostrar alertas -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="alertModalTitle">
+                    <i class="fas fa-info-circle me-2"></i>Información
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+                <!-- El contenido se llena con JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de carga -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h5 class="mb-2">Generando Documento</h5>
+                <p class="text-muted mb-0" id="loadingText">Preparando el archivo para descarga...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Cargar estadísticas rápidas
+    $.ajax({
+        url: '/api/reportes/estadisticas-dia',
+        method: 'GET',
+        success: function(data) {
+            if (data.success) {
+                $('#ventasHoy').text('S/ ' + data.ventas_hoy.toFixed(2));
+                $('#reservasHoy').text(data.reservas_hoy);
+                $('#serviciosHoy').text(data.servicios_hoy);
+                $('#empleadosActivos').text(data.empleados_activos);
+            }
+        }
+    });
+    
+    // Funciones auxiliares para todos los reportes
+    window.showAlert = function(title, message, type = 'info') {
+        const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+        
+        // Configurar título y mensaje
+        document.getElementById('alertModalTitle').innerHTML = getAlertIcon(type) + ' ' + title;
+        document.getElementById('alertModalBody').innerHTML = message;
+        
+        // Configurar colores según el tipo
+        const modalHeader = document.querySelector('#alertModal .modal-header');
+        modalHeader.className = 'modal-header ' + getAlertClass(type);
+        
+        modal.show();
+    };
+    
+    window.showLoading = function(message = 'Procesando...') {
+        document.getElementById('loadingText').textContent = message;
+        const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+        modal.show();
+    };
+    
+    window.hideLoading = function() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+        if (modal) {
+            modal.hide();
+        }
+    };
+    
+    function getAlertIcon(type) {
+        switch(type) {
+            case 'success':
+                return '<i class="fas fa-check-circle me-2"></i>';
+            case 'error':
+                return '<i class="fas fa-exclamation-circle me-2"></i>';
+            case 'warning':
+                return '<i class="fas fa-exclamation-triangle me-2"></i>';
+            default:
+                return '<i class="fas fa-info-circle me-2"></i>';
+        }
+    }
+    
+    function getAlertClass(type) {
+        switch(type) {
+            case 'success':
+                return 'bg-success text-white';
+            case 'error':
+                return 'bg-danger text-white';
+            case 'warning':
+                return 'bg-warning text-dark';
+            default:
+                return 'bg-primary text-white';
+        }
+    }
+});
+</script>
+{% endblock %}
