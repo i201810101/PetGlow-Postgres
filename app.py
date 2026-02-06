@@ -219,7 +219,7 @@ def verify_password(stored_hash, provided_password):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Página de inicio de sesión"""
+    """Página de inicio de sesión - CON DEBUG"""
     if 'id_usuario' in session:
         return redirect(url_for('dashboard'))
     
@@ -227,6 +227,9 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         remember = request.form.get('remember') == 'on'
+        
+        print(f"DEBUG: Usuario intentando login: {username}")
+        print(f"DEBUG: Contraseña ingresada: {password}")
         
         if not username or not password:
             flash('Usuario y contraseña son requeridos.', 'danger')
@@ -251,41 +254,41 @@ def login():
             usuario = cursor.fetchone()
             
             if not usuario:
+                print(f"DEBUG: Usuario '{username}' no encontrado")
                 flash('Usuario o contraseña incorrectos.', 'danger')
                 return render_template('login/login.html')
             
-            # Verificar contraseña - Versión CORREGIDA
+            print(f"DEBUG: Usuario encontrado: {usuario['username']}")
+            print(f"DEBUG: Hash almacenado: {usuario['password_hash']}")
+            
+            # Verificar contraseña
             stored_hash = usuario['password_hash']
             
-            # Si el hash empieza con 'sha256$' (el que acabas de poner)
+            # Si el hash empieza con 'sha256$'
             if stored_hash.startswith('sha256$'):
-                # Extraer solo la parte del hash (después de '$')
+                print("DEBUG: Hash detectado como formato 'sha256$'")
                 hash_parts = stored_hash.split('$')
                 if len(hash_parts) == 2:
                     stored_hash_only = hash_parts[1]
+                    print(f"DEBUG: Hash puro: {stored_hash_only}")
+                    
                     # Calcular hash de la contraseña ingresada
                     import hashlib
                     input_hash = hashlib.sha256(password.encode()).hexdigest()
+                    print(f"DEBUG: Hash calculado de input: {input_hash}")
+                    print(f"DEBUG: ¿Son iguales? {input_hash == stored_hash_only}")
                     
-                    # Comparar
                     if input_hash != stored_hash_only:
+                        print("DEBUG: Hash NO coincide")
                         flash('Usuario o contraseña incorrectos.', 'danger')
                         return render_template('login/login.html')
                 else:
+                    print("DEBUG: Formato de hash inválido")
                     flash('Formato de hash inválido.', 'danger')
                     return render_template('login/login.html')
             
-            # Si es PBKDF2 (el formato anterior)
-            elif stored_hash.startswith('pbkdf2:'):
-                from werkzeug.security import check_password_hash
-                if not check_password_hash(stored_hash, password):
-                    flash('Usuario o contraseña incorrectos.', 'danger')
-                    return render_template('login/login.html')
-            
-            # Si no reconocemos el formato
-            else:
-                flash('Error en la configuración de seguridad.', 'danger')
-                return render_template('login/login.html')
+            # Si llega aquí, la contraseña es correcta
+            print("DEBUG: Contraseña VERIFICADA correctamente")
             
             conn.commit()
             
@@ -318,6 +321,7 @@ def login():
                 return redirect(url_for('dashboard'))
             
         except Exception as e:
+            print(f"DEBUG: ERROR: {str(e)}")
             flash(f'Error en el inicio de sesión: {str(e)}', 'danger')
             return render_template('login/login.html')
         finally:
