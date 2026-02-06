@@ -13,7 +13,7 @@ import psycopg2
 import psycopg2.extras
 import hashlib
 from functools import wraps
-from mysql.connector import Error
+
 
 # Importar configuración y base de datos
 from config.config import config
