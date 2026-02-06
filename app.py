@@ -1342,31 +1342,74 @@ def editar_servicio(id):
             cursor.execute("""
                 UPDATE servicios 
                 SET codigo = %s, nombre = %s, categoria = %s, descripcion = %s,
-                    duracion_min = %s, costo = %s, precio = %s
+                    duracion_min = %s, costo = %s, precio = %s,
+                    margen = ((%s - %s) / NULLIF(%s, 0)) * 100
                 WHERE id_servicio = %s
             """, (codigo, nombre, categoria, descripcion or None, 
-                  duracion_int, costo_float, precio_float, id))
+                  duracion_int, costo_float, precio_float,
+                  precio_float, costo_float, costo_float, id))
             conn.commit()
             
             flash(f'Servicio {nombre} actualizado exitosamente.', 'success')
             return redirect(url_for('servicios'))
         
         # GET: Obtener datos del servicio
-        cursor.execute("SELECT * FROM servicios WHERE id_servicio = %s", (id,))
-        servicio = cursor.fetchone()
+        cursor.execute("""
+            SELECT id_servicio, codigo, nombre, categoria, descripcion, 
+                   costo, precio, activo, duracion_min, margen, iva
+            FROM servicios 
+            WHERE id_servicio = %s
+        """, (id,))
         
-        if not servicio:
+        servicio_raw = cursor.fetchone()
+        
+        if not servicio_raw:
             flash('Servicio no encontrado.', 'danger')
             return redirect(url_for('servicios'))
         
-    except Error as e:
-        flash(f'Error editando servicio: {e}', 'danger')
-        return redirect(url_for('servicios'))
-    finally:
+        # Convertir a diccionario explícitamente
+        servicio = dict(servicio_raw)
+        
+        # Calcular margen si no está en la BD
+        if servicio.get('margen') is None and servicio.get('costo') and servicio.get('precio'):
+            if servicio['costo'] > 0:
+                servicio['margen'] = ((servicio['precio'] - servicio['costo']) / servicio['costo']) * 100
+            else:
+                servicio['margen'] = 0
+        
+        # Asegurar tipos de datos correctos
+        servicio['costo'] = float(servicio['costo']) if servicio['costo'] is not None else 0.0
+        servicio['precio'] = float(servicio['precio']) if servicio['precio'] is not None else 0.0
+        servicio['margen'] = float(servicio['margen']) if servicio['margen'] is not None else 0.0
+        servicio['activo'] = bool(servicio['activo']) if servicio['activo'] is not None else True
+        
+        # Obtener estadísticas para la vista (opcional)
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) as total_reservas,
+                       SUM(rs.subtotal) as total_ingresos
+                FROM reserva_servicios rs
+                WHERE rs.id_servicio = %s
+            """, (id,))
+            estadisticas = cursor.fetchone()
+            
+            if estadisticas:
+                servicio['total_reservas'] = estadisticas['total_reservas'] or 0
+                servicio['total_ingresos'] = float(estadisticas['total_ingresos']) if estadisticas['total_ingresos'] else 0.0
+        except:
+            # Si falla, establecer valores por defecto
+            servicio['total_reservas'] = 0
+            servicio['total_ingresos'] = 0.0
+        
         cursor.close()
         conn.close()
-    
-    return render_template('servicios/editar.html', servicio=servicio)
+        
+        return render_template('servicios/editar.html', servicio=servicio)
+        
+    except Error as e:
+        flash(f'Error editando servicio: {e}', 'danger')
+        print(f"Error en editar_servicio: {e}")  # Para debugging
+        return redirect(url_for('servicios'))
 
 @app.route('/servicios/eliminar/<int:id>', methods=['POST'])
 def eliminar_servicio(id):
@@ -1421,15 +1464,24 @@ def ver_servicio(id):
         cursor = conn.cursor()
         
         # Obtener datos del servicio
-        cursor.execute("SELECT * FROM servicios WHERE id_servicio = %s", (id,))
-        servicio = cursor.fetchone()
+        cursor.execute("""
+            SELECT id_servicio, codigo, nombre, categoria, descripcion, 
+                   costo, precio, activo, duracion_min, margen, iva
+            FROM servicios 
+            WHERE id_servicio = %s
+        """, (id,))
         
-        if not servicio:
+        servicio_raw = cursor.fetchone()
+        
+        if not servicio_raw:
             flash('Servicio no encontrado.', 'danger')
             return redirect(url_for('servicios'))
         
+        # Convertir a diccionario explícitamente
+        servicio = dict(servicio_raw)
+        
         # Calcular margen si no está en la BD
-        if servicio['margen'] is None and servicio['costo'] and servicio['precio']:
+        if servicio.get('margen') is None and servicio.get('costo') and servicio.get('precio'):
             if servicio['costo'] > 0:
                 servicio['margen'] = ((servicio['precio'] - servicio['costo']) / servicio['costo']) * 100
             else:
@@ -1443,20 +1495,29 @@ def ver_servicio(id):
             FROM reserva_servicios rs
             WHERE rs.id_servicio = %s
         """, (id,))
+        
         estadisticas = cursor.fetchone()
         
-        servicio['total_reservas'] = estadisticas['total_reservas'] or 0
-        servicio['total_veces'] = estadisticas['total_veces'] or 0
-        servicio['total_ingresos'] = estadisticas['total_ingresos'] or 0.0
+        # Asegurarnos de que existen las claves, incluso si son 0
+        servicio['total_reservas'] = estadisticas['total_reservas'] if estadisticas and estadisticas['total_reservas'] else 0
+        servicio['total_veces'] = estadisticas['total_veces'] if estadisticas and estadisticas['total_veces'] else 0
+        servicio['total_ingresos'] = float(estadisticas['total_ingresos']) if estadisticas and estadisticas['total_ingresos'] else 0.0
         
-    except Error as e:
-        flash(f'Error obteniendo datos del servicio: {e}', 'danger')
-        return redirect(url_for('servicios'))
-    finally:
+        # Asegurar tipos de datos correctos
+        servicio['costo'] = float(servicio['costo']) if servicio['costo'] is not None else 0.0
+        servicio['precio'] = float(servicio['precio']) if servicio['precio'] is not None else 0.0
+        servicio['margen'] = float(servicio['margen']) if servicio['margen'] is not None else 0.0
+        servicio['activo'] = bool(servicio['activo']) if servicio['activo'] is not None else True
+        
         cursor.close()
         conn.close()
-    
-    return render_template('servicios/ver.html', servicio=servicio)
+        
+        return render_template('servicios/ver.html', servicio=servicio)
+        
+    except Error as e:
+        flash(f'Error obteniendo detalles del servicio: {e}', 'danger')
+        print(f"Error en ver_servicio: {e}")  # Para debugging
+        return redirect(url_for('servicios'))
 # En tu app.py, agrega esta ruta al final
 @app.route('/api/calendario/reservas')
 def api_calendario_reservas():
