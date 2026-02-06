@@ -1020,58 +1020,77 @@ def ver_mascota(id):
             flash('Mascota no encontrada.', 'danger')
             return redirect(url_for('mascotas'))
         
-        # Obtener historial de reservas - CORREGIDO PARA POSTGRESQL
-        cursor.execute("""
-            SELECT r.*, 
-                   e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                   string_agg(s.nombre, ', ') as servicios_nombres
-            FROM reservas r
-            LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
-            LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
-            LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
-            WHERE r.id_mascota = %s
-            GROUP BY r.id_reserva, e.id_empleado
-            ORDER BY r.fecha_reserva DESC
-            LIMIT 10
-        """, (id,))
-        reservas = cursor.fetchall()
-        
-        # OBTENER HISTORIAL DE CORTES - CORREGIDO PARA POSTGRESQL
-        cursor.execute("""
-            SELECT 
-                hc.*,
-                CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
-                hc.fecha_registro
-            FROM historial_cortes hc
-            LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
-            WHERE hc.id_mascota = %s
-            ORDER BY hc.fecha_registro DESC
-            LIMIT 10
-        """, (id,))
-        historial_cortes = cursor.fetchall()
-        
-        # Formatear fechas en Python
-        for corte in historial_cortes:
-            if corte['fecha_registro']:
-                # Formato: día/mes/año hora:minutos
-                corte['fecha_formateada'] = corte['fecha_registro'].strftime('%d/%m/%Y %H:%M')
-            else:
-                corte['fecha_formateada'] = 'Fecha no disponible'
-        
-        # También formatear edad si es necesario
+        # CALCULAR EDAD SI HAY FECHA DE NACIMIENTO
         if mascota['fecha_nacimiento']:
             from datetime import datetime
             hoy = datetime.now()
             nacimiento = mascota['fecha_nacimiento']
             
-            # Calcular años y meses
-            años = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
-            meses = (hoy.month - nacimiento.month) % 12
+            # Calcular años
+            años = hoy.year - nacimiento.year
+            # Ajustar si aún no ha pasado el cumpleaños este año
+            if (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day):
+                años -= 1
+            
+            # Calcular meses restantes
+            meses = hoy.month - nacimiento.month
             if hoy.day < nacimiento.day:
                 meses -= 1
+            if meses < 0:
+                meses += 12
             
             mascota['edad_anios'] = años
             mascota['edad_meses'] = meses
+        else:
+            mascota['edad_anios'] = None
+            mascota['edad_meses'] = None
+        
+        # Obtener historial de reservas - CORREGIDO PARA POSTGRESQL
+        # Primero verifica si la tabla reservas existe
+        try:
+            cursor.execute("""
+                SELECT r.*, 
+                       e.nombre as empleado_nombre, e.apellido as empleado_apellido,
+                       string_agg(s.nombre, ', ') as servicios_nombres
+                FROM reservas r
+                LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
+                LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
+                LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
+                WHERE r.id_mascota = %s
+                GROUP BY r.id_reserva, e.id_empleado
+                ORDER BY r.fecha_reserva DESC
+                LIMIT 10
+            """, (id,))
+            reservas = cursor.fetchall()
+        except Exception as e:
+            print(f"Advertencia: Error obteniendo reservas: {e}")
+            reservas = []  # Si no existe la tabla, devolver lista vacía
+        
+        # OBTENER HISTORIAL DE CORTES - CORREGIDO PARA POSTGRESQL
+        try:
+            cursor.execute("""
+                SELECT 
+                    hc.*,
+                    CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
+                    hc.fecha_registro
+                FROM historial_cortes hc
+                LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
+                WHERE hc.id_mascota = %s
+                ORDER BY hc.fecha_registro DESC
+                LIMIT 10
+            """, (id,))
+            historial_cortes = cursor.fetchall()
+            
+            # Formatear fechas en Python
+            for corte in historial_cortes:
+                if corte['fecha_registro']:
+                    # Formato: día/mes/año hora:minutos
+                    corte['fecha_formateada'] = corte['fecha_registro'].strftime('%d/%m/%Y %H:%M')
+                else:
+                    corte['fecha_formateada'] = 'Fecha no disponible'
+        except Exception as e:
+            print(f"Advertencia: Error obteniendo historial de cortes: {e}")
+            historial_cortes = []  # Si no existe la tabla, devolver lista vacía
         
     except Exception as e:
         flash(f'Error obteniendo datos de la mascota: {e}', 'danger')
