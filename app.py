@@ -254,25 +254,38 @@ def login():
                 flash('Usuario o contraseña incorrectos.', 'danger')
                 return render_template('login/login.html')
             
-            # Verificar contraseña con PBKDF2
-            from werkzeug.security import check_password_hash
-            
-            # Tu hash actual es: pbkdf2:sha256:260000$demo$demo
-            # Para probar si "demo" es la contraseña:
+            # Verificar contraseña - Versión CORREGIDA
             stored_hash = usuario['password_hash']
             
-            # Verificar si el hash comienza con "pbkdf2:" (es PBKDF2)
-            if stored_hash.startswith('pbkdf2:'):
-                # Usar check_password_hash de werkzeug
+            # Si el hash empieza con 'sha256$' (el que acabas de poner)
+            if stored_hash.startswith('sha256$'):
+                # Extraer solo la parte del hash (después de '$')
+                hash_parts = stored_hash.split('$')
+                if len(hash_parts) == 2:
+                    stored_hash_only = hash_parts[1]
+                    # Calcular hash de la contraseña ingresada
+                    import hashlib
+                    input_hash = hashlib.sha256(password.encode()).hexdigest()
+                    
+                    # Comparar
+                    if input_hash != stored_hash_only:
+                        flash('Usuario o contraseña incorrectos.', 'danger')
+                        return render_template('login/login.html')
+                else:
+                    flash('Formato de hash inválido.', 'danger')
+                    return render_template('login/login.html')
+            
+            # Si es PBKDF2 (el formato anterior)
+            elif stored_hash.startswith('pbkdf2:'):
+                from werkzeug.security import check_password_hash
                 if not check_password_hash(stored_hash, password):
                     flash('Usuario o contraseña incorrectos.', 'danger')
                     return render_template('login/login.html')
+            
+            # Si no reconocemos el formato
             else:
-                # Hash antiguo (sha256)
-                hashed_password = hashlib.sha256(password.encode()).hexdigest()
-                if usuario['password_hash'] != hashed_password:
-                    flash('Usuario o contraseña incorrectos.', 'danger')
-                    return render_template('login/login.html')
+                flash('Error en la configuración de seguridad.', 'danger')
+                return render_template('login/login.html')
             
             conn.commit()
             
@@ -314,7 +327,6 @@ def login():
                 conn.close()
     
     return render_template('login/login.html')
-
 @app.route('/logout')
 def logout():
     """Cerrar sesión"""
