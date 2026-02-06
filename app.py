@@ -1020,28 +1020,28 @@ def ver_mascota(id):
             flash('Mascota no encontrada.', 'danger')
             return redirect(url_for('mascotas'))
         
-        # Obtener historial de reservas CORREGIDO
+        # Obtener historial de reservas - CORREGIDO PARA POSTGRESQL
         cursor.execute("""
             SELECT r.*, 
                    e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                   string_agg(s.nombre SEPARATOR ', ') as servicios_nombres
+                   string_agg(s.nombre, ', ') as servicios_nombres
             FROM reservas r
             LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE r.id_mascota = %s
-            GROUP BY r.id_reserva
+            GROUP BY r.id_reserva, e.id_empleado
             ORDER BY r.fecha_reserva DESC
             LIMIT 10
         """, (id,))
         reservas = cursor.fetchall()
         
-        # OBTENER HISTORIAL DE CORTES (NUEVO)
+        # OBTENER HISTORIAL DE CORTES - CORREGIDO PARA POSTGRESQL
         cursor.execute("""
             SELECT 
                 hc.*,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
-                DATE_FORMAT(hc.fecha_registro, '%%d/%%m/%%Y %%H:%%i') as fecha_formateada
+                hc.fecha_registro
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
             WHERE hc.id_mascota = %s
@@ -1050,7 +1050,7 @@ def ver_mascota(id):
         """, (id,))
         historial_cortes = cursor.fetchall()
         
-       # Formatear fechas en Python
+        # Formatear fechas en Python
         for corte in historial_cortes:
             if corte['fecha_registro']:
                 # Formato: día/mes/año hora:minutos
@@ -1058,7 +1058,22 @@ def ver_mascota(id):
             else:
                 corte['fecha_formateada'] = 'Fecha no disponible'
         
-    except Error as e:
+        # También formatear edad si es necesario
+        if mascota['fecha_nacimiento']:
+            from datetime import datetime
+            hoy = datetime.now()
+            nacimiento = mascota['fecha_nacimiento']
+            
+            # Calcular años y meses
+            años = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+            meses = (hoy.month - nacimiento.month) % 12
+            if hoy.day < nacimiento.day:
+                meses -= 1
+            
+            mascota['edad_anios'] = años
+            mascota['edad_meses'] = meses
+        
+    except Exception as e:
         flash(f'Error obteniendo datos de la mascota: {e}', 'danger')
         return redirect(url_for('mascotas'))
     finally:
@@ -1068,10 +1083,10 @@ def ver_mascota(id):
     return render_template('mascotas/ver.html', 
                          mascota=mascota, 
                          reservas=reservas,
-                         historial_cortes=historial_cortes)  # Agregado el historial
+                         historial_cortes=historial_cortes)
 
 def obtener_historial_cortes(id_mascota):
-    """Obtener historial de cortes de una mascota"""
+    """Obtener historial de cortes de una mascota - CORREGIDO PARA POSTGRESQL"""
     conn = get_db_connection()
     if not conn:
         return []
@@ -1082,9 +1097,7 @@ def obtener_historial_cortes(id_mascota):
             SELECT 
                 hc.*,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
-                DATE_FORMAT(hc.fecha_registro, '%%d/%%m/%%Y %%H:%%i') as fecha_formateada,
-                DATE_FORMAT(hc.fecha_registro, '%%Y-%%m-%%d') as fecha_simple,
-                TIME(hc.fecha_registro) as hora
+                hc.fecha_registro
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
             WHERE hc.id_mascota = %s
@@ -1093,8 +1106,22 @@ def obtener_historial_cortes(id_mascota):
         """, (id_mascota,))
         
         historial = cursor.fetchall()
+        
+        # Formatear fechas en Python (no usar DATE_FORMAT de MySQL)
+        for corte in historial:
+            if corte['fecha_registro']:
+                # Formato: día/mes/año hora:minutos
+                corte['fecha_formateada'] = corte['fecha_registro'].strftime('%d/%m/%Y %H:%M')
+                # Si necesitas fecha_simple y hora por separado
+                corte['fecha_simple'] = corte['fecha_registro'].strftime('%Y-%m-%d')
+                corte['hora'] = corte['fecha_registro'].strftime('%H:%M:%S')
+            else:
+                corte['fecha_formateada'] = 'Fecha no disponible'
+                corte['fecha_simple'] = ''
+                corte['hora'] = ''
+        
         return historial
-    except Error as e:
+    except Exception as e:  # Cambia Error por Exception
         print(f"Error obteniendo historial de cortes: {e}")
         return []
     finally:
@@ -1102,14 +1129,16 @@ def obtener_historial_cortes(id_mascota):
         conn.close()
 
 @app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
+@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
 def registrar_corte(id):
-    """Registrar un nuevo corte en el historial"""
+    """Registrar un nuevo corte en el historial - CORREGIDO PARA POSTGRESQL"""
     if request.method == 'POST':
         conn = get_db_connection()
         if not conn:
             flash('No hay conexión a la base de datos.', 'danger')
             return redirect(url_for('ver_mascota', id=id))
         
+        cursor = None
         try:
             # Obtener datos del formulario
             tipo_corte = request.form.get('tipo_corte', '').strip()
@@ -1129,9 +1158,8 @@ def registrar_corte(id):
             """, (tipo_corte, id))
             
             # 2. Registrar en el historial
-            # Si tienes sistema de autenticación, obtén el id_empleado de la sesión
-            # Si no, puedes usar un valor por defecto o dejarlo NULL
-            id_empleado = None  # Cambia esto según tu sistema
+            # Obtener id_empleado de la sesión si existe
+            id_empleado = session.get('id_empleado')
             
             cursor.execute("""
                 INSERT INTO historial_cortes 
@@ -1142,12 +1170,15 @@ def registrar_corte(id):
             conn.commit()
             flash(f'Corte "{tipo_corte}" registrado exitosamente.', 'success')
             
-        except Error as e:
-            conn.rollback()
+        except Exception as e:  # Cambia Error por Exception
+            if conn:
+                conn.rollback()
             flash(f'Error registrando corte: {e}', 'danger')
         finally:
-            cursor.close()
-            conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
         
         return redirect(url_for('ver_mascota', id=id))
 
