@@ -1,4 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
 import re
@@ -210,15 +211,15 @@ def dashboard():
     return render_template('dashboard.html', ultimas_reservas=ultimas_reservas, **stats)
 
 def hash_password(password):
-    """Generar hash seguro para contraseñas"""
-    # Usar sha256 con salt
-    salt = "petglow_salt_2024"
-    return hashlib.sha256((password + salt).encode()).hexdigest()
+    """Generar hash seguro para contraseñas"""   
+    return generate_password_hash(password)
+
+def verify_password(stored_hash, provided_password):
+    return check_password_hash(stored_hash, provided_password)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Página de inicio de sesión"""
-    # Si ya está logueado, redirigir al dashboard
     if 'id_usuario' in session:
         return redirect(url_for('dashboard'))
     
@@ -227,7 +228,6 @@ def login():
         password = request.form.get('password', '').strip()
         remember = request.form.get('remember') == 'on'
         
-        # Validaciones básicas
         if not username or not password:
             flash('Usuario y contraseña son requeridos.', 'danger')
             return render_template('login/login.html')
@@ -237,10 +237,10 @@ def login():
             flash('Error de conexión a la base de datos.', 'danger')
             return render_template('login/login.html')
         
+        cursor = None
         try:
             cursor = conn.cursor()
             
-            # Buscar usuario - ¡IMPORTANTE! Seleccionar id_empleado
             cursor.execute("""
                 SELECT u.*, e.id_empleado, e.nombre, e.apellido, e.email as empleado_email
                 FROM usuarios u
@@ -254,84 +254,47 @@ def login():
                 flash('Usuario o contraseña incorrectos.', 'danger')
                 return render_template('login/login.html')
             
-            # Verificar contraseña (comparar hashes)
-            hashed_password = hash_password(password)
-            if usuario['password_hash'] != hashlib.sha256(password.encode()).hexdigest():
-                # Registrar intento fallido
-                cursor.execute("""
-                    UPDATE usuarios 
-                    SET intentos_fallidos = COALESCE(intentos_fallidos, 0) + 1,
-                        ultimo_intento_fallido = NOW()
-                    WHERE id_usuario = %s
-                """, (usuario['id_usuario'],))
-                conn.commit()
-                
-                flash('Usuario o contraseña incorrectos.', 'danger')
-                return render_template('login/login.html')
+            # Verificar contraseña con PBKDF2
+            from werkzeug.security import check_password_hash
             
-            # Verificar si la cuenta está bloqueada por intentos fallidos
-            if usuario.get('intentos_fallidos', 0) >= 5:
-                # Verificar si han pasado 5 minutos desde el último intento
-                cursor.execute("""
-                    SELECT TIMESTAMPDIFF(MINUTE, ultimo_intento_fallido, NOW()) as minutos_desde_bloqueo
-                    FROM usuarios 
-                    WHERE id_usuario = %s
-                """, (usuario['id_usuario'],))
-                bloqueo = cursor.fetchone()
-                
-                if bloqueo and bloqueo['minutos_desde_bloqueo'] < 5:
-                    flash('Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta nuevamente en 5 minutos.', 'danger')
+            # Tu hash actual es: pbkdf2:sha256:260000$demo$demo
+            # Para probar si "demo" es la contraseña:
+            stored_hash = usuario['password_hash']
+            
+            # Verificar si el hash comienza con "pbkdf2:" (es PBKDF2)
+            if stored_hash.startswith('pbkdf2:'):
+                # Usar check_password_hash de werkzeug
+                if not check_password_hash(stored_hash, password):
+                    flash('Usuario o contraseña incorrectos.', 'danger')
                     return render_template('login/login.html')
-                else:
-                    # Restablecer intentos si ya pasaron 5 minutos
-                    cursor.execute("""
-                        UPDATE usuarios 
-                        SET intentos_fallidos = 0,
-                            ultimo_intento_fallido = NULL
-                        WHERE id_usuario = %s
-                    """, (usuario['id_usuario'],))
-            
-            # Restablecer intentos fallidos
-            cursor.execute("""
-                UPDATE usuarios 
-                SET intentos_fallidos = 0,
-                    ultimo_intento_fallido = NULL,
-                    ultimo_login = NOW()
-                WHERE id_usuario = %s
-            """, (usuario['id_usuario'],))
-            
-            # Registrar historial de login
-            ip_address = request.remote_addr
-            user_agent = request.headers.get('User-Agent', '')
-            
-            cursor.execute("""
-                INSERT INTO login_history (id_usuario, ip_address, user_agent)
-                VALUES (%s, %s, %s)
-            """, (usuario['id_usuario'], ip_address, user_agent))
+            else:
+                # Hash antiguo (sha256)
+                hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                if usuario['password_hash'] != hashed_password:
+                    flash('Usuario o contraseña incorrectos.', 'danger')
+                    return render_template('login/login.html')
             
             conn.commit()
             
-            # Configurar sesión - ¡AGREGAR id_empleado!
+            # Configurar sesión
             session['id_usuario'] = usuario['id_usuario']
             session['username'] = usuario['username']
             session['rol'] = usuario['rol']
             session['nombre'] = usuario.get('nombre', 'Administrador')
             session['apellido'] = usuario.get('apellido', '')
             session['email'] = usuario.get('empleado_email', '')
-            session['id_empleado'] = usuario.get('id_empleado')  # ¡ESTO ES LO QUE FALTA!
+            session['id_empleado'] = usuario.get('id_empleado')
             session['last_activity'] = datetime.now().isoformat()
             
-            # Configurar duración de sesión
             if remember:
                 session.permanent = True
-                app.permanent_session_lifetime = timedelta(days=7)  # 7 días
+                app.permanent_session_lifetime = timedelta(days=7)
             else:
                 session.permanent = True
-                app.permanent_session_lifetime = timedelta(hours=8)  # 8 horas
+                app.permanent_session_lifetime = timedelta(hours=8)
             
             flash(f'¡Bienvenido(a), {session["nombre"]}!', 'success')
             
-            # Redirigir según rol
             if usuario['rol'] == 'admin':
                 return redirect(url_for('dashboard'))
             elif usuario['rol'] == 'gerente':
@@ -345,12 +308,11 @@ def login():
             flash(f'Error en el inicio de sesión: {str(e)}', 'danger')
             return render_template('login/login.html')
         finally:
-            if 'cursor' in locals() and cursor:
+            if cursor:
                 cursor.close()
             if conn:
                 conn.close()
     
-    # GET: Mostrar formulario de login
     return render_template('login/login.html')
 
 @app.route('/logout')
