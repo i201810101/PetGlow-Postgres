@@ -1210,9 +1210,10 @@ def servicios():
     if conn:
         try:
             cursor = conn.cursor()
+            # CORRECCIÓN: Usar TRUE en lugar de 1 para booleanos
             cursor.execute("""
                 SELECT * FROM servicios 
-                WHERE activo = 1 
+                WHERE activo = TRUE  -- Cambiado de 1 a TRUE
                 ORDER BY categoria, precio
             """)
             servicios_list = cursor.fetchall()
@@ -1233,10 +1234,10 @@ def servicios():
     else:
         # Datos demo con márgenes calculados
         servicios_list = [
-            {'id_servicio': 1, 'nombre': 'Baño Básico', 'precio': 25.00, 'costo': 10.00, 'margen': 150.00, 'descripcion': 'Baño con shampoo especial', 'categoria': 'baño', 'duracion_min': 45},
-            {'id_servicio': 2, 'nombre': 'Corte de Pelo', 'precio': 35.00, 'costo': 12.00, 'margen': 191.67, 'descripcion': 'Corte profesional', 'categoria': 'corte', 'duracion_min': 60},
-            {'id_servicio': 3, 'nombre': 'Baño + Corte', 'precio': 50.00, 'costo': 20.00, 'margen': 150.00, 'descripcion': 'Servicio completo', 'categoria': 'spa', 'duracion_min': 90},
-            {'id_servicio': 4, 'nombre': 'Limpieza Dental', 'precio': 20.00, 'costo': 8.00, 'margen': 150.00, 'descripcion': 'Limpieza dental especializada', 'categoria': 'salud', 'duracion_min': 30},
+            {'id_servicio': 1, 'nombre': 'Baño Básico', 'precio': 25.00, 'costo': 10.00, 'margen': 150.00, 'descripcion': 'Baño con shampoo especial', 'categoria': 'baño', 'duracion_min': 45, 'activo': True},
+            {'id_servicio': 2, 'nombre': 'Corte de Pelo', 'precio': 35.00, 'costo': 12.00, 'margen': 191.67, 'descripcion': 'Corte profesional', 'categoria': 'corte', 'duracion_min': 60, 'activo': True},
+            {'id_servicio': 3, 'nombre': 'Baño + Corte', 'precio': 50.00, 'costo': 20.00, 'margen': 150.00, 'descripcion': 'Servicio completo', 'categoria': 'spa', 'duracion_min': 90, 'activo': True},
+            {'id_servicio': 4, 'nombre': 'Limpieza Dental', 'precio': 20.00, 'costo': 8.00, 'margen': 150.00, 'descripcion': 'Limpieza dental especializada', 'categoria': 'salud', 'duracion_min': 30, 'activo': True},
         ]
     
     return render_template('servicios/listar.html', servicios=servicios_list)
@@ -1392,8 +1393,8 @@ def eliminar_servicio(id):
                 'message': f'No se puede eliminar el servicio porque está en {result[0]} reserva(s).'
             })
         
-        # Soft delete
-        cursor.execute("UPDATE servicios SET activo = FALSE WHERE id_servicio = %s", (id,))
+        # Soft delete - CORRECCIÓN: Usar FALSE en lugar de false
+        cursor.execute("UPDATE servicios SET activo = FALSE WHERE id_servicio = %s", (id,))  # Cambiado false por FALSE
         conn.commit()
         
         if cursor.rowcount > 0:
