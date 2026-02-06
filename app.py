@@ -1573,7 +1573,7 @@ def reservas():
     """Listar reservas"""
     # Obtener parámetros de paginación
     pagina = request.args.get('pagina', 1, type=int)
-    items_por_pagina = 10  # Cambia este número si quieres más/menos items por página
+    items_por_pagina = 10
     
     conn = get_db_connection()
     reservas_list = []
@@ -1596,6 +1596,7 @@ def reservas():
             offset = (pagina - 1) * items_por_pagina
             
             # **SEGUNDO: Obtener reservas con LIMIT y OFFSET**
+            # CORRECCIÓN: string_agg() en PostgreSQL no usa SEPARATOR
             cursor.execute("""
                 SELECT r.*, 
                        m.nombre as mascota_nombre, 
@@ -1604,21 +1605,21 @@ def reservas():
                        c.apellido as cliente_apellido,
                        e.nombre as empleado_nombre, 
                        e.apellido as empleado_apellido,
-                       string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
+                       string_agg(DISTINCT s.nombre, ', ') as servicios_nombres
                 FROM reservas r
                 JOIN mascotas m ON r.id_mascota = m.id_mascota
                 JOIN clientes c ON m.id_cliente = c.id_cliente
                 JOIN empleados e ON r.id_empleado = e.id_empleado
                 LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
                 LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
-                GROUP BY r.id_reserva
+                GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.id_empleado
                 ORDER BY r.fecha_reserva DESC 
-                LIMIT %s OFFSET %s  # **AQUÍ ESTÁ LA PAGINACIÓN**
-            """, (items_por_pagina, offset))  # **Cambia LIMIT 50 por esto**
+                LIMIT %s OFFSET %s
+            """, (items_por_pagina, offset))
             
             reservas_list = cursor.fetchall()
             
-            # Formatear datos (esto ya lo tienes)
+            # Formatear datos
             for reserva in reservas_list:
                 # Estado con clase CSS
                 estado_clases = {
@@ -1639,6 +1640,10 @@ def reservas():
                     reserva['estado_texto'] = 'Vencida'
                 else:
                     reserva['vencida'] = False
+                    
+                # Asegurar que servicios_nombres sea string (puede ser None si no hay servicios)
+                if reserva['servicios_nombres'] is None:
+                    reserva['servicios_nombres'] = ''
             
             cursor.close()
         except Error as e:
@@ -1673,7 +1678,6 @@ def reservas():
                          pagina_actual=pagina,
                          total_paginas=total_paginas,
                          total_reservas=total_reservas)
-
 # ================= RUTAS DE RESERVAS =================
 
 @app.route('/reservas/crear', methods=['GET', 'POST'])
