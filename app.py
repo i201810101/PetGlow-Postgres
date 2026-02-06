@@ -9,7 +9,8 @@ from flask import current_app
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 import hashlib
 from functools import wraps
 from mysql.connector import Error
@@ -89,19 +90,20 @@ def admin_required(f):
 
 # Configuración de la base de datos MySQL
 def get_db_connection():
-    """Obtener conexión a MySQL"""
     try:
-        connection = mysql.connector.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=int(os.getenv('DB_PORT', 3306)),
-            database=os.getenv('DB_NAME', 'petglowbd'),
-            user=os.getenv('DB_USER', 'root'),
-            password=os.getenv('DB_PASSWORD', '')
+        DATABASE_URL = os.getenv("DATABASE_URL")
+
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            cursor_factory=psycopg2.extras.DictCursor
         )
-        return connection
-    except Error as e:
-        print(f"❌ Error conectando a MySQL: {e}")
+
+        return conn
+
+    except Exception as e:
+        print("ERROR CONEXION POSTGRES:", e)
         return None
+
 
 # Middleware para establecer valores por defecto en sesión
 @app.before_request
@@ -144,24 +146,24 @@ def dashboard():
             cursor = conn.cursor(dictionary=True)
             
             # Verificar si las tablas existen
-            cursor.execute("SHOW TABLES LIKE 'clientes'")
+            cursor.execute("SELECT to_regclass( public.clientes)")
             if cursor.fetchone():
                 # Total clientes
                 cursor.execute("SELECT COUNT(*) as total FROM clientes")
                 result = cursor.fetchone()
                 stats['total_clientes'] = result['total'] if result else 15
             
-            cursor.execute("SHOW TABLES LIKE 'mascotas'")
+            cursor.execute("SELECT to_regclass (public.mascotas)")
             if cursor.fetchone():
                 # Total mascotas
                 cursor.execute("SELECT COUNT(*) as total FROM mascotas")
                 result = cursor.fetchone()
                 stats['total_mascotas'] = result['total'] if result else 42
             
-            cursor.execute("SHOW TABLES LIKE 'reservas'")
+            cursor.execute("SELECT to_regclass( public.reservas)")
             if cursor.fetchone():
                 # Reservas de hoy
-                cursor.execute("SELECT COUNT(*) as total FROM reservas WHERE DATE(fecha_reserva) = CURDATE()")
+                cursor.execute("SELECT COUNT(*) as total FROM reservas WHERE DATE(fecha_reserva) = CURRENT_DATE")
                 result = cursor.fetchone()
                 stats['reservas_hoy'] = result['total'] if result else 5
                 
@@ -171,7 +173,7 @@ def dashboard():
                            m.nombre as mascota_nombre, m.especie,
                            c.nombre as cliente_nombre, c.apellido as cliente_apellido,
                            e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                           GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
+                           string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
                     FROM reservas r
                     JOIN mascotas m ON r.id_mascota = m.id_mascota
                     JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -184,13 +186,13 @@ def dashboard():
                 """)
                 ultimas_reservas = cursor.fetchall()  # ← Obtener las reservas reales
             
-            cursor.execute("SHOW TABLES LIKE 'facturas'")
+            cursor.execute("SELECT to_regclass( public.facturas)")
             if cursor.fetchone():
                 # Ventas de hoy
                 cursor.execute("""
                     SELECT COALESCE(SUM(total), 0) as total 
                     FROM facturas 
-                    WHERE DATE(fecha_emision) = CURDATE() AND estado = 'pagada'
+                    WHERE DATE(fecha_emision) = CURRENT_DATE AND estado = 'pagada'
                 """)
                 result = cursor.fetchone()
                 stats['ventas_hoy'] = float(result['total']) if result and result['total'] else 850.0
@@ -1041,7 +1043,7 @@ def ver_mascota(id):
         cursor.execute("""
             SELECT r.*, 
                    e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                   GROUP_CONCAT(s.nombre SEPARATOR ', ') as servicios_nombres
+                   string_agg(s.nombre SEPARATOR ', ') as servicios_nombres
             FROM reservas r
             LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
@@ -1509,7 +1511,7 @@ def reservas():
                        c.apellido as cliente_apellido,
                        e.nombre as empleado_nombre, 
                        e.apellido as empleado_apellido,
-                       GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
+                       string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
                 FROM reservas r
                 JOIN mascotas m ON r.id_mascota = m.id_mascota
                 JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -2294,7 +2296,7 @@ def empleado_reservas():
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
-                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
                 SUM(s.duracion_min) as duracion_total
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
@@ -2303,7 +2305,7 @@ def empleado_reservas():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE r.id_empleado = %s
-            AND DATE(r.fecha_reserva) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+            AND DATE(r.fecha_reserva) BETWEEN CURRENT_DATE AND DATE_ADD(CURRENT_DATE, INTERVAL 7 DAY)
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
             GROUP BY r.id_reserva
             ORDER BY 
@@ -2327,7 +2329,7 @@ def empleado_reservas():
                 SUM(CASE WHEN estado = 'en_proceso' THEN 1 ELSE 0 END) as en_proceso
             FROM reservas 
             WHERE id_empleado = %s 
-            AND DATE(fecha_reserva) >= CURDATE()
+            AND DATE(fecha_reserva) >= CURRENT_DATE
             AND estado IN ('pendiente', 'confirmada', 'en_proceso')
         """, (id_empleado,))
         
@@ -2442,7 +2444,7 @@ def api_reservas_hoy_empleado():
                 c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
                 SUM(s.duracion_min) as duracion_total
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
@@ -2450,7 +2452,7 @@ def api_reservas_hoy_empleado():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE r.id_empleado = %s
-            AND DATE(r.fecha_reserva) = CURDATE()
+            AND DATE(r.fecha_reserva) = CURRENT_DATE
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
             GROUP BY r.id_reserva
             ORDER BY r.fecha_reserva ASC
@@ -2628,7 +2630,7 @@ def api_monitor_reservas():
                 c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                GROUP_CONCAT(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_asignado,
                 e.nombre as empleado_nombre,
                 e.apellido as empleado_apellido
@@ -2638,7 +2640,7 @@ def api_monitor_reservas():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
-            WHERE DATE(r.fecha_reserva) = CURDATE()
+            WHERE DATE(r.fecha_reserva) = CURRENT_DATE
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso', 'completada')
             GROUP BY r.id_reserva
             ORDER BY 
@@ -2785,8 +2787,8 @@ def obtener_datos_mascota(id):
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
                 c.email as cliente_email,
-                TIMESTAMPDIFF(YEAR, m.fecha_nacimiento, CURDATE()) as edad_anios,
-                TIMESTAMPDIFF(MONTH, m.fecha_nacimiento, CURDATE()) % 12 as edad_meses
+                TIMESTAMPDIFF(YEAR, m.fecha_nacimiento, CURRENT_DATE) as edad_anios,
+                TIMESTAMPDIFF(MONTH, m.fecha_nacimiento, CURRENT_DATE) % 12 as edad_meses
             FROM mascotas m
             JOIN clientes c ON m.id_cliente = c.id_cliente
             WHERE m.id_mascota = %s
@@ -3631,7 +3633,7 @@ def apertura_caja():
                 # Verificar si ya hay caja abierta hoy para este empleado
                 cursor.execute("""
                     SELECT id_caja FROM caja_diaria 
-                    WHERE fecha = CURDATE() 
+                    WHERE fecha = CURRENT_DATE 
                     AND id_empleado_cajero = %s
                     AND estado = 'abierta'
                 """, (id_empleado,))
@@ -3645,7 +3647,7 @@ def apertura_caja():
                     cursor.execute("""
                         INSERT INTO caja_diaria 
                         (fecha, id_empleado_cajero, monto_apertura, estado, hora_apertura)
-                        VALUES (CURDATE(), %s, %s, 'abierta', NOW())
+                        VALUES (CURRENT_DATE, %s, %s, 'abierta', NOW())
                     """, (id_empleado, monto_apertura))
                     
                     conn.commit()
@@ -3692,7 +3694,7 @@ def cierre_caja():
             SELECT c.*, CONCAT(e.nombre, ' ', e.apellido) as cajero
             FROM caja_diaria c
             JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
-            WHERE fecha = CURDATE() 
+            WHERE fecha = CURRENT_DATE 
             AND estado = 'abierta'
             AND c.id_empleado_cajero = %s
         """, (id_empleado,))
@@ -3789,7 +3791,7 @@ def estado_caja():
             SELECT c.*, CONCAT(e.nombre, ' ', e.apellido) as cajero
             FROM caja_diaria c
             JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
-            WHERE fecha = CURDATE() 
+            WHERE fecha = CURRENT_DATE 
             AND estado = 'abierta'
             AND c.id_empleado_cajero = %s
         """, (id_empleado,))
@@ -4035,7 +4037,7 @@ def pagar_factura(id):
         cursor.execute("""
             SELECT id_caja 
             FROM caja_diaria 
-            WHERE fecha = CURDATE() 
+            WHERE fecha = CURRENT_DATE 
             AND estado = 'abierta'
             AND id_empleado_cajero = %s
             LIMIT 1
@@ -5502,12 +5504,12 @@ def reporte_empleados():
                 SUM(f.total) as ingresos_mes
             FROM empleados e
             LEFT JOIN reservas r ON e.id_empleado = r.id_empleado
-                AND MONTH(r.fecha_reserva) = MONTH(CURDATE())
-                AND YEAR(r.fecha_reserva) = YEAR(CURDATE())
+                AND MONTH(r.fecha_reserva) = MONTH(CURRENT_DATE)
+                AND YEAR(r.fecha_reserva) = YEAR(CURRENT_DATE)
             LEFT JOIN facturas f ON r.id_reserva = f.id_reserva
                 AND f.estado = 'pagada'
-                AND MONTH(f.fecha_emision) = MONTH(CURDATE())
-                AND YEAR(f.fecha_emision) = YEAR(CURDATE())
+                AND MONTH(f.fecha_emision) = MONTH(CURRENT_DATE)
+                AND YEAR(f.fecha_emision) = YEAR(CURRENT_DATE)
             WHERE e.activo = TRUE
             GROUP BY e.id_empleado, e.nombre, e.apellido
             ORDER BY ingresos_mes DESC
@@ -5699,7 +5701,7 @@ def api_estadisticas_dia():
         cursor.execute("""
             SELECT COALESCE(SUM(total), 0) as ventas_hoy
             FROM facturas
-            WHERE DATE(fecha_emision) = CURDATE()
+            WHERE DATE(fecha_emision) = CURRENT_DATE
                 AND estado = 'pagada'
         """)
         ventas = cursor.fetchone()
@@ -5708,7 +5710,7 @@ def api_estadisticas_dia():
         cursor.execute("""
             SELECT COUNT(*) as reservas_hoy
             FROM reservas
-            WHERE DATE(fecha_reserva) = CURDATE()
+            WHERE DATE(fecha_reserva) = CURRENT_DATE
         """)
         reservas = cursor.fetchone()
         
@@ -5717,7 +5719,7 @@ def api_estadisticas_dia():
             SELECT COUNT(*) as servicios_hoy
             FROM reserva_servicios rs
             JOIN reservas r ON rs.id_reserva = r.id_reserva
-            WHERE DATE(r.fecha_reserva) = CURDATE()
+            WHERE DATE(r.fecha_reserva) = CURRENT_DATE
         """)
         servicios = cursor.fetchone()
         
