@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import psycopg2
+from psycopg2 import Error
 import psycopg2.extras
 import hashlib
 from functools import wraps
