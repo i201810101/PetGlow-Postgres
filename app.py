@@ -341,12 +341,14 @@ def login():
             else:
                 return redirect(url_for('dashboard'))
             
-        except Error as e:
+        except Exception as e:
             flash(f'Error en el inicio de sesión: {str(e)}', 'danger')
             return render_template('login/login.html')
         finally:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if conn:
+                conn.close()
     
     # GET: Mostrar formulario de login
     return render_template('login/login.html')
