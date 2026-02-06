@@ -96,24 +96,6 @@
                                   rows="3" placeholder="Describe el servicio, incluye detalles importantes...">{{ servicio.descripcion or '' }}</textarea>
                     </div>
                     
-                    <!-- Información del margen -->
-                    <div class="alert alert-info mt-3">
-                        <h6 class="alert-heading"><i class="fas fa-chart-line me-2"></i>Análisis del Servicio</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <p class="mb-1"><strong>Costo:</strong> S/ {{ "%.2f"|format(servicio.costo) }}</p>
-                            </div>
-                            <div class="col-md-4">
-                                <p class="mb-1"><strong>Precio:</strong> S/ {{ "%.2f"|format(servicio.precio) }}</p>
-                            </div>
-                            <div class="col-md-4">
-                                <p class="mb-1"><strong>Margen Actual:</strong> 
-                                    <span class="badge {{ 'bg-success' if servicio.margen > 100 else 'bg-warning' if servicio.margen > 50 else 'bg-info' }}">
-                                        {{ "%.1f"|format(servicio.margen) }}%
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
                         <p class="mb-0 mt-2">
                             <small>
                                 Utilidad por servicio: S/ {{ "%.2f"|format(servicio.precio - servicio.costo) }} | 
