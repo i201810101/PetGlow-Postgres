@@ -144,7 +144,7 @@ def dashboard():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # Verificar si las tablas existen
             cursor.execute("SELECT to_regclass( public.clientes)")
@@ -238,7 +238,7 @@ def login():
             return render_template('login/login.html')
         
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # Buscar usuario - ¡IMPORTANTE! Seleccionar id_empleado
             cursor.execute("""
@@ -359,7 +359,7 @@ def logout():
         conn = get_db_connection()
         if conn:
             try:
-                cursor = conn.cursor(dictionary=True)
+                cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE usuarios 
                     SET ultimo_logout = NOW()
@@ -413,7 +413,7 @@ def ventas():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT f.*, 
                        c.nombre as cliente_nombre, 
@@ -469,7 +469,7 @@ def clientes():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # 1. Contar total de clientes
             cursor.execute("SELECT COUNT(*) as total FROM clientes")
@@ -578,7 +578,7 @@ def editar_cliente(id):
         return redirect(url_for('clientes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         if request.method == 'POST':
             # Obtener TODOS los datos del formulario
@@ -657,7 +657,7 @@ def eliminar_cliente(id):
         return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el cliente tiene mascotas asociadas
         cursor.execute("SELECT COUNT(*) as total FROM mascotas WHERE id_cliente = %s", (id,))
@@ -699,7 +699,7 @@ def ver_cliente(id):
         return redirect(url_for('clientes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos del cliente
         cursor.execute("SELECT * FROM clientes WHERE id_cliente = %s", (id,))
@@ -737,7 +737,7 @@ def mascotas():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # Contar total de mascotas
             cursor.execute("SELECT COUNT(*) as total FROM mascotas")
@@ -854,7 +854,7 @@ def crear_mascota():
     
     # GET: Obtener clientes para el select
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
         clientes = cursor.fetchall()
         cursor.close()
@@ -876,7 +876,7 @@ def editar_mascota(id):
         return redirect(url_for('mascotas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         if request.method == 'POST':
             # Obtener datos del formulario
@@ -1023,7 +1023,7 @@ def ver_mascota(id):
         return redirect(url_for('mascotas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos de la mascota con información del cliente
         cursor.execute("""
@@ -1097,7 +1097,7 @@ def obtener_historial_cortes(id_mascota):
         return []
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT 
                 hc.*,
@@ -1179,7 +1179,7 @@ def servicios():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT * FROM servicios 
                 WHERE activo = 1 
@@ -1278,7 +1278,7 @@ def editar_servicio(id):
         return redirect(url_for('servicios'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         if request.method == 'POST':
             # Obtener datos del formulario
@@ -1387,7 +1387,7 @@ def ver_servicio(id):
         return redirect(url_for('servicios'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos del servicio
         cursor.execute("SELECT * FROM servicios WHERE id_servicio = %s", (id,))
@@ -1490,7 +1490,7 @@ def reservas():
     
     if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # **PRIMERO: Contar el TOTAL de reservas**
             cursor.execute("SELECT COUNT(*) as total FROM reservas")
@@ -1594,7 +1594,7 @@ def crear_reserva():
         return redirect(url_for('reservas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         if request.method == 'POST':
             # Obtener datos del formulario
@@ -1821,7 +1821,7 @@ def editar_reserva(id):
         return redirect(url_for('reservas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Primero obtener la reserva actual
         cursor.execute("""
@@ -2226,7 +2226,7 @@ def api_empleado_info():
         return jsonify({'success': False, 'message': 'Error de conexión'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener información del empleado
         cursor.execute("""
@@ -2279,7 +2279,7 @@ def empleado_reservas():
         return redirect(url_for('dashboard'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener reservas asignadas a este empleado
         # Hoy + próximos 7 días
@@ -2379,7 +2379,7 @@ def api_cambiar_estado_reserva_empleado(id):
         return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         id_empleado = session.get('id_empleado')
         
         # Verificar que la reserva pertenece a este empleado
@@ -2428,7 +2428,7 @@ def api_reservas_hoy_empleado():
         return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Reservas de hoy para este empleado
         cursor.execute("""
@@ -2525,7 +2525,7 @@ def api_tomar_reserva(id):
         return jsonify({'success': False, 'message': 'Error de conexión.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Verificar que la reserva existe
         cursor.execute("""
@@ -2590,7 +2590,7 @@ def api_monitor_reservas():
         return jsonify({'error': 'Error de conexión'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener ID del empleado actual DE LA SESIÓN
         id_empleado = session.get('id_empleado')
@@ -2685,7 +2685,7 @@ def api_monitor_empleados():
         return jsonify({'success': False, 'error': 'Error de conexión'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener todos los empleados activos (EXCLUYENDO al Admin Sistema - ID 1)
         cursor.execute("""
@@ -2719,7 +2719,7 @@ def devolver_reserva(id):
         return jsonify({'success': False, 'message': 'Error de conexión.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Verificar que la reserva existe y está en_proceso
         cursor.execute("""
@@ -2778,7 +2778,7 @@ def obtener_datos_mascota(id):
         return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos completos de la mascota
         cursor.execute("""
@@ -2866,7 +2866,7 @@ def actualizar_datos_mascota_reserva(id):
             if not color:
                 return jsonify({'success': False, 'error': 'El campo Color es obligatorio'})
             
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # Verificar si la mascota existe
             cursor.execute("SELECT id_mascota, corte FROM mascotas WHERE id_mascota = %s", (id,))
@@ -3001,7 +3001,7 @@ def ver_factura(id):
         return redirect(url_for('ventas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Obtener datos de la factura
         cursor.execute("""
@@ -3104,7 +3104,7 @@ def ver_reserva(id):
         return redirect(url_for('reservas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos principales de la reserva
         cursor.execute("""
@@ -3204,7 +3204,7 @@ def cambiar_estado_reserva(id):
             return jsonify({'success': False, 'message': 'No hay conexión a la base de datos'}), 500
         
         try:
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor()
             
             # 1. Obtener la reserva actual
             cursor.execute("""
@@ -3327,7 +3327,7 @@ def test_correo(id):
             flash('No hay conexión a la base de datos.', 'danger')
             return redirect(url_for('reservas'))
         
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener datos de la reserva
         cursor.execute("""
@@ -3401,7 +3401,7 @@ def facturar_reserva(id):
         return redirect(url_for('ver_reserva', id=id))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Verificar que la reserva existe y está completada
         cursor.execute("""
@@ -3629,7 +3629,7 @@ def apertura_caja():
             
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor(dictionary=True)
+                cursor = conn.cursor()
                 
                 # Verificar si ya hay caja abierta hoy para este empleado
                 cursor.execute("""
@@ -3687,7 +3687,7 @@ def cierre_caja():
         return redirect(url_for('dashboard'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         id_empleado = session.get('id_empleado', 1)
         
         # Obtener caja abierta actual
@@ -3785,7 +3785,7 @@ def estado_caja():
         return jsonify({'caja_abierta': False, 'message': 'Sin conexión a BD'})
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         id_empleado = session.get('id_empleado', 1)
         
         cursor.execute("""
@@ -3822,7 +3822,7 @@ def historial_caja():
         return redirect(url_for('dashboard'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener últimas 30 cajas
         cursor.execute("""
@@ -3892,7 +3892,7 @@ def crear_venta():
         return redirect(url_for('ventas'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener clientes para el select
         cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
@@ -3963,7 +3963,7 @@ def pagar_factura(id):
         if monto_pagado <= 0:
             return jsonify({'success': False, 'message': 'El monto debe ser mayor a 0.'}), 400
         
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Obtener factura
         cursor.execute("""
@@ -4120,7 +4120,7 @@ def anular_factura(id):
         return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar que la factura existe
         cursor.execute("SELECT estado, numero FROM facturas WHERE id_factura = %s", (id,))
@@ -4177,7 +4177,7 @@ def api_get_empleados():
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT id_empleado, dni, nombre, apellido, telefono, email, 
                    especialidad, fecha_contratacion, activo
@@ -4208,7 +4208,7 @@ def api_create_empleado():
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el DNI ya existe
         cursor.execute("SELECT id_empleado FROM empleados WHERE dni = %s", (data['dni'],))
@@ -4287,7 +4287,7 @@ def api_get_empleado(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT id_empleado, dni, nombre, apellido, telefono, email, 
                    especialidad, fecha_contratacion, activo
@@ -4316,7 +4316,7 @@ def api_update_empleado(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el empleado existe
         cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
@@ -4388,7 +4388,7 @@ def api_delete_empleado(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el empleado existe
         cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
@@ -4419,7 +4419,7 @@ def api_get_usuario_empleado(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el empleado existe
         cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
@@ -4467,7 +4467,7 @@ def api_create_usuario_empleado(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el empleado existe
         cursor.execute("SELECT id_empleado FROM empleados WHERE id_empleado = %s", (id,))
@@ -4517,7 +4517,7 @@ def api_update_usuario(id):
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el usuario existe
         cursor.execute("SELECT id_usuario FROM usuarios WHERE id_usuario = %s", (id,))
@@ -4574,7 +4574,7 @@ def api_get_estadisticas_empleados():
         return jsonify({'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Estadísticas básicas
         cursor.execute("""
@@ -4633,7 +4633,7 @@ def exportar_empleados():
         return redirect(url_for('empleados'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT dni, nombre, apellido, telefono, email, especialidad,
                    fecha_contratacion, 
@@ -4696,7 +4696,7 @@ def verificar_disponibilidad_empleado(id):
         return jsonify({'disponible': False, 'mensaje': 'Error de conexión'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         fecha = request.args.get('fecha')
         hora = request.args.get('hora')
@@ -4781,7 +4781,7 @@ def usuarios():
         return redirect(url_for('index'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener todos los usuarios
         cursor.execute("""
@@ -4857,7 +4857,7 @@ def api_crear_usuario():
         return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el usuario ya existe
         cursor.execute("SELECT id_usuario FROM usuarios WHERE username = %s", (data['username'],))
@@ -4895,7 +4895,7 @@ def api_obtener_usuario(id):
         return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Obtener usuario
         cursor.execute("""
@@ -4955,7 +4955,7 @@ def api_actualizar_usuario(id):
         return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el usuario existe
         cursor.execute("SELECT id_usuario FROM usuarios WHERE id_usuario = %s", (id,))
@@ -5011,7 +5011,7 @@ def api_eliminar_usuario(id):
         return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Verificar si el usuario existe
         cursor.execute("SELECT id_usuario, rol FROM usuarios WHERE id_usuario = %s", (id,))
@@ -5169,7 +5169,7 @@ def reporte_ventas():
         return redirect(url_for('reportes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Estadísticas generales del período
         cursor.execute("""
@@ -5314,7 +5314,7 @@ def reporte_caja():
         return redirect(url_for('reportes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Cierres de caja en el período
         cursor.execute("""
@@ -5424,7 +5424,7 @@ def reporte_empleados():
         return redirect(url_for('reportes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Estadísticas generales de empleados
         cursor.execute("""
@@ -5568,7 +5568,7 @@ def reporte_servicios():
         return redirect(url_for('reportes'))
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Estadísticas generales de servicios
         cursor.execute("""
@@ -5696,7 +5696,7 @@ def api_estadisticas_dia():
         return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'}), 500
     
     try:
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Ventas del día
         cursor.execute("""
@@ -5803,7 +5803,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             flash('Error de conexión.', 'danger')
             return redirect(url_for('reportes'))
         
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         if reporte == 'ventas':
             # Datos principales de ventas
@@ -5960,7 +5960,7 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
         if not conn:
             return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
         
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Datos principales
         cursor.execute("""
@@ -6196,7 +6196,7 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             flash('Error de conexión.', 'danger')
             return redirect(url_for('reporte_ventas'))
         
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # 1. Estadísticas generales
         cursor.execute("""
@@ -6407,7 +6407,7 @@ def exportar_excel_caja(fecha_inicio, fecha_fin):
         from flask import send_file
         
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Cierres de caja
         cursor.execute("""
@@ -6462,7 +6462,7 @@ def exportar_excel_empleados(fecha_inicio, fecha_fin):
         from flask import send_file
         
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Rendimiento de empleados
         cursor.execute("""
@@ -6531,7 +6531,7 @@ def exportar_excel_servicios(fecha_inicio, fecha_fin):
         from flask import send_file
         
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         
         # Servicios más vendidos
         cursor.execute("""
