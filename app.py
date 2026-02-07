@@ -1677,7 +1677,6 @@ def reservas():
             offset = (pagina - 1) * items_por_pagina
             
             # **SEGUNDO: Obtener reservas con LIMIT y OFFSET**
-            # CORRECCIÓN: string_agg() en PostgreSQL no usa SEPARATOR
             cursor.execute("""
                 SELECT r.*, 
                        m.nombre as mascota_nombre, 
@@ -1698,10 +1697,13 @@ def reservas():
                 LIMIT %s OFFSET %s
             """, (items_por_pagina, offset))
             
-            reservas_list = cursor.fetchall()
+            reservas_list_raw = cursor.fetchall()  # Cambio de nombre aquí
             
-            # Formatear datos
-            for reserva in reservas_list:
+            # ====== ¡IMPORTANTE!: CONVERTIR A DICT MUTABLE ======
+            for reserva in reservas_list_raw:
+                # Convertir RealDictRow a diccionario mutable
+                reserva_dict = dict(reserva)  # <-- ¡ESTO ES CLAVE!
+                
                 # Estado con clase CSS
                 estado_clases = {
                     'pendiente': 'bg-warning',
@@ -1711,20 +1713,23 @@ def reservas():
                     'cancelada': 'bg-danger',
                     'no_show': 'bg-secondary'
                 }
-                reserva['estado_clase'] = estado_clases.get(reserva['estado'], 'bg-secondary')
-                reserva['estado_texto'] = reserva['estado'].replace('_', ' ').title()
+                reserva_dict['estado_clase'] = estado_clases.get(reserva_dict['estado'], 'bg-secondary')
+                reserva_dict['estado_texto'] = reserva_dict['estado'].replace('_', ' ').title()
                 
                 # Verificar si está vencida
-                if reserva['estado'] == 'pendiente' and reserva['fecha_reserva'] < datetime.now():
-                    reserva['vencida'] = True
-                    reserva['estado_clase'] = 'bg-dark'
-                    reserva['estado_texto'] = 'Vencida'
+                if reserva_dict['estado'] == 'pendiente' and reserva_dict['fecha_reserva'] < datetime.now():
+                    reserva_dict['vencida'] = True
+                    reserva_dict['estado_clase'] = 'bg-dark'
+                    reserva_dict['estado_texto'] = 'Vencida'
                 else:
-                    reserva['vencida'] = False
+                    reserva_dict['vencida'] = False
                     
                 # Asegurar que servicios_nombres sea string (puede ser None si no hay servicios)
-                if reserva['servicios_nombres'] is None:
-                    reserva['servicios_nombres'] = ''
+                if reserva_dict['servicios_nombres'] is None:
+                    reserva_dict['servicios_nombres'] = ''
+                
+                # Agregar a la lista final
+                reservas_list.append(reserva_dict)  # <-- Agregar el dict mutable
             
             cursor.close()
         except Error as e:
@@ -1733,7 +1738,7 @@ def reservas():
         finally:
             conn.close()
     else:
-        # Datos demo
+        # Datos demo (ya son diccionarios)
         total_reservas = 1
         total_paginas = 1
         reservas_list = [
