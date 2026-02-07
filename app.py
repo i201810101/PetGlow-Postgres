@@ -859,8 +859,87 @@ def editar_mascota(id):
         cursor = conn.cursor()
         
         if request.method == 'POST':
-            # ... (código POST existente, sin cambios) ...
-            return redirect(url_for('mascotas'))
+            # Obtener datos del formulario
+            id_cliente = request.form.get('id_cliente', '').strip()
+            nombre = request.form.get('nombre', '').strip()
+            especie = request.form.get('especie', 'perro').strip()
+            raza = request.form.get('raza', '').strip()
+            tamano = request.form.get('tamano', '').strip()
+            fecha_nacimiento = request.form.get('fecha_nacimiento', '').strip()
+            peso = request.form.get('peso', '').strip()
+            color = request.form.get('color', '').strip()
+            corte = request.form.get('corte', '').strip()  # Asegurar captura del corte
+            caracteristicas = request.form.get('caracteristicas', '').strip()
+            alergias = request.form.get('alergias', '').strip()
+            
+            # Validaciones básicas
+            if not id_cliente or not nombre:
+                flash('Cliente y nombre de mascota son obligatorios.', 'danger')
+                return redirect(url_for('editar_mascota', id=id))
+            
+            # Convertir fecha
+            fecha_nacimiento_dt = None
+            if fecha_nacimiento:
+                try:
+                    fecha_nacimiento_dt = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
+                except ValueError:
+                    flash('Formato de fecha inválido. Use YYYY-MM-DD.', 'danger')
+                    return redirect(url_for('editar_mascota', id=id))
+            
+            # Convertir peso
+            peso_float = None
+            if peso:
+                try:
+                    peso_float = float(peso)
+                except ValueError:
+                    flash('Peso debe ser un número válido.', 'danger')
+                    return redirect(url_for('editar_mascota', id=id))
+            
+            # Obtener el corte actual ANTES de actualizar
+            cursor.execute("SELECT corte, nombre FROM mascotas WHERE id_mascota = %s", (id,))
+            mascota_actual = cursor.fetchone()
+            
+            if not mascota_actual:
+                flash('Mascota no encontrada.', 'danger')
+                return redirect(url_for('mascotas'))
+            
+            corte_anterior = mascota_actual['corte'] if mascota_actual else None
+            nombre_mascota = mascota_actual['nombre']
+            
+            # Actualizar mascota
+            cursor.execute("""
+                UPDATE mascotas 
+                SET id_cliente = %s, nombre = %s, especie = %s, raza = %s, tamano = %s,
+                    fecha_nacimiento = %s, peso = %s, color = %s, corte = %s, 
+                    caracteristicas = %s, alergias = %s
+                WHERE id_mascota = %s
+            """, (
+                id_cliente, nombre, especie, raza or None, tamano or None,
+                fecha_nacimiento_dt, peso_float, color or None, corte or None,
+                caracteristicas or None, alergias or None, id
+            ))
+            
+            # Registrar en historial si el corte cambió
+            if corte and corte != corte_anterior:
+                try:
+                    # Obtener id del empleado de la sesión o usar NULL
+                    id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
+                    
+                    descripcion = f"Cambio de corte: {corte_anterior or 'Sin corte'} → {corte}"
+                    notas = f"Actualizado al editar mascota"
+                    
+                    cursor.execute("""
+                        INSERT INTO historial_cortes (id_mascota, tipo_corte, descripcion, id_empleado, notas)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (id, corte, descripcion, id_empleado, notas))
+                except Exception as e:
+                    print(f"Error registrando en historial de cortes: {e}")
+                    # No interrumpir por error en historial
+            
+            conn.commit()
+            
+            flash(f'Mascota {nombre} actualizada exitosamente.', 'success')
+            return redirect(url_for('ver_mascota', id=id))  # Redirigir a ver, no a listar
         
         # GET: Obtener datos de la mascota
         cursor.execute("SELECT * FROM mascotas WHERE id_mascota = %s", (id,))
@@ -886,9 +965,10 @@ def editar_mascota(id):
         mascota['peso'] = mascota.get('peso') or ''
         mascota['caracteristicas'] = mascota.get('caracteristicas') or ''
         mascota['alergias'] = mascota.get('alergias') or ''
+        mascota['tamano'] = mascota.get('tamano') or ''
         
         # Obtener clientes para el select
-        cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
+        cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes WHERE activo = TRUE ORDER BY apellido, nombre")
         clientes_raw = cursor.fetchall()
         
         # Convertir clientes a diccionarios
@@ -896,9 +976,9 @@ def editar_mascota(id):
         for cliente in clientes_raw:
             clientes.append(dict(cliente))
         
-    except Error as e:
+    except Exception as e:
         flash(f'Error editando mascota: {e}', 'danger')
-        print(f"Error detallado: {e}")  # Para debugging
+        print(f"Error detallado en editar_mascota: {e}")
         return redirect(url_for('mascotas'))
     finally:
         cursor.close()
