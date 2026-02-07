@@ -2031,6 +2031,10 @@ def editar_reserva(id):
             flash('Reserva no encontrada.', 'danger')
             return redirect(url_for('reservas'))
         
+        # ========== ¡CONVERTIR A DICT MUTABLE! ==========
+        reserva = dict(reserva)
+        # ==============================================
+        
         if request.method == 'POST':
             # Obtener datos del formulario
             id_mascota = request.form.get('id_mascota', '').strip()
@@ -3337,9 +3341,9 @@ def ver_reserva(id):
             flash('Reserva no encontrada.', 'danger')
             return redirect(url_for('reservas'))
         
-        # ========== ¡AÑADE ESTA LÍNEA! ==========
-        reserva = dict(reserva)  # Convertir RealDictRow a diccionario mutable
-        # ========================================
+        # ========== ¡CONVERTIR A DICT MUTABLE! ==========
+        reserva = dict(reserva)
+        # ==============================================
         
         # Calcular tiempo restante si es pendiente
         if reserva['estado'] == 'pendiente' and reserva['fecha_reserva'] > datetime.now():
@@ -3356,10 +3360,24 @@ def ver_reserva(id):
             JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE rs.id_reserva = %s
         """, (id,))
-        servicios = cursor.fetchall()
+        servicios_raw = cursor.fetchall()
         
-        # Calcular total
-        total = sum(s['subtotal'] for s in servicios) if servicios else 0
+        # Convertir servicios a dicts mutables
+        servicios = []
+        total = 0
+        for servicio in servicios_raw:
+            servicio_dict = dict(servicio)
+            
+            # Calcular subtotal si no existe
+            if 'subtotal' not in servicio_dict or not servicio_dict['subtotal']:
+                if 'precio_unitario' in servicio_dict and servicio_dict['precio_unitario']:
+                    cantidad = servicio_dict.get('cantidad', 1)
+                    servicio_dict['subtotal'] = float(servicio_dict['precio_unitario']) * int(cantidad)
+                else:
+                    servicio_dict['subtotal'] = 0
+            
+            total += float(servicio_dict['subtotal'])
+            servicios.append(servicio_dict)
         
         # Obtener factura asociada si existe
         cursor.execute("""
@@ -3369,15 +3387,21 @@ def ver_reserva(id):
             ORDER BY f.fecha_emision DESC 
             LIMIT 1
         """, (id,))
-        factura = cursor.fetchone()
+        factura_raw = cursor.fetchone()
         
-        # Ahora puedes asignar nuevas claves porque reserva es un dict mutable
+        # Convertir factura a dict si existe
+        factura = None
+        if factura_raw:
+            factura = dict(factura_raw)
+        
+        # Ahora podemos agregar nuevas claves
         reserva['servicios'] = servicios
         reserva['total'] = total
         reserva['factura'] = factura
         
     except Error as e:
         flash(f'Error obteniendo datos de la reserva: {e}', 'danger')
+        print(f"ERROR en ver_reserva: {e}")  # Para debug
         return redirect(url_for('reservas'))
     finally:
         cursor.close()
