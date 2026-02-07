@@ -1880,13 +1880,23 @@ def crear_reserva():
             next_id = cursor.fetchone()['next_id']
             codigo_reserva = f"RES-{datetime.now().strftime('%y%m%d')}-{next_id:04d}"
             
-            # Crear reserva
+            # ===== CORRECCIÓN PARA POSTGRESQL =====
+            # Crear reserva y obtener el ID insertado usando RETURNING
             cursor.execute("""
                 INSERT INTO reservas (codigo_reserva, id_mascota, id_empleado, fecha_reserva, notas)
                 VALUES (%s, %s, %s, %s, %s)
+                RETURNING id_reserva
             """, (codigo_reserva, id_mascota, id_empleado, fecha_hora_dt, notas or None))
             
-            id_reserva = cursor.lastrowid
+            # Obtener el ID de la reserva creada
+            result = cursor.fetchone()
+            id_reserva = result['id_reserva'] if result else None
+            
+            if not id_reserva:
+                flash('Error al crear la reserva: No se pudo obtener el ID.', 'danger')
+                return redirect(url_for('crear_reserva'))
+            
+            print(f"DEBUG: Reserva creada con ID: {id_reserva}")
             
             # Agregar servicios a la reserva
             for servicio_id in servicios:
@@ -1897,6 +1907,7 @@ def crear_reserva():
                         INSERT INTO reserva_servicios (id_reserva, id_servicio, precio_unitario)
                         VALUES (%s, %s, %s)
                     """, (id_reserva, servicio_id, servicio['precio']))
+                    print(f"DEBUG: Servicio {servicio_id} agregado a reserva {id_reserva}")
             
             conn.commit()
             
@@ -1987,7 +1998,6 @@ def crear_reserva():
                          fecha_minima=fecha_minima,
                          hora_minima=hora_minima,
                          empleado_admin_id=empleado_admin_id)
-
 @app.route('/reservas/editar/<int:id>', methods=['GET', 'POST'])
 def editar_reserva(id):
     """Editar reserva existente"""
