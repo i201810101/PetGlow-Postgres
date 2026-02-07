@@ -968,7 +968,7 @@ def editar_mascota(id):
         mascota['tamano'] = mascota.get('tamano') or ''
         
         # Obtener clientes para el select
-        cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes WHERE activo = TRUE ORDER BY apellido, nombre")
+        cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
         clientes_raw = cursor.fetchall()
         
         # Convertir clientes a diccionarios
