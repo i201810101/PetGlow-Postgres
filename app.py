@@ -229,7 +229,6 @@ def login():
         remember = request.form.get('remember') == 'on'
         
         print(f"DEBUG: Usuario intentando login: {username}")
-        print(f"DEBUG: Contraseña ingresada: {password}")
         
         if not username or not password:
             flash('Usuario y contraseña son requeridos.', 'danger')
@@ -259,7 +258,6 @@ def login():
                 return render_template('login/login.html')
             
             print(f"DEBUG: Usuario encontrado: {usuario['username']}")
-            print(f"DEBUG: Hash almacenado: {usuario['password_hash']}")
             
             # Verificar contraseña
             stored_hash = usuario['password_hash']
@@ -286,11 +284,39 @@ def login():
                     print("DEBUG: Formato de hash inválido")
                     flash('Formato de hash inválido.', 'danger')
                     return render_template('login/login.html')
+            else:
+                # Si no es formato sha256$, comparar directamente
+                print("DEBUG: Hash NO tiene formato sha256$")
+                import hashlib
+                input_hash = hashlib.sha256(password.encode()).hexdigest()
+                if input_hash != stored_hash:
+                    print("DEBUG: Hash NO coincide")
+                    flash('Usuario o contraseña incorrectos.', 'danger')
+                    return render_template('login/login.html')
             
             # Si llega aquí, la contraseña es correcta
             print("DEBUG: Contraseña VERIFICADA correctamente")
             
+            # 1. ACTUALIZAR último login en tabla usuarios
+            print("DEBUG: Actualizando ultimo_login...")
+            cursor.execute("""
+                UPDATE usuarios 
+                SET ultimo_login = CURRENT_TIMESTAMP 
+                WHERE id_usuario = %s
+            """, (usuario['id_usuario'],))
+            
+            # 2. REGISTRAR en login_history
+            print("DEBUG: Registrando en login_history...")
+            ip_address = request.remote_addr
+            user_agent = request.headers.get('User-Agent', '')
+            
+            cursor.execute("""
+                INSERT INTO login_history (id_usuario, ip_address, user_agent)
+                VALUES (%s, %s, %s)
+            """, (usuario['id_usuario'], ip_address, user_agent))
+            
             conn.commit()
+            print("DEBUG: Base de datos actualizada correctamente")
             
             # Configurar sesión
             session['id_usuario'] = usuario['id_usuario']
@@ -4963,9 +4989,6 @@ def verificar_disponibilidad_empleado(id):
 @admin_required  # Solo administradores pueden ver usuarios
 def usuarios():
     """Listar usuarios del sistema"""
-    if 'id_usuario' not in session:
-        return redirect(url_for('login'))
-    
     conn = get_db_connection()
     if not conn:
         flash('No hay conexión a la base de datos.', 'danger')
@@ -4976,23 +4999,42 @@ def usuarios():
         
         # Obtener todos los usuarios
         cursor.execute("""
-            SELECT u.*, e.nombre as empleado_nombre, e.apellido as empleado_apellido, 
-                   e.email, e.dni as empleado_dni
+            SELECT u.*, 
+                   e.nombre as empleado_nombre, 
+                   e.apellido as empleado_apellido, 
+                   e.email as empleado_email,
+                   e.dni as empleado_dni
             FROM usuarios u
             LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
             ORDER BY u.id_usuario DESC
         """)
-        usuarios = cursor.fetchall()
+        
+        usuarios_raw = cursor.fetchall()
+        
+        # Convertir a diccionarios y formatear
+        usuarios = []
+        for usuario in usuarios_raw:
+            user_dict = dict(usuario)
+            
+            # Convertir booleano
+            user_dict['activo'] = bool(user_dict['activo'])
+            
+            # Formatear fechas si existen
+            if user_dict['ultimo_login']:
+                # Mantener como datetime para que la plantilla pueda usar .strftime()
+                pass  # Se queda como datetime
+            else:
+                user_dict['ultimo_login'] = None
+            
+            if user_dict['fecha_creacion']:
+                pass  # Se queda como datetime
+            
+            usuarios.append(user_dict)
         
         # Estadísticas
-        cursor.execute("SELECT COUNT(*) as total FROM usuarios")
-        total_usuarios = cursor.fetchone()['total']
-        
-        cursor.execute("SELECT COUNT(*) as activos FROM usuarios WHERE activo = TRUE")
-        usuarios_activos = cursor.fetchone()['activos']
-        
-        cursor.execute("SELECT COUNT(*) as admins FROM usuarios WHERE rol = 'admin'")
-        administradores = cursor.fetchone()['admins']
+        total_usuarios = len(usuarios)
+        usuarios_activos = sum(1 for u in usuarios if u['activo'])
+        administradores = sum(1 for u in usuarios if u['rol'] == 'admin')
         
         # Obtener empleados sin usuario
         cursor.execute("""
@@ -5001,12 +5043,16 @@ def usuarios():
             WHERE u.id_usuario IS NULL AND e.activo = TRUE
             ORDER BY e.nombre
         """)
-        empleados_sin_usuario = cursor.fetchall()
+        empleados_sin_usuario_raw = cursor.fetchall()
+        
+        empleados_sin_usuario = []
+        for emp in empleados_sin_usuario_raw:
+            empleados_sin_usuario.append(dict(emp))
         
         # Último registro
         ultimo_registro = None
-        if usuarios:
-            ultimo_registro = usuarios[0].get('fecha_creacion')
+        if usuarios and usuarios[0].get('fecha_creacion'):
+            ultimo_registro = usuarios[0]['fecha_creacion'].strftime('%d/%m/%Y')
         
     except Error as e:
         flash(f'Error cargando usuarios: {e}', 'danger')
@@ -5101,7 +5147,7 @@ def api_obtener_usuario(id):
                 COALESCE(e.nombre, '') as nombre,
                 COALESCE(e.apellido, '') as apellido,
                 COALESCE(e.dni, '') as dni,
-                COALESCE(e.email, '') as email_empleado
+                COALESCE(e.email, '') as email
             FROM usuarios u
             LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
             WHERE u.id_usuario = %s
@@ -5123,10 +5169,12 @@ def api_obtener_usuario(id):
         if 'activo' in usuario:
             usuario['activo'] = bool(usuario['activo'])
         
-        # Formatear fechas
+        # Formatear fechas para JSON
         for field in ['fecha_creacion', 'ultimo_login']:
             if field in usuario and usuario[field]:
-                usuario[field] = usuario[field].strftime('%Y-%m-%d %H:%M:%S')
+                usuario[field] = usuario[field].isoformat()
+            else:
+                usuario[field] = None
         
         # Intentar obtener historial de login
         try:
@@ -5139,8 +5187,15 @@ def api_obtener_usuario(id):
             """, (id,))
             
             historial_raw = cursor.fetchall()
-            # Convertir historial a lista de diccionarios
-            usuario['historial_login'] = [dict(h) for h in historial_raw]
+            # Convertir historial a lista de diccionarios y formatear fechas
+            historial = []
+            for h in historial_raw:
+                hist_item = dict(h)
+                if hist_item.get('fecha_login'):
+                    hist_item['fecha_login'] = hist_item['fecha_login'].isoformat()
+                historial.append(hist_item)
+            
+            usuario['historial_login'] = historial
         except Exception as e:
             print(f"Advertencia: No se pudo obtener historial de login: {e}")
             usuario['historial_login'] = []
