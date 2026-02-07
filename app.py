@@ -5088,9 +5088,20 @@ def api_obtener_usuario(id):
     try:
         cursor = conn.cursor()
         
-        # Obtener usuario
+        # Obtener usuario - USAR COALESCE para manejar NULLs
         cursor.execute("""
-            SELECT u.*, e.nombre, e.apellido, e.dni, e.email
+            SELECT 
+                u.id_usuario,
+                u.username,
+                u.id_empleado,
+                u.rol,
+                u.activo,
+                u.fecha_creacion,
+                u.ultimo_login,
+                COALESCE(e.nombre, '') as nombre,
+                COALESCE(e.apellido, '') as apellido,
+                COALESCE(e.dni, '') as dni,
+                COALESCE(e.email, '') as email_empleado
             FROM usuarios u
             LEFT JOIN empleados e ON u.id_empleado = e.id_empleado
             WHERE u.id_usuario = %s
@@ -5108,7 +5119,16 @@ def api_obtener_usuario(id):
         if 'password_hash' in usuario:
             del usuario['password_hash']
         
-        # Intentar obtener historial de login (manejar error si no existe la tabla)
+        # Manejar valores booleanos de PostgreSQL
+        if 'activo' in usuario:
+            usuario['activo'] = bool(usuario['activo'])
+        
+        # Formatear fechas
+        for field in ['fecha_creacion', 'ultimo_login']:
+            if field in usuario and usuario[field]:
+                usuario[field] = usuario[field].strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Intentar obtener historial de login
         try:
             cursor.execute("""
                 SELECT fecha_login, ip_address, user_agent
