@@ -501,15 +501,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // ==================== FUNCIONES GLOBALES ====================
 
 // Función para abrir modal de edición
+// Función para abrir modal de edición - CON MEJOR MANEJO DE DATOS
 window.editarUsuario = function(id) {
     console.log(`Editando usuario ID: ${id}`);
-    
-    // Mostrar indicador de carga
-    const modalElement = document.getElementById('modalEditarUsuario');
-    if (modalElement) {
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    }
     
     // Cargar datos del usuario
     fetch(`/api/usuarios/${id}`)
@@ -523,56 +517,36 @@ window.editarUsuario = function(id) {
         .then(data => {
             console.log('Datos recibidos:', data);
             
-            // Verificar si hay error en la respuesta
-            if (data.error) {
-                throw new Error(data.error);
+            if (!data.success) {
+                throw new Error(data.error || 'Error desconocido');
             }
             
-            // Tu API devuelve el usuario directamente, no dentro de {success: true, usuario: {...}}
-            const usuario = data;
+            const usuario = data.usuario;
             
             // Llenar formulario
-            const idUsuarioInput = document.getElementById('editar_id_usuario');
-            const usernameInput = document.getElementById('editar_username');
-            const rolInput = document.getElementById('editar_rol');
-            const activoInput = document.getElementById('editar_activo');
+            document.getElementById('editar_id_usuario').value = usuario.id_usuario || '';
+            document.getElementById('editar_username').value = usuario.username || '';
+            document.getElementById('editar_rol').value = usuario.rol || '';
             
-            if (idUsuarioInput) idUsuarioInput.value = usuario.id_usuario;
-            if (usernameInput) usernameInput.value = usuario.username || '';
-            if (rolInput) rolInput.value = usuario.rol || '';
-            
-            // Manejar campo activo (puede ser boolean, integer o string)
-            let activoValor = false;
-            if (usuario.activo !== undefined && usuario.activo !== null) {
-                activoValor = usuario.activo === true || usuario.activo === 1 || usuario.activo === '1';
-            }
-            
-            if (activoInput) {
-                activoInput.checked = activoValor;
-            }
+            // Manejar booleano (PostgreSQL devuelve true/false)
+            const activo = usuario.activo === true || usuario.activo === 1 || usuario.activo === '1';
+            document.getElementById('editar_activo').checked = activo;
             
             // Limpiar contraseña
-            const passwordInput = document.getElementById('editar_password');
-            if (passwordInput) passwordInput.value = '';
+            document.getElementById('editar_password').value = '';
             
             // Mostrar información del empleado si existe
             const infoEmpleado = document.getElementById('info-empleado');
             if (infoEmpleado) {
-                if (usuario.nombre && usuario.apellido) {
+                // Verificar si hay nombre y apellido (no vacíos después de trim)
+                const nombre = (usuario.nombre || '').trim();
+                const apellido = (usuario.apellido || '').trim();
+                
+                if (nombre && apellido) {
                     infoEmpleado.innerHTML = `
                         <div class="alert alert-info mb-3">
                             <h6><i class="fas fa-user-tie me-2"></i>Empleado Asociado</h6>
-                            <p class="mb-1"><strong>Nombre:</strong> ${usuario.nombre} ${usuario.apellido}</p>
-                            ${usuario.dni ? `<p class="mb-1"><strong>DNI:</strong> ${usuario.dni}</p>` : ''}
-                            ${usuario.email ? `<p class="mb-0"><strong>Email:</strong> ${usuario.email}</p>` : ''}
-                        </div>
-                    `;
-                } else if (usuario.empleado_nombre && usuario.empleado_apellido) {
-                    // Si los datos vienen con prefijo empleado_
-                    infoEmpleado.innerHTML = `
-                        <div class="alert alert-info mb-3">
-                            <h6><i class="fas fa-user-tie me-2"></i>Empleado Asociado</h6>
-                            <p class="mb-1"><strong>Nombre:</strong> ${usuario.empleado_nombre} ${usuario.empleado_apellido}</p>
+                            <p class="mb-1"><strong>Nombre:</strong> ${nombre} ${apellido}</p>
                             ${usuario.dni ? `<p class="mb-1"><strong>DNI:</strong> ${usuario.dni}</p>` : ''}
                             ${usuario.email ? `<p class="mb-0"><strong>Email:</strong> ${usuario.email}</p>` : ''}
                         </div>
@@ -587,22 +561,15 @@ window.editarUsuario = function(id) {
                 }
             }
             
-            // Cargar historial de login
-            cargarHistorialLogin(id);
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
+            modal.show();
         })
         .catch(error => {
             console.error('Error cargando usuario:', error);
-            
-            // Cerrar modal si está abierto
-            const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario'));
-            if (modalInstance) {
-                modalInstance.hide();
-            }
-            
-            // Mostrar alerta de error
-            mostrarNotificacion('❌ Error al cargar usuario', 'error', error.message);
+            alert('Error al cargar usuario: ' + error.message);
         });
-}
+};
 
 // Función para cargar historial de login
 function cargarHistorialLogin(idUsuario) {
