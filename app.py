@@ -5096,22 +5096,34 @@ def api_obtener_usuario(id):
             WHERE u.id_usuario = %s
         """, (id,))
         
-        usuario = cursor.fetchone()
+        usuario_raw = cursor.fetchone()
         
-        if not usuario:
+        if not usuario_raw:
             return jsonify({'success': False, 'error': 'Usuario no encontrado'}), 404
         
-        # Obtener historial de login (últimos 5)
-        cursor.execute("""
-            SELECT fecha_login, ip_address, user_agent
-            FROM login_history
-            WHERE id_usuario = %s
-            ORDER BY fecha_login DESC
-            LIMIT 5
-        """, (id,))
+        # Convertir a diccionario
+        usuario = dict(usuario_raw)
         
-        historial = cursor.fetchall()
-        usuario['historial_login'] = historial
+        # Remover password_hash por seguridad
+        if 'password_hash' in usuario:
+            del usuario['password_hash']
+        
+        # Intentar obtener historial de login (manejar error si no existe la tabla)
+        try:
+            cursor.execute("""
+                SELECT fecha_login, ip_address, user_agent
+                FROM login_history
+                WHERE id_usuario = %s
+                ORDER BY fecha_login DESC
+                LIMIT 5
+            """, (id,))
+            
+            historial_raw = cursor.fetchall()
+            # Convertir historial a lista de diccionarios
+            usuario['historial_login'] = [dict(h) for h in historial_raw]
+        except Exception as e:
+            print(f"Advertencia: No se pudo obtener historial de login: {e}")
+            usuario['historial_login'] = []
         
         return jsonify({'success': True, 'usuario': usuario})
         
@@ -5120,7 +5132,7 @@ def api_obtener_usuario(id):
     finally:
         cursor.close()
         conn.close()
-
+        
 @app.route('/api/usuarios/<int:id>', methods=['PUT'])
 def api_actualizar_usuario(id):
     """Actualizar un usuario (API)"""
