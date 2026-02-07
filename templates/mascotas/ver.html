@@ -57,7 +57,7 @@
                                 <p><strong>Fecha Nacimiento:</strong> 
                                     {% if mascota.fecha_nacimiento %}
                                         {{ mascota.fecha_nacimiento.strftime('%d/%m/%Y') }}
-                                        {% if mascota.edad_anios is not none %}
+                                        {% if mascota.edad_anios is defined and mascota.edad_anios is not none %}
                                             ({{ mascota.edad_anios }} años, {{ mascota.edad_meses }} meses)
                                         {% endif %}
                                     {% else %}
