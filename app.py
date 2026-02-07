@@ -4280,7 +4280,25 @@ def api_get_empleados():
             FROM empleados
             ORDER BY nombre, apellido
         """)
-        empleados = cursor.fetchall()
+        
+        # Convertir resultados a lista de diccionarios
+        empleados_raw = cursor.fetchall()
+        empleados = []
+        
+        for empleado in empleados_raw:
+            empleado_dict = dict(empleado)
+            
+            # Formatear fechas para JSON
+            if empleado_dict['fecha_contratacion']:
+                empleado_dict['fecha_contratacion'] = empleado_dict['fecha_contratacion'].strftime('%Y-%m-%d')
+            
+            # Asegurar que los campos sean strings
+            empleado_dict['telefono'] = str(empleado_dict['telefono']) if empleado_dict['telefono'] else ''
+            empleado_dict['email'] = str(empleado_dict['email']) if empleado_dict['email'] else ''
+            empleado_dict['especialidad'] = str(empleado_dict['especialidad']) if empleado_dict['especialidad'] else ''
+            
+            empleados.append(empleado_dict)
+        
         return jsonify(empleados)
     except Error as e:
         return jsonify({'error': str(e)}), 500
@@ -4364,7 +4382,14 @@ def api_create_empleado():
             FROM empleados
             WHERE id_empleado = %s
         """, (id_empleado,))
-        empleado = cursor.fetchone()
+        empleado_raw = cursor.fetchone()
+        
+        # Convertir a diccionario
+        empleado = dict(empleado_raw)
+        
+        # Formatear fecha
+        if empleado['fecha_contratacion']:
+            empleado['fecha_contratacion'] = empleado['fecha_contratacion'].strftime('%Y-%m-%d')
         
         return jsonify({'success': True, 'empleado': empleado})
         
@@ -4390,10 +4415,23 @@ def api_get_empleado(id):
             FROM empleados
             WHERE id_empleado = %s
         """, (id,))
-        empleado = cursor.fetchone()
+        empleado_raw = cursor.fetchone()
         
-        if not empleado:
+        if not empleado_raw:
             return jsonify({'error': 'Empleado no encontrado'}), 404
+        
+        # Convertir a diccionario
+        empleado = dict(empleado_raw)
+        
+        # Formatear fechas
+        if empleado['fecha_contratacion']:
+            empleado['fecha_contratacion'] = empleado['fecha_contratacion'].strftime('%Y-%m-%d')
+        
+        # Asegurar tipos de datos
+        empleado['telefono'] = str(empleado['telefono']) if empleado['telefono'] else ''
+        empleado['email'] = str(empleado['email']) if empleado['email'] else ''
+        empleado['especialidad'] = str(empleado['especialidad']) if empleado['especialidad'] else ''
+        empleado['activo'] = bool(empleado['activo'])
         
         return jsonify(empleado)
     except Error as e:
@@ -4528,9 +4566,11 @@ def api_get_usuario_empleado(id):
             FROM usuarios
             WHERE id_empleado = %s
         """, (id,))
-        usuario = cursor.fetchone()
+        usuario_raw = cursor.fetchone()
         
-        if usuario:
+        if usuario_raw:
+            usuario = dict(usuario_raw)
+            
             # Formatear fechas
             if usuario['fecha_creacion']:
                 usuario['fecha_creacion'] = usuario['fecha_creacion'].strftime('%d/%m/%Y %H:%M')
