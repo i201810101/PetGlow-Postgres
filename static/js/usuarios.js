@@ -454,34 +454,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function mostrarNotificacion(titulo, tipo, mensaje) {
-        // Eliminar notificaciones previas
-        document.querySelectorAll('.notificacion-usuario').forEach(n => n.remove());
-        
-        const tipos = {
-            'success': 'alert-success',
-            'error': 'alert-danger',
-            'warning': 'alert-warning',
-            'info': 'alert-info'
-        };
-        
-        const alerta = document.createElement('div');
-        alerta.className = `alert ${tipos[tipo]} alert-dismissible fade show notificacion-usuario`;
-        alerta.style.cssText = 'position:fixed; top:80px; right:20px; z-index:1050; min-width:300px; max-width:400px';
-        
-        alerta.innerHTML = `
-            <strong>${titulo}</strong>
-            ${mensaje ? `<p class="mb-0 mt-2">${mensaje}</p>` : ''}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        document.body.appendChild(alerta);
-        
-        setTimeout(() => {
-            if (alerta.parentNode) {
-                alerta.remove();
-            }
-        }, 5000);
-    }
+    // Eliminar notificaciones previas
+    document.querySelectorAll('.notificacion-usuario').forEach(n => n.remove());
+    
+    const tipos = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    };
+    
+    const alerta = document.createElement('div');
+    alerta.className = `alert ${tipos[tipo]} alert-dismissible fade show notificacion-usuario`;
+    alerta.style.cssText = 'position:fixed; top:80px; right:20px; z-index:1050; min-width:300px; max-width:400px';
+    
+    alerta.innerHTML = `
+        <strong>${titulo}</strong>
+        ${mensaje ? `<p class="mb-0 mt-2">${mensaje}</p>` : ''}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alerta);
+    
+    setTimeout(() => {
+        if (alerta.parentNode) {
+            alerta.remove();
+        }
+    }, 5000);
+}
     
     // ==================== INICIALIZACIÓN ====================
     
@@ -502,7 +502,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Función para abrir modal de edición
 window.editarUsuario = function(id) {
-    console.log(`Editando usuario ID: ${id}`); // Para depuración
+    console.log(`Editando usuario ID: ${id}`);
+    
+    // Mostrar indicador de carga
+    const modalElement = document.getElementById('modalEditarUsuario');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
     
     // Cargar datos del usuario
     fetch(`/api/usuarios/${id}`)
@@ -514,22 +521,39 @@ window.editarUsuario = function(id) {
             return response.json();
         })
         .then(data => {
-            console.log('Datos recibidos:', data); // Para depuración
+            console.log('Datos recibidos:', data);
             
-            if (!data.success) {
-                throw new Error(data.error || 'Error desconocido');
+            // Verificar si hay error en la respuesta
+            if (data.error) {
+                throw new Error(data.error);
             }
             
-            const usuario = data.usuario;
+            // Tu API devuelve el usuario directamente, no dentro de {success: true, usuario: {...}}
+            const usuario = data;
             
             // Llenar formulario
-            document.getElementById('editar_id_usuario').value = usuario.id_usuario;
-            document.getElementById('editar_username').value = usuario.username;
-            document.getElementById('editar_rol').value = usuario.rol;
-            document.getElementById('editar_activo').checked = usuario.activo === 1 || usuario.activo === true;
+            const idUsuarioInput = document.getElementById('editar_id_usuario');
+            const usernameInput = document.getElementById('editar_username');
+            const rolInput = document.getElementById('editar_rol');
+            const activoInput = document.getElementById('editar_activo');
+            
+            if (idUsuarioInput) idUsuarioInput.value = usuario.id_usuario;
+            if (usernameInput) usernameInput.value = usuario.username || '';
+            if (rolInput) rolInput.value = usuario.rol || '';
+            
+            // Manejar campo activo (puede ser boolean, integer o string)
+            let activoValor = false;
+            if (usuario.activo !== undefined && usuario.activo !== null) {
+                activoValor = usuario.activo === true || usuario.activo === 1 || usuario.activo === '1';
+            }
+            
+            if (activoInput) {
+                activoInput.checked = activoValor;
+            }
             
             // Limpiar contraseña
-            document.getElementById('editar_password').value = '';
+            const passwordInput = document.getElementById('editar_password');
+            if (passwordInput) passwordInput.value = '';
             
             // Mostrar información del empleado si existe
             const infoEmpleado = document.getElementById('info-empleado');
@@ -539,6 +563,16 @@ window.editarUsuario = function(id) {
                         <div class="alert alert-info mb-3">
                             <h6><i class="fas fa-user-tie me-2"></i>Empleado Asociado</h6>
                             <p class="mb-1"><strong>Nombre:</strong> ${usuario.nombre} ${usuario.apellido}</p>
+                            ${usuario.dni ? `<p class="mb-1"><strong>DNI:</strong> ${usuario.dni}</p>` : ''}
+                            ${usuario.email ? `<p class="mb-0"><strong>Email:</strong> ${usuario.email}</p>` : ''}
+                        </div>
+                    `;
+                } else if (usuario.empleado_nombre && usuario.empleado_apellido) {
+                    // Si los datos vienen con prefijo empleado_
+                    infoEmpleado.innerHTML = `
+                        <div class="alert alert-info mb-3">
+                            <h6><i class="fas fa-user-tie me-2"></i>Empleado Asociado</h6>
+                            <p class="mb-1"><strong>Nombre:</strong> ${usuario.empleado_nombre} ${usuario.empleado_apellido}</p>
                             ${usuario.dni ? `<p class="mb-1"><strong>DNI:</strong> ${usuario.dni}</p>` : ''}
                             ${usuario.email ? `<p class="mb-0"><strong>Email:</strong> ${usuario.email}</p>` : ''}
                         </div>
@@ -555,14 +589,18 @@ window.editarUsuario = function(id) {
             
             // Cargar historial de login
             cargarHistorialLogin(id);
-            
-            // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
-            modal.show();
         })
         .catch(error => {
             console.error('Error cargando usuario:', error);
-            alert('Error al cargar usuario: ' + error.message);
+            
+            // Cerrar modal si está abierto
+            const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuario'));
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            
+            // Mostrar alerta de error
+            mostrarNotificacion('❌ Error al cargar usuario', 'error', error.message);
         });
 }
 
@@ -573,54 +611,48 @@ function cargarHistorialLogin(idUsuario) {
     
     contenedor.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Cargando historial...</p>';
     
+    // Si no tienes endpoint específico para historial, usa datos básicos
     fetch(`/api/usuarios/${idUsuario}`)
         .then(response => response.json())
-        .then(data => {
-            if (data.success && data.usuario.historial_login && data.usuario.historial_login.length > 0) {
-                const historial = data.usuario.historial_login;
-                let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
-                html += '<thead><tr><th>Fecha</th><th>IP</th><th>Dispositivo</th></tr></thead><tbody>';
+        .then(usuario => {
+            let html = '';
+            
+            // Mostrar información básica de login
+            if (usuario.ultimo_login) {
+                const ultimoLogin = new Date(usuario.ultimo_login);
+                const fechaStr = ultimoLogin.toLocaleDateString('es-ES');
+                const horaStr = ultimoLogin.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 
-                historial.forEach(login => {
-                    const fecha = new Date(login.fecha_login);
-                    const fechaStr = fecha.toLocaleDateString('es-ES');
-                    const horaStr = fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                    
-                    // Acortar user agent
-                    let dispositivo = login.user_agent || '';
-                    if (dispositivo.length > 50) {
-                        dispositivo = dispositivo.substring(0, 50) + '...';
-                    }
-                    
-                    html += `
-                        <tr>
-                            <td><small>${fechaStr}<br>${horaStr}</small></td>
-                            <td><small>${login.ip_address || 'N/A'}</small></td>
-                            <td><small>${dispositivo}</small></td>
-                        </tr>
-                    `;
-                });
-                
-                html += '</tbody></table></div>';
-                contenedor.innerHTML = html;
+                html = `
+                    <div class="alert alert-light border">
+                        <h6 class="mb-2"><i class="fas fa-sign-in-alt me-2"></i>Información de Acceso</h6>
+                        <p class="mb-1"><strong>Fecha Creación:</strong> ${usuario.fecha_creacion ? new Date(usuario.fecha_creacion).toLocaleDateString('es-ES') : 'No disponible'}</p>
+                        <p class="mb-1"><strong>Último Login:</strong> ${fechaStr} ${horaStr}</p>
+                        ${usuario.activo ? '<p class="mb-0"><strong>Estado:</strong> <span class="badge bg-success">Activo</span></p>' : '<p class="mb-0"><strong>Estado:</strong> <span class="badge bg-secondary">Inactivo</span></p>'}
+                    </div>
+                `;
             } else {
-                contenedor.innerHTML = `
-                    <p class="text-muted text-center py-3">
-                        <i class="fas fa-history me-2"></i>No hay historial de login disponible
-                    </p>
+                html = `
+                    <div class="alert alert-light border">
+                        <h6 class="mb-2"><i class="fas fa-sign-in-alt me-2"></i>Información de Acceso</h6>
+                        <p class="mb-1"><strong>Fecha Creación:</strong> ${usuario.fecha_creacion ? new Date(usuario.fecha_creacion).toLocaleDateString('es-ES') : 'No disponible'}</p>
+                        <p class="mb-0"><strong>Último Login:</strong> <span class="text-muted">Nunca ha iniciado sesión</span></p>
+                    </div>
                 `;
             }
+            
+            contenedor.innerHTML = html;
         })
         .catch(error => {
             console.error('Error cargando historial:', error);
             contenedor.innerHTML = `
-                <p class="text-danger text-center py-3">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Error al cargar historial
-                </p>
+                <div class="alert alert-light border">
+                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Información de Acceso</h6>
+                    <p class="text-muted mb-0">No se pudo cargar el historial de acceso</p>
+                </div>
             `;
         });
 }
-
 // Exponer funciones al scope global
 window.mostrarModalEliminar = mostrarModalEliminar;
 window.editarUsuario = editarUsuario;
