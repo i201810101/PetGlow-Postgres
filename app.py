@@ -2949,7 +2949,7 @@ def devolver_reserva(id):
 
 @app.route('/api/mascota/<int:id>')
 def obtener_datos_mascota(id):
-    """Obtener datos completos de una mascota para AJAX"""
+    """Obtener datos completos de una mascota para AJAX - CORREGIDO PARA POSTGRESQL"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
@@ -2957,31 +2957,56 @@ def obtener_datos_mascota(id):
     try:
         cursor = conn.cursor()
         
-        # Obtener datos completos de la mascota
+        # Obtener datos completos de la mascota - CORREGIDO PARA POSTGRESQL
         cursor.execute("""
             SELECT 
                 m.*, 
                 c.nombre as cliente_nombre, 
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                c.email as cliente_email,
-                TIMESTAMPDIFF(YEAR, m.fecha_nacimiento, CURRENT_DATE) as edad_anios,
-                TIMESTAMPDIFF(MONTH, m.fecha_nacimiento, CURRENT_DATE) % 12 as edad_meses
+                c.email as cliente_email
             FROM mascotas m
             JOIN clientes c ON m.id_cliente = c.id_cliente
             WHERE m.id_mascota = %s
         """, (id,))
         
-        mascota = cursor.fetchone()
+        mascota_raw = cursor.fetchone()
         
-        if not mascota:
+        if not mascota_raw:
             return jsonify({'success': False, 'error': 'Mascota no encontrada'})
         
-        # OBTENER HISTORIAL DE CORTES - ¡SOLUCIÓN SIMPLE!
+        # Convertir a diccionario
+        mascota = dict(mascota_raw)
+        
+        # CALCULAR EDAD EN PYTHON (en lugar de TIMESTAMPDIFF de MySQL)
+        if mascota.get('fecha_nacimiento'):
+            from datetime import datetime
+            hoy = datetime.now()
+            nacimiento = mascota['fecha_nacimiento']
+            
+            años = hoy.year - nacimiento.year
+            # Ajustar si aún no ha pasado el cumpleaños este año
+            if (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day):
+                años -= 1
+            
+            # Calcular meses restantes
+            meses = hoy.month - nacimiento.month
+            if hoy.day < nacimiento.day:
+                meses -= 1
+            if meses < 0:
+                meses += 12
+            
+            mascota['edad_anios'] = años
+            mascota['edad_meses'] = meses
+        else:
+            mascota['edad_anios'] = None
+            mascota['edad_meses'] = None
+        
+        # OBTENER HISTORIAL DE CORTES - ¡CORREGIDO PARA POSTGRESQL!
         cursor.execute("""
             SELECT 
                 hc.*,
-                CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
+                e.nombre || ' ' || e.apellido as empleado_nombre,
                 hc.fecha_registro
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
@@ -2990,15 +3015,20 @@ def obtener_datos_mascota(id):
             LIMIT 10
         """, (id,))
         
-        historial_cortes = cursor.fetchall()
+        historial_raw = cursor.fetchall()
         
-        # Formatear fechas en Python - ¡EXACTAMENTE COMO EN VER_MASCOTA!
-        for corte in historial_cortes:
-            if corte['fecha_registro']:
-                # Formato: día/mes/año hora:minutos
-                corte['fecha_formateada'] = corte['fecha_registro'].strftime('%d/%m/%Y %H:%M')
+        # Convertir historial a lista de diccionarios y formatear
+        historial_cortes = []
+        for corte in historial_raw:
+            corte_dict = dict(corte)
+            
+            # Formatear fecha
+            if corte_dict.get('fecha_registro'):
+                corte_dict['fecha_formateada'] = corte_dict['fecha_registro'].strftime('%d/%m/%Y %H:%M')
             else:
-                corte['fecha_formateada'] = 'Fecha no disponible'
+                corte_dict['fecha_formateada'] = 'Fecha no disponible'
+            
+            historial_cortes.append(corte_dict)
         
         cursor.close()
         conn.close()
@@ -3012,10 +3042,10 @@ def obtener_datos_mascota(id):
     except Exception as e:
         print(f"Error al obtener datos de mascota: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
-
+        
 @app.route('/mascotas/actualizar-datos/<int:id>', methods=['POST'])
 def actualizar_datos_mascota_reserva(id):
-    """Actualizar datos de mascota desde la reserva"""
+    """Actualizar datos de mascota desde la reserva - CORREGIDO PARA POSTGRESQL"""
     print(f"Recibiendo actualización para mascota ID: {id}")
     print(f"Datos recibidos: {request.form}")
     
@@ -3047,13 +3077,15 @@ def actualizar_datos_mascota_reserva(id):
             
             # Verificar si la mascota existe
             cursor.execute("SELECT id_mascota, corte FROM mascotas WHERE id_mascota = %s", (id,))
-            mascota_existente = cursor.fetchone()
+            mascota_existente_raw = cursor.fetchone()
             
-            if not mascota_existente:
+            if not mascota_existente_raw:
                 cursor.close()
                 conn.close()
                 return jsonify({'success': False, 'error': 'Mascota no encontrada'})
             
+            # Convertir a diccionario
+            mascota_existente = dict(mascota_existente_raw)
             corte_anterior = mascota_existente.get('corte', None)
             
             # Preparar valores para la actualización
@@ -3096,11 +3128,6 @@ def actualizar_datos_mascota_reserva(id):
                 campos.append("alergias = %s")
                 valores.append(alergias)
             
-            # NOTA: Eliminamos fecha_actualizacion ya que no existe en tu tabla
-            # Si necesitas una columna de fecha de actualización, puedes usar:
-            # campos.append("updated_at = NOW()")
-            # pero primero verifica qué columnas tienes en tu tabla
-            
             # Agregar ID al final para la condición WHERE
             valores.append(id)
             
@@ -3112,7 +3139,7 @@ def actualizar_datos_mascota_reserva(id):
                 
                 cursor.execute(sql, valores)
                 
-                # Registrar en historial si el corte cambió
+                # Registrar en historial si el corte cambió - CORREGIDO PARA POSTGRESQL
                 if corte and corte != corte_anterior:
                     id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
                     
@@ -3122,8 +3149,8 @@ def actualizar_datos_mascota_reserva(id):
                     try:
                         cursor.execute("""
                             INSERT INTO historial_cortes 
-                            (id_mascota, tipo_corte, descripcion, id_empleado, notas, fecha_registro)
-                            VALUES (%s, %s, %s, %s, %s, NOW())
+                            (id_mascota, tipo_corte, descripcion, id_empleado, notas)
+                            VALUES (%s, %s, %s, %s, %s)
                         """, (id, corte, descripcion, id_empleado, notas))
                         print("Registro en historial_cortes creado")
                     except Exception as hist_error:
@@ -3151,23 +3178,15 @@ def actualizar_datos_mascota_reserva(id):
                 conn.close()
                 return jsonify({'success': False, 'error': 'No se proporcionaron datos para actualizar'})
             
-        except mysql.connector.Error as e:
-            print(f"Error de MySQL: {str(e)}")
-            if 'cursor' in locals() and cursor:
-                cursor.close()
-            if conn:
-                conn.close()
-            return jsonify({'success': False, 'error': f'Error de base de datos: {str(e)}'})
-        except Exception as e:
-            print(f"Error general: {str(e)}")
+        except Exception as e:  # Cambia Error por Exception para PostgreSQL
+            print(f"Error de PostgreSQL: {str(e)}")
             import traceback
             traceback.print_exc()
             if 'cursor' in locals() and cursor:
                 cursor.close()
             if conn:
                 conn.close()
-            return jsonify({'success': False, 'error': f'Error interno: {str(e)}'})
-
+            return jsonify({'success': False, 'error': f'Error de base de datos: {str(e)}'})
 @app.route('/facturas/<int:id>')
 def ver_factura(id):
     """Ver detalles de la factura"""
