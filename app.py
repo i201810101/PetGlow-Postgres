@@ -3337,6 +3337,10 @@ def ver_reserva(id):
             flash('Reserva no encontrada.', 'danger')
             return redirect(url_for('reservas'))
         
+        # ========== ¡AÑADE ESTA LÍNEA! ==========
+        reserva = dict(reserva)  # Convertir RealDictRow a diccionario mutable
+        # ========================================
+        
         # Calcular tiempo restante si es pendiente
         if reserva['estado'] == 'pendiente' and reserva['fecha_reserva'] > datetime.now():
             tiempo_restante = reserva['fecha_reserva'] - datetime.now()
@@ -3357,7 +3361,7 @@ def ver_reserva(id):
         # Calcular total
         total = sum(s['subtotal'] for s in servicios) if servicios else 0
         
-        # Obtener factura asociada si existe - ¡IMPORTANTE!
+        # Obtener factura asociada si existe
         cursor.execute("""
             SELECT f.* 
             FROM facturas f 
@@ -3367,12 +3371,10 @@ def ver_reserva(id):
         """, (id,))
         factura = cursor.fetchone()
         
+        # Ahora puedes asignar nuevas claves porque reserva es un dict mutable
         reserva['servicios'] = servicios
         reserva['total'] = total
-        reserva['factura'] = factura  # ← AÑADE ESTO
-        
-        # Obtener historial de cambios de estado
-        # (Podrías agregar una tabla de historial_reservas si necesitas más detalle)
+        reserva['factura'] = factura
         
     except Error as e:
         flash(f'Error obteniendo datos de la reserva: {e}', 'danger')
