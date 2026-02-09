@@ -445,26 +445,30 @@ def ventas():
                 ORDER BY f.fecha_emision DESC 
                 LIMIT 50
             """)
-            ventas_list = cursor.fetchall()
+            ventas_raw = cursor.fetchall()  # Cambiar nombre
             
-            # Formatear estados para mostrar
-            for venta in ventas_list:
+            # Convertir cada RealDictRow a dict mutable
+            for venta in ventas_raw:
+                venta_dict = dict(venta)  # ← CONVERTIR A DICT
+                
                 estado_clases = {
                     'pendiente': 'bg-warning text-dark',
                     'pagada': 'bg-success',
                     'anulada': 'bg-danger',
                     'credito': 'bg-info text-dark'
                 }
-                venta['estado_clase'] = estado_clases.get(venta['estado'], 'bg-secondary')
-                venta['estado_texto'] = venta['estado'].capitalize()
+                venta_dict['estado_clase'] = estado_clases.get(venta_dict['estado'], 'bg-secondary')
+                venta_dict['estado_texto'] = venta_dict['estado'].capitalize()
                 
                 # Añadir icono según tipo
-                if venta['tipo_comprobante'] == 'factura':
-                    venta['tipo_icono'] = 'fa-file-invoice'
-                    venta['tipo_color'] = 'text-primary'
+                if venta_dict['tipo_comprobante'] == 'factura':
+                    venta_dict['tipo_icono'] = 'fa-file-invoice'
+                    venta_dict['tipo_color'] = 'text-primary'
                 else:
-                    venta['tipo_icono'] = 'fa-receipt'
-                    venta['tipo_color'] = 'text-success'
+                    venta_dict['tipo_icono'] = 'fa-receipt'
+                    venta_dict['tipo_color'] = 'text-success'
+                
+                ventas_list.append(venta_dict)  # Agregar dict mutable
             
             cursor.close()
         except Error as e:
@@ -3307,18 +3311,18 @@ def ver_factura(id):
             WHERE f.id_factura = %s
         """, (id,))
         
-        factura = cursor.fetchone()
+        factura_raw = cursor.fetchone()
         
-        if not factura:
+        if not factura_raw:
             flash('Factura no encontrada.', 'danger')
             return redirect(url_for('ventas'))
         
         # Convertir a dict mutable
-        factura = dict(factura)
+        factura = dict(factura_raw)
         
         print(f"🔍 Factura encontrada: {factura.get('numero', 'N/A')}")
         
-        # 2. Obtener servicios de la factura (SOLO SERVICIOS)
+        # 2. Obtener servicios de la factura (SOLO SERVICIOS) - CORREGIDO
         cursor.execute("""
             SELECT 
                 fs.*, 
@@ -3327,17 +3331,17 @@ def ver_factura(id):
             FROM factura_servicios fs
             LEFT JOIN servicios s ON fs.id_servicio = s.id_servicio
             WHERE fs.id_factura = %s
-            ORDER BY fs.id_factura_servicio
+            ORDER BY s.nombre  # ← Ordenar por nombre en lugar de id_factura_servicio
         """, (id,))
         
-        servicios = cursor.fetchall()
+        servicios_raw = cursor.fetchall()
         
         # 3. Calcular totales
         total_servicios = 0
         servicios_procesados = []
         
-        for servicio in servicios:
-            servicio_dict = dict(servicio)
+        for servicio in servicios_raw:
+            servicio_dict = dict(servicio)  # Convertir a dict mutable
             
             # Asegurar valores numéricos
             precio = float(servicio_dict.get('precio_unitario', 0))
@@ -3357,20 +3361,20 @@ def ver_factura(id):
         factura['productos'] = []  # Lista vacía - NO MANEJAS PRODUCTOS
         
         # Si la factura no tiene total, usar el calculado
-        if not factura.get('total') or float(factura['total']) == 0:
+        if not factura.get('total') or float(factura.get('total', 0)) == 0:
             factura['total'] = total_servicios
         
         # Si no tiene subtotal/igv, calcular según tipo de comprobante
-        if not factura.get('subtotal') or float(factura['subtotal']) == 0:
+        if not factura.get('subtotal') or float(factura.get('subtotal', 0)) == 0:
             if factura.get('tipo_comprobante') == 'factura':
                 # Para factura: calcular base e IGV
-                subtotal_val = float(factura['total']) / 1.18
+                subtotal_val = float(factura.get('total', 0)) / 1.18
                 igv_val = subtotal_val * 0.18
                 factura['subtotal'] = subtotal_val
                 factura['igv'] = igv_val
             else:
                 # Para boleta: subtotal = total, igv = 0
-                factura['subtotal'] = float(factura['total'])
+                factura['subtotal'] = float(factura.get('total', 0))
                 factura['igv'] = 0.0
         
         factura['total_servicios'] = total_servicios
@@ -3406,16 +3410,20 @@ def ver_factura(id):
             """, (id,))
             pagos = cursor.fetchall()
             factura['pagos'] = pagos
-        except:
+        except Exception as e:
+            print(f"⚠️ Tabla pagos no existe: {e}")
             factura['pagos'] = []
         
-        print(f"✅ Factura preparada para template:")
+        print(f"✅ Factura preparada:")
+        print(f"   Número: {factura.get('numero')}")
         print(f"   Total: S/ {factura.get('total', 0):.2f}")
         print(f"   Servicios: {len(servicios_procesados)}")
         
     except Error as e:
         flash(f'Error obteniendo factura: {e}', 'danger')
         print(f"❌ Error en ver_factura: {e}")
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('ventas'))
     finally:
         if 'cursor' in locals():
@@ -3424,6 +3432,7 @@ def ver_factura(id):
             conn.close()
     
     return render_template('facturas/ver.html', factura=factura)
+    
 @app.route('/reservas/ver/<int:id>')
 def ver_reserva(id):
     """Ver detalles de la reserva"""
