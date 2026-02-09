@@ -2348,12 +2348,35 @@ def obtener_correo_admin():
 def enviar_correo_reserva_completada(reserva_dict):
     """Envía correo usando Resend (funciona en Render)"""
     try:
-        # 1. Configurar API key desde variables de entorno
+        print(f"🔍 Iniciando envío de correo...")
+        
+        # 1. Obtener API key de varias fuentes
+        api_key = None
+        
+        # Primero de app.config
         api_key = app.config.get('RESEND_API_KEY')
+        print(f"🔍 app.config RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
+        
+        # Si no, de os.environ
         if not api_key:
-            print("❌ RESEND_API_KEY no configurada")
+            import os
+            api_key = os.environ.get('RESEND_API_KEY')
+            print(f"🔍 os.environ RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
+        
+        # Si no, de config directamente
+        if not api_key:
+            from config.config import config
+            api_key = config.RESEND_API_KEY
+            print(f"🔍 config.RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
+        
+        if not api_key:
+            print("❌ ERROR CRÍTICO: RESEND_API_KEY no encontrada en ningún lado")
+            print("   Solución: Añadir RESEND_API_KEY en variables de entorno de Render")
             return False
         
+        print(f"✅ API Key encontrada (primeros 8 chars): {api_key[:8]}...")
+        
+        # 2. Configurar Resend
         resend.api_key = api_key
         
         # 2. Preparar datos
