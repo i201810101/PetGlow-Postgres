@@ -2348,47 +2348,46 @@ def obtener_correo_admin():
 def enviar_correo_reserva_completada(reserva_dict):
     """Envía correo usando Resend (funciona en Render)"""
     try:
-        print(f"🔍 Iniciando envío de correo...")
+        print(f"\n🔍 DEBUG: Datos recibidos en reserva_dict:")
+        for key, value in reserva_dict.items():
+            print(f"   {key}: {value}")
         
-        # 1. Obtener API key de varias fuentes
-        api_key = None
-        
-        # Primero de app.config
+        # 1. Configurar API key
         api_key = app.config.get('RESEND_API_KEY')
-        print(f"🔍 app.config RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
-        
-        # Si no, de os.environ
         if not api_key:
-            import os
-            api_key = os.environ.get('RESEND_API_KEY')
-            print(f"🔍 os.environ RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
-        
-        # Si no, de config directamente
-        if not api_key:
-            from config.config import config
-            api_key = config.RESEND_API_KEY
-            print(f"🔍 config.RESEND_API_KEY: {'✅ Sí' if api_key else '❌ No'}")
-        
-        if not api_key:
-            print("❌ ERROR CRÍTICO: RESEND_API_KEY no encontrada en ningún lado")
-            print("   Solución: Añadir RESEND_API_KEY en variables de entorno de Render")
+            print("❌ RESEND_API_KEY no configurada")
             return False
         
-        print(f"✅ API Key encontrada (primeros 8 chars): {api_key[:8]}...")
-        
-        # 2. Configurar Resend
         resend.api_key = api_key
         
         # 2. Preparar datos
         codigo_reserva = reserva_dict.get('codigo_reserva', 'Sin código')
         mascota = reserva_dict.get('mascota_nombre', 'N/A')
         cliente = f"{reserva_dict.get('cliente_nombre', '')} {reserva_dict.get('cliente_apellido', '')}".strip()
-        total = float(reserva_dict.get('total', 0))
+        
+        # Obtener total con manejo robusto
+        total_raw = reserva_dict.get('total', 0)
+        print(f"🔍 total_raw: {total_raw} (tipo: {type(total_raw)})")
+        
+        try:
+            if total_raw is None:
+                total = 0.0
+            elif isinstance(total_raw, (int, float)):
+                total = float(total_raw)
+            else:
+                total = float(str(total_raw))
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Error convirtiendo total: {e}")
+            total = 0.0
+        
         fecha = datetime.now().strftime('%d/%m/%Y %H:%M')
+        servicios_texto = reserva_dict.get('servicios_texto', 'No especificados')
         
-        print(f"📧 Preparando correo Resend para: {codigo_reserva}")
+        print(f"📧 Preparando correo para: {codigo_reserva}")
+        print(f"   Total: S/ {total:.2f}")
+        print(f"   Servicios: {servicios_texto}")
         
-        # 3. Crear contenido HTML atractivo
+        # 3. Crear contenido HTML
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -2402,6 +2401,7 @@ def enviar_correo_reserva_completada(reserva_dict):
                 .total {{ font-size: 24px; color: #4CAF50; font-weight: bold; }}
                 .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
                 .details {{ background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                .servicios {{ background: #e8f5e9; padding: 10px; border-radius: 5px; margin: 10px 0; }}
             </style>
         </head>
         <body>
@@ -2418,7 +2418,13 @@ def enviar_correo_reserva_completada(reserva_dict):
                         <h3>📋 Detalles de la Reserva</h3>
                         <p><strong>🦮 Mascota:</strong> {mascota}</p>
                         <p><strong>👤 Cliente:</strong> {cliente}</p>
-                        <p><strong>📅 Fecha de Reserva:</strong> {fecha}</p>
+                        <p><strong>📅 Fecha:</strong> {fecha}</p>
+                        
+                        <div class="servicios">
+                            <strong>🛠️ Servicios:</strong><br>
+                            {servicios_texto}
+                        </div>
+                        
                         <p><strong>💰 Total:</strong> <span class="total">S/ {total:.2f}</span></p>
                     </div>
                     
@@ -2434,7 +2440,7 @@ def enviar_correo_reserva_completada(reserva_dict):
         </html>
         """
         
-        # 4. Contenido texto plano (por si acaso)
+        # 4. Contenido texto plano
         text_content = f"""
         RESERVA COMPLETADA - PETGLOW
         =============================
@@ -2444,6 +2450,7 @@ def enviar_correo_reserva_completada(reserva_dict):
         Código: {codigo_reserva}
         Mascota: {mascota}
         Cliente: {cliente}
+        Servicios: {servicios_texto}
         Total: S/ {total:.2f}
         Fecha: {fecha}
         
@@ -2455,8 +2462,8 @@ def enviar_correo_reserva_completada(reserva_dict):
         
         # 5. Enviar correo
         response = resend.Emails.send({
-            "from": "PetGlow <onboarding@resend.dev>",  # Resend te da este dominio
-            "to": ["ayumu798@gmail.com"],  # Cambia por tu email real
+            "from": "PetGlow <onboarding@resend.dev>",
+            "to": ["ayumu798@gmail.com"],
             "subject": f"✅ Reserva Completada - {codigo_reserva}",
             "html": html_content,
             "text": text_content
@@ -2464,16 +2471,15 @@ def enviar_correo_reserva_completada(reserva_dict):
         
         print(f"✅ Correo enviado exitosamente!")
         print(f"   ID del correo: {response.get('id')}")
-        print(f"   Destinatario: ayumu798@gmail.com")
+        print(f"   Total mostrado: S/ {total:.2f}")
         
         return True
         
     except Exception as e:
         print(f"❌ Error con Resend: {str(e)}")
-        
-        # Fallback simple: solo log
-        print(f"📝 [FALLBACK] Se completó reserva pero no se pudo enviar correo")
-        return True  # Retornar True para no bloquear la reserva
+        import traceback
+        traceback.print_exc()
+        return False
 # ===================== RUTAS API PARA EMPLEADOS ====================
 
 @app.route('/api/empleado/info')
@@ -3563,34 +3569,109 @@ def cambiar_estado_reserva(id):
                 servicios = cursor.fetchall()
                 servicios_texto = ", ".join([s['nombre'] for s in servicios]) if servicios else "No especificados"
                 
-                # Calcular total
+                # 🔥 CALCULAR TOTAL CORRECTAMENTE - VERSIÓN MEJORADA
+                print("🔍 Calculando total de la reserva...")
+                
+                # Primero intentar obtener cantidad de cada servicio
                 cursor.execute("""
-                    SELECT SUM(subtotal) as total
-                    FROM reserva_servicios
-                    WHERE id_reserva = %s
+                    SELECT 
+                        rs.id_servicio,
+                        rs.precio_unitario,
+                        COALESCE(rs.cantidad, 1) as cantidad,  -- Si cantidad es NULL, usar 1
+                        rs.subtotal,
+                        s.precio as precio_servicio
+                    FROM reserva_servicios rs
+                    JOIN servicios s ON rs.id_servicio = s.id_servicio
+                    WHERE rs.id_reserva = %s
                 """, (id,))
                 
-                total_result = cursor.fetchone()
-                total = total_result['total'] if total_result and total_result['total'] else 0
+                servicios_detalle = cursor.fetchall()
+                print(f"🔍 Encontrados {len(servicios_detalle)} servicios en la reserva")
                 
-                # Crear objeto reserva con los datos necesarios para el correo
-                # Crear diccionario con los datos necesarios para el correo
+                # Calcular total de 3 formas diferentes
+                total_method1 = 0.0  # Usando subtotal
+                total_method2 = 0.0  # Usando precio_unitario * cantidad
+                total_method3 = 0.0  # Usando precio_servicio * cantidad
+                
+                for i, servicio in enumerate(servicios_detalle):
+                    print(f"🔍 Servicio {i+1}:")
+                    print(f"   precio_unitario: {servicio['precio_unitario']}")
+                    print(f"   cantidad: {servicio['cantidad']}")
+                    print(f"   subtotal: {servicio['subtotal']}")
+                    print(f"   precio_servicio: {servicio['precio_servicio']}")
+                    
+                    # Método 1: Usar subtotal directamente
+                    if servicio['subtotal'] is not None:
+                        total_method1 += float(servicio['subtotal'])
+                    
+                    # Método 2: precio_unitario * cantidad
+                    if servicio['precio_unitario'] is not None:
+                        cantidad = int(servicio['cantidad']) if servicio['cantidad'] else 1
+                        total_method2 += float(servicio['precio_unitario']) * cantidad
+                    
+                    # Método 3: precio_servicio * cantidad
+                    if servicio['precio_servicio'] is not None:
+                        cantidad = int(servicio['cantidad']) if servicio['cantidad'] else 1
+                        total_method3 += float(servicio['precio_servicio']) * cantidad
+                
+                print(f"🔍 Totales calculados:")
+                print(f"   Método 1 (subtotal): {total_method1:.2f}")
+                print(f"   Método 2 (precio_unitario * cantidad): {total_method2:.2f}")
+                print(f"   Método 3 (precio_servicio * cantidad): {total_method3:.2f}")
+                
+                # Elegir el total que no sea 0
+                if total_method1 > 0:
+                    total = total_method1
+                    print(f"✅ Usando total_method1: {total:.2f}")
+                elif total_method2 > 0:
+                    total = total_method2
+                    print(f"✅ Usando total_method2: {total:.2f}")
+                elif total_method3 > 0:
+                    total = total_method3
+                    print(f"✅ Usando total_method3: {total:.2f}")
+                else:
+                    total = 0.0
+                    print("⚠️ Todos los métodos devolvieron 0")
+                
+                # Si todo falla, hacer consulta directa
+                if total == 0:
+                    print("🔍 Intentando consulta directa de total...")
+                    cursor.execute("""
+                        SELECT COALESCE(SUM(subtotal), 0) as total_directo
+                        FROM reserva_servicios
+                        WHERE id_reserva = %s
+                    """, (id,))
+                    
+                    total_directo = cursor.fetchone()
+                    if total_directo and total_directo['total_directo']:
+                        total = float(total_directo['total_directo'])
+                        print(f"✅ Total directo de BD: {total:.2f}")
+                
+                print(f"🎯 Total final para correo: S/ {total:.2f}")
+                
+                # 🔥 CREAR DICCIONARIO CON LOS DATOS - VERSIÓN MEJORADA
                 reserva_dict = {
-    'codigo_reserva': reserva['codigo_reserva'],
-    'fecha_reserva': reserva['fecha_reserva'],
-    'mascota_nombre': reserva['mascota_nombre'],
-    'especie': reserva['especie'],
-    'raza': reserva['raza'],
-    'cliente_nombre': reserva['cliente_nombre'],
-    'cliente_apellido': reserva['cliente_apellido'],
-    'cliente_telefono': reserva['cliente_telefono'],
-    'cliente_email': reserva['cliente_email'],
-    'empleado_nombre': reserva['empleado_nombre'],
-    'empleado_apellido': reserva['empleado_apellido'],
-    'empleado_especialidad': reserva.get('especialidad', 'No especificada'),
-    'notas': reserva.get('notas', 'No hay notas'),
-    'total': float(total)
+                    'codigo_reserva': reserva['codigo_reserva'],
+                    'fecha_reserva': reserva['fecha_reserva'],
+                    'mascota_nombre': reserva['mascota_nombre'],
+                    'especie': reserva['especie'],
+                    'raza': reserva['raza'],
+                    'cliente_nombre': reserva['cliente_nombre'],
+                    'cliente_apellido': reserva['cliente_apellido'],
+                    'cliente_telefono': reserva['cliente_telefono'],
+                    'cliente_email': reserva['cliente_email'],
+                    'empleado_nombre': reserva['empleado_nombre'],
+                    'empleado_apellido': reserva['empleado_apellido'],
+                    'empleado_especialidad': 'No especificada',  # Esto no está en tu consulta
+                    'notas': reserva.get('notas', 'No hay notas'),
+                    'total': float(total),
+                    'servicios_texto': servicios_texto,
+                    'id_reserva': id  # Añadir ID para debug
                 }
+                
+                print(f"🔍 Enviando reserva_dict a función de correo:")
+                for key, value in reserva_dict.items():
+                    print(f"   {key}: {value}")
 
                 resultado_correo = enviar_correo_reserva_completada(reserva_dict)
                 
