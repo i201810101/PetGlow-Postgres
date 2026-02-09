@@ -2382,31 +2382,22 @@ Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
         
         try:
             if mail_use_ssl:
-                # SSL en puerto 465
-                server = smtplib.SMTP_SSL(mail_server, mail_port, timeout=10)
-            else:
-                # TLS en puerto 587 (GMAIL)
-                server = smtplib.SMTP(mail_server, mail_port, timeout=10)
-                server.ehlo()  # 🔥 Agregar esto
-                if mail_use_tls:
-                    server.starttls()
-                    server.ehlo()  # 🔥 Agregar esto también
-            
+            # Solo SSL
+            server = smtplib.SMTP_SSL(mail_server, mail_port, timeout=10)
             server.login(mail_username, mail_password)
-            server.send_message(msg)
-            server.quit()
-            
-            print(f"✅ Correo enviado exitosamente!")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error SMTP: {str(e)}")
-            return False
-            
+        else:
+            # Solo TLS
+            server = smtplib.SMTP(mail_server, mail_port, timeout=10)
+            server.starttls()
+            server.login(mail_username, mail_password)
+        
+        server.send_message(msg)
+        server.quit()
+        return True
+        
     except Exception as e:
-        print(f"❌ Error general: {str(e)}")
-        return False
-# ==================== RUTAS API PARA EMPLEADOS ====================
+        print(f"❌ Error SMTP: {str(e)}")
+        return False== RUTAS API PARA EMPLEADOS ====================
 
 @app.route('/api/empleado/info')
 @login_required
