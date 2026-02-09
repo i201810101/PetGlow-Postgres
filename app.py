@@ -3322,7 +3322,7 @@ def ver_factura(id):
         
         print(f"🔍 Factura encontrada: {factura.get('numero', 'N/A')}")
         
-        # 2. Obtener servicios de la factura (SOLO SERVICIOS) - CORREGIDO
+        # 2. Obtener servicios de la factura (SOLO SERVICIOS)
         cursor.execute("""
             SELECT 
                 fs.*, 
@@ -3331,7 +3331,7 @@ def ver_factura(id):
             FROM factura_servicios fs
             LEFT JOIN servicios s ON fs.id_servicio = s.id_servicio
             WHERE fs.id_factura = %s
-            ORDER BY s.nombre  # ← Ordenar por nombre en lugar de id_factura_servicio
+            ORDER BY s.nombre
         """, (id,))
         
         servicios_raw = cursor.fetchall()
@@ -3341,7 +3341,7 @@ def ver_factura(id):
         servicios_procesados = []
         
         for servicio in servicios_raw:
-            servicio_dict = dict(servicio)  # Convertir a dict mutable
+            servicio_dict = dict(servicio)
             
             # Asegurar valores numéricos
             precio = float(servicio_dict.get('precio_unitario', 0))
@@ -3378,8 +3378,8 @@ def ver_factura(id):
                 factura['igv'] = 0.0
         
         factura['total_servicios'] = total_servicios
-        factura['total_productos'] = 0  # Siempre 0
-        factura['descuento_total'] = 0  # Siempre 0
+        factura['total_productos'] = 0
+        factura['descuento_total'] = 0
         
         # 5. Formatear fecha para mostrar
         if factura.get('fecha_emision'):
@@ -3401,7 +3401,7 @@ def ver_factura(id):
                 factura['mascota_especie'] = mascota['especie']
                 factura['mascota_raza'] = mascota['raza']
         
-        # 7. Obtener pagos (opcional - si tienes tabla pagos)
+        # 7. Obtener pagos (opcional)
         try:
             cursor.execute("""
                 SELECT * FROM pagos 
