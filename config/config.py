@@ -11,7 +11,7 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Correo
+    # Correo SMTP
     MAIL_SERVER = os.environ.get('MAIL_SERVER')
     MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
@@ -21,5 +21,8 @@ class Config:
 
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'False').lower() in ['true', '1']
     MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'True').lower() in ['true', '1']
+
+    # 🔥 NUEVO: Resend API Key
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
 config = Config()
