@@ -3282,7 +3282,7 @@ def actualizar_datos_mascota_reserva(id):
             return jsonify({'success': False, 'error': f'Error de base de datos: {str(e)}'})
 @app.route('/facturas/<int:id>')
 def ver_factura(id):
-    """Ver detalles de una factura"""
+    """Ver detalles de una factura - SOLO SERVICIOS"""
     conn = get_db_connection()
     
     if not conn:
@@ -3292,16 +3292,18 @@ def ver_factura(id):
     try:
         cursor = conn.cursor()
         
-        # Obtener datos de la factura
+        # 1. Obtener datos de la factura
         cursor.execute("""
             SELECT f.*, 
                    c.nombre as cliente_nombre, c.apellido as cliente_apellido,
                    c.dni as cliente_dni, c.direccion as cliente_direccion,
                    c.telefono as cliente_telefono, c.email as cliente_email,
-                   r.codigo_reserva, r.id_reserva
+                   r.codigo_reserva, r.id_reserva, r.id_mascota,
+                   e.nombre as empleado_nombre, e.apellido as empleado_apellido
             FROM facturas f
             LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
             LEFT JOIN reservas r ON f.id_reserva = r.id_reserva
+            LEFT JOIN empleados e ON f.id_empleado_cajero = e.id_empleado
             WHERE f.id_factura = %s
         """, (id,))
         
@@ -3314,25 +3316,102 @@ def ver_factura(id):
         # Convertir a dict mutable
         factura = dict(factura)
         
-        # Obtener servicios de la factura (solo servicios, no productos)
+        print(f"🔍 Factura encontrada: {factura.get('numero', 'N/A')}")
+        
+        # 2. Obtener servicios de la factura (SOLO SERVICIOS)
         cursor.execute("""
-            SELECT fs.*, s.categoria
+            SELECT 
+                fs.*, 
+                s.categoria,
+                COALESCE(fs.descripcion, s.nombre) as nombre_servicio
             FROM factura_servicios fs
             LEFT JOIN servicios s ON fs.id_servicio = s.id_servicio
             WHERE fs.id_factura = %s
+            ORDER BY fs.id_factura_servicio
         """, (id,))
         
         servicios = cursor.fetchall()
         
-        # Calcular total si no está en la factura
-        if not factura.get('total') or factura['total'] == 0:
-            total = sum(float(s['subtotal']) for s in servicios) if servicios else 0
-            factura['total'] = total
+        # 3. Calcular totales
+        total_servicios = 0
+        servicios_procesados = []
         
-        factura['servicios'] = servicios
+        for servicio in servicios:
+            servicio_dict = dict(servicio)
+            
+            # Asegurar valores numéricos
+            precio = float(servicio_dict.get('precio_unitario', 0))
+            cantidad = int(servicio_dict.get('cantidad', 1))
+            subtotal = float(servicio_dict.get('subtotal', 0))
+            
+            # Calcular subtotal si es 0
+            if subtotal == 0 and precio > 0:
+                subtotal = precio * cantidad
+                servicio_dict['subtotal'] = subtotal
+            
+            total_servicios += subtotal
+            servicios_procesados.append(servicio_dict)
         
-        # No hay productos, así que dejamos lista vacía
-        factura['productos'] = []
+        # 4. Preparar datos para el template
+        factura['servicios'] = servicios_procesados
+        factura['productos'] = []  # Lista vacía - NO MANEJAS PRODUCTOS
+        
+        # Si la factura no tiene total, usar el calculado
+        if not factura.get('total') or float(factura['total']) == 0:
+            factura['total'] = total_servicios
+        
+        # Si no tiene subtotal/igv, calcular según tipo de comprobante
+        if not factura.get('subtotal') or float(factura['subtotal']) == 0:
+            if factura.get('tipo_comprobante') == 'factura':
+                # Para factura: calcular base e IGV
+                subtotal_val = float(factura['total']) / 1.18
+                igv_val = subtotal_val * 0.18
+                factura['subtotal'] = subtotal_val
+                factura['igv'] = igv_val
+            else:
+                # Para boleta: subtotal = total, igv = 0
+                factura['subtotal'] = float(factura['total'])
+                factura['igv'] = 0.0
+        
+        factura['total_servicios'] = total_servicios
+        factura['total_productos'] = 0  # Siempre 0
+        factura['descuento_total'] = 0  # Siempre 0
+        
+        # 5. Formatear fecha para mostrar
+        if factura.get('fecha_emision'):
+            factura['fecha_emision_str'] = factura['fecha_emision'].strftime('%d/%m/%Y %H:%M')
+        else:
+            factura['fecha_emision_str'] = 'No disponible'
+        
+        # 6. Obtener datos de mascota si hay reserva
+        if factura.get('id_mascota'):
+            cursor.execute("""
+                SELECT nombre, especie, raza 
+                FROM mascotas 
+                WHERE id_mascota = %s
+            """, (factura['id_mascota'],))
+            
+            mascota = cursor.fetchone()
+            if mascota:
+                factura['mascota_nombre'] = mascota['nombre']
+                factura['mascota_especie'] = mascota['especie']
+                factura['mascota_raza'] = mascota['raza']
+        
+        # 7. Obtener pagos (opcional - si tienes tabla pagos)
+        try:
+            cursor.execute("""
+                SELECT * FROM pagos 
+                WHERE id_factura = %s 
+                ORDER BY fecha_pago DESC
+            """, (id,))
+            pagos = cursor.fetchall()
+            factura['pagos'] = pagos
+        except:
+            factura['pagos'] = []
+        
+        print(f"✅ Factura preparada para template:")
+        print(f"   Total: S/ {factura.get('total', 0):.2f}")
+        print(f"   Servicios: {len(servicios_procesados)}")
         
     except Error as e:
         flash(f'Error obteniendo factura: {e}', 'danger')
@@ -3345,7 +3424,6 @@ def ver_factura(id):
             conn.close()
     
     return render_template('facturas/ver.html', factura=factura)
-    
 @app.route('/reservas/ver/<int:id>')
 def ver_reserva(id):
     """Ver detalles de la reserva"""
