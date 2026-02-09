@@ -3282,7 +3282,7 @@ def actualizar_datos_mascota_reserva(id):
             return jsonify({'success': False, 'error': f'Error de base de datos: {str(e)}'})
 @app.route('/facturas/<int:id>')
 def ver_factura(id):
-    """Ver detalles de la factura"""
+    """Ver detalles de una factura"""
     conn = get_db_connection()
     
     if not conn:
@@ -3292,94 +3292,57 @@ def ver_factura(id):
     try:
         cursor = conn.cursor()
         
-        # 1. Obtener datos de la factura
+        # Obtener datos de la factura
         cursor.execute("""
             SELECT f.*, 
                    c.nombre as cliente_nombre, c.apellido as cliente_apellido,
                    c.dni as cliente_dni, c.direccion as cliente_direccion,
-                   r.codigo_reserva, m.nombre as mascota_nombre
+                   c.telefono as cliente_telefono, c.email as cliente_email,
+                   r.codigo_reserva, r.id_reserva
             FROM facturas f
             LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
             LEFT JOIN reservas r ON f.id_reserva = r.id_reserva
-            LEFT JOIN mascotas m ON r.id_mascota = m.id_mascota
             WHERE f.id_factura = %s
         """, (id,))
+        
         factura = cursor.fetchone()
         
         if not factura:
             flash('Factura no encontrada.', 'danger')
             return redirect(url_for('ventas'))
         
-        # 2. Obtener servicios y productos
+        # Convertir a dict mutable
+        factura = dict(factura)
+        
+        # Obtener servicios de la factura (solo servicios, no productos)
         cursor.execute("""
             SELECT fs.*, s.categoria
             FROM factura_servicios fs
             LEFT JOIN servicios s ON fs.id_servicio = s.id_servicio
             WHERE fs.id_factura = %s
         """, (id,))
+        
         servicios = cursor.fetchall()
         
-        cursor.execute("""
-            SELECT fp.*, p.categoria
-            FROM factura_productos fp
-            LEFT JOIN productos p ON fp.id_producto = p.id_producto
-            WHERE fp.id_factura = %s
-        """, (id,))
-        productos = cursor.fetchall()
+        # Calcular total si no está en la factura
+        if not factura.get('total') or factura['total'] == 0:
+            total = sum(float(s['subtotal']) for s in servicios) if servicios else 0
+            factura['total'] = total
         
-        # 3. Calcular totales desde los detalles
-        total_servicios = sum(float(s['subtotal']) for s in servicios) if servicios else 0.0
-        total_productos = sum(float(p['subtotal']) for p in productos) if productos else 0.0
-        
-        # 4. Si la factura ya tiene totales calculados, usarlos
-        if factura['total'] and factura['total'] > 0:
-            total = float(factura['total'])
-            subtotal = float(factura['subtotal']) if factura['subtotal'] else 0.0
-            igv = float(factura['igv']) if factura['igv'] else 0.0
-        else:
-            # Calcular según tipo de comprobante
-            total_base = total_servicios + total_productos
-            
-            if factura['tipo_comprobante'] == 'factura':
-                # Para factura: separar IGV
-                subtotal = total_base / 1.18
-                igv = subtotal * 0.18
-                total = subtotal + igv
-            else:
-                # Para boleta: no hay IGV separado
-                subtotal = total_base
-                igv = 0.00
-                total = total_base
-        
-        # 5. Asignar valores a la factura
         factura['servicios'] = servicios
-        factura['productos'] = productos
-        factura['total_servicios'] = round(total_servicios, 2)
-        factura['total_productos'] = round(total_productos, 2)
-        factura['subtotal'] = round(subtotal, 2)
-        factura['igv'] = round(igv, 2)
-        factura['total'] = round(total, 2)
         
-        # 6. Formatear fecha
-        if factura['fecha_emision']:
-            factura['fecha_emision_str'] = factura['fecha_emision'].strftime('%d/%m/%Y %H:%M')
-        
-        # 7. Verificar pagos
-        cursor.execute("""
-            SELECT * FROM movimientos_caja 
-            WHERE id_factura = %s
-            ORDER BY fecha_movimiento DESC
-        """, (id,))
-        pagos = cursor.fetchall()
-        
-        factura['pagos'] = pagos
+        # No hay productos, así que dejamos lista vacía
+        factura['productos'] = []
         
     except Error as e:
         flash(f'Error obteniendo factura: {e}', 'danger')
+        print(f"❌ Error en ver_factura: {e}")
         return redirect(url_for('ventas'))
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals():
+            cursor.close()
+        if conn:
+            conn.close()
     
     return render_template('facturas/ver.html', factura=factura)
     
