@@ -4841,6 +4841,15 @@ def anular_factura(id):
         return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
     
     try:
+        # Verificar si es JSON
+        if request.is_json:
+            data = request.get_json()
+            motivo = data.get('motivo', 'Sin motivo especificado')
+        else:
+            motivo = request.form.get('motivo', 'Sin motivo especificado')
+        
+        print(f"🔍 Motivo de anulación: {motivo}")
+        
         cursor = conn.cursor()
         
         # Verificar que la factura existe
@@ -4851,22 +4860,30 @@ def anular_factura(id):
             return jsonify({'success': False, 'message': 'Factura no encontrada.'}), 404
         
         if factura['estado'] == 'anulada':
-            return jsonify({'success': False, 'message': 'La factura ya está anulada.'})
+            return jsonify({'success': False, 'message': 'La factura ya está anulada.'}), 400
         
         # No permitir anular facturas ya pagadas sin confirmación especial
         if factura['estado'] == 'pagada':
             return jsonify({
                 'success': False, 
                 'message': 'No se puede anular una factura pagada automáticamente. Contacte al administrador.'
-            })
+            }), 400
         
         # Anular factura
-        cursor.execute("UPDATE facturas SET estado = 'anulada' WHERE id_factura = %s", (id,))
+        cursor.execute("""
+            UPDATE facturas 
+            SET estado = 'anulada', fecha_modificacion = NOW()
+            WHERE id_factura = %s
+        """, (id,))
+        
         conn.commit()
         
         print(f"✅ Factura {factura['numero']} anulada exitosamente")
         
-        return jsonify({'success': True, 'message': 'Factura anulada exitosamente.'})
+        return jsonify({
+            'success': True, 
+            'message': f'Factura {factura["numero"]} anulada exitosamente. Motivo: {motivo}'
+        })
             
     except Error as e:
         if conn:
@@ -4877,8 +4894,7 @@ def anular_factura(id):
         if 'cursor' in locals() and cursor:
             cursor.close()
         if conn:
-            conn.close()        
-
+            conn.close()
 
 # Añadir estas rutas a tu app.py
 
