@@ -9,6 +9,7 @@ Flask-Migrate==4.0.5
 psycopg2-binary==2.9.10
 SQLAlchemy==2.0.40  # Versión más reciente que arregla el bug
 gunicorn==21.2.0
+resend==2.4.0
 # O alternativamente, usar SQLAlchemy 1.4 que es más estable
 # SQLAlchemy==1.4.52
 
