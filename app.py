@@ -2365,8 +2365,8 @@ Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
         mail_port = app.config.get('MAIL_PORT', 587)
         mail_username = app.config.get('MAIL_USERNAME')
         mail_password = app.config.get('MAIL_PASSWORD')
-        mail_use_tls = app.config.get('MAIL_USE_TLS', True)
-        mail_use_ssl = app.config.get('MAIL_USE_SSL', False)
+        mail_use_tls = app.config.get('MAIL_USE_TLS', False)
+        mail_use_ssl = app.config.get('MAIL_USE_SSL', True)
         
         print(f"📊 Configuración detectada:")
         print(f"   Servidor: {mail_server}:{mail_port}")
