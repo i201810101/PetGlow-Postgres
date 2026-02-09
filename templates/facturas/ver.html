@@ -4,60 +4,101 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/facturas.css') }}">
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        .btn, .modal, .navbar, footer {
+            display: none !important;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card shadow mb-4">
-            <!-- Encabezado del comprobante -->
-            <div class="comprobante-header">
-                <div class="card-body">
-                    <div class="row align-items-center">
+<div class="container-fluid">
+    <!-- Botones de acción (NO imprimir) -->
+    <div class="row mb-4 no-print">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <a href="{{ url_for('ventas') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Volver a Ventas
+                    </a>
+                </div>
+                <div>
+                    {% if factura.estado != 'anulada' %}
+                    <button class="btn btn-primary btn-imprimir me-2">
+                        <i class="fas fa-print me-1"></i>Imprimir
+                    </button>
+                    
+                    {% if factura.estado == 'pendiente' %}
+                    <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalPagoCompleto">
+                        <i class="fas fa-check-circle me-1"></i>Marcar como Pagada
+                    </button>
+                    {% endif %}
+                    
+                    {% if factura.estado != 'anulada' and factura.estado != 'pagada' %}
+                    <button class="btn btn-danger" id="btnAnularFactura">
+                        <i class="fas fa-ban me-1"></i>Anular Factura
+                    </button>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- COMPROBANTE -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <!-- ENCABEZADO -->
+                <div class="comprobante-header">
+                    <div class="row">
                         <div class="col-md-6">
-                            <div class="empresa-info">
-                                <h3 class="mb-1">PETGLOW GROOMERS</h3>
-                                <p class="mb-0">Sistema de Grooming Profesional</p>
-                                <p class="mb-0">Av. Principal 123 - Lima</p>
-                                <p class="mb-0">RUC: 20123456789</p>
-                            </div>
+                            <h2 class="mb-0">PETGLOW</h2>
+                            <p class="mb-0">Servicios para Mascotas</p>
+                            <p class="mb-0">Av. Principal 123, Lima</p>
+                            <p class="mb-0">RUC: 20123456781</p>
+                            <p class="mb-0">Tel: (01) 123-4567</p>
                         </div>
                         <div class="col-md-6 text-end">
-                            <h2 class="mb-1">{{ factura.tipo_comprobante|upper }}</h2>
-                            <h3 class="mb-0">{{ factura.numero }}</h3>
-                            <p class="mb-0">{{ factura.fecha_emision_str or 'Fecha no disponible' }}</p>
+                            <h1 class="mb-3">{{ factura.tipo_comprobante|upper }}</h1>
+                            <h3 class="mb-2">{{ factura.numero }}</h3>
+                            <p class="mb-0">
+                                <strong>Fecha:</strong> {{ factura.fecha_emision_str }}
+                            </p>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Cuerpo del comprobante -->
-            <div class="comprobante-body">
-                <div class="card-body">
-                    <!-- Información del cliente -->
+                
+                <!-- CUERPO -->
+                <div class="comprobante-body p-4">
+                    <!-- DATOS CLIENTE -->
                     <div class="row mb-4">
                         <div class="col-md-6">
-                            <div class="cliente-card">
-                                <h5 class="border-bottom pb-2">DATOS DEL CLIENTE</h5>
-                                <p class="mb-1"><strong>Nombre:</strong> {{ factura.cliente_nombre }} {{ factura.cliente_apellido }}</p>
-                                {% if factura.cliente_dni %}
-                                <p class="mb-1"><strong>DNI:</strong> {{ factura.cliente_dni }}</p>
-                                {% endif %}
-                                {% if factura.cliente_direccion %}
-                                <p class="mb-1"><strong>Dirección:</strong> {{ factura.cliente_direccion }}</p>
-                                {% endif %}
-                            </div>
+                            <h5>DATOS DEL CLIENTE</h5>
+                            {% if factura.cliente_nombre %}
+                            <p class="mb-1"><strong>Señor(es):</strong> {{ factura.cliente_nombre }} {{ factura.cliente_apellido }}</p>
+                            {% if factura.cliente_dni %}<p class="mb-1"><strong>DNI:</strong> {{ factura.cliente_dni }}</p>{% endif %}
+                            {% if factura.cliente_direccion %}<p class="mb-1"><strong>Dirección:</strong> {{ factura.cliente_direccion }}</p>{% endif %}
+                            {% if factura.cliente_telefono %}<p class="mb-1"><strong>Teléfono:</strong> {{ factura.cliente_telefono }}</p>{% endif %}
+                            {% else %}
+                            <p class="text-muted">Cliente no especificado</p>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <h5 class="border-bottom pb-2">INFORMACIÓN ADICIONAL</h5>
-                            <p class="mb-1"><strong>Estado:</strong> 
-                                <span class="badge estado-badge 
-                                    {% if factura.estado == 'pagada' %}estado-pagada
-                                    {% elif factura.estado == 'pendiente' %}estado-pendiente
-                                    {% elif factura.estado == 'anulada' %}estado-anulada
-                                    {% elif factura.estado == 'credito' %}estado-credito
-                                    {% endif %}">
-                                    {{ factura.estado|upper }}
+                            <h5>INFORMACIÓN ADICIONAL</h5>
+                            <p class="mb-1">
+                                <strong>Método de Pago:</strong> 
+                                <span class="badge bg-info">{{ factura.metodo_pago|title if factura.metodo_pago else 'No especificado' }}</span>
+                            </p>
+                            <p class="mb-1">
+                                <strong>Estado:</strong> 
+                                <span class="badge {% if factura.estado == 'pagada' %}bg-success{% elif factura.estado == 'pendiente' %}bg-warning{% elif factura.estado == 'anulada' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                    {{ factura.estado|title }}
                                 </span>
                             </p>
                             {% if factura.codigo_reserva %}
@@ -66,241 +107,179 @@
                             {% if factura.mascota_nombre %}
                             <p class="mb-1"><strong>Mascota:</strong> {{ factura.mascota_nombre }}</p>
                             {% endif %}
-                            <p class="mb-1"><strong>Método de Pago:</strong> {{ factura.metodo_pago|title }}</p>
                         </div>
                     </div>
                     
-                    <!-- Detalle de servicios -->
+                    <!-- SERVICIOS -->
+                    <h5 class="mb-3">DETALLE DE SERVICIOS</h5>
                     {% if factura.servicios %}
-                    <h5 class="border-bottom pb-2 mb-3">DETALLE DE SERVICIOS</h5>
-                    <div class="table-responsive mb-4">
+                    <div class="table-responsive">
                         <table class="table table-bordered table-factura">
-                            <thead class="table-light">
+                            <thead>
                                 <tr>
-                                    <th width="50%">Descripción</th>
+                                    <th width="5%">#</th>
+                                    <th width="55%">Descripción</th>
                                     <th width="10%" class="text-center">Cant.</th>
-                                    <th width="15%" class="text-end">P. Unitario</th>
-                                    <th width="10%" class="text-end">Desc.</th>
+                                    <th width="15%" class="text-end">Precio Unit.</th>
                                     <th width="15%" class="text-end">Subtotal</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for servicio in factura.servicios %}
                                 <tr>
-                                    <td>{{ servicio.descripcion }}</td>
-                                    <td class="text-center">{{ servicio.cantidad }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(servicio.precio_unitario) }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(servicio.descuento or 0) }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(servicio.subtotal) }}</td>
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        {{ servicio.nombre_servicio or servicio.descripcion or 'Servicio' }}
+                                        {% if servicio.categoria %}
+                                        <br><small class="text-muted">Categoría: {{ servicio.categoria }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">{{ servicio.cantidad|default(1) }}</td>
+                                    <td class="text-end">S/ {{ "%.2f"|format(servicio.precio_unitario|default(0)) }}</td>
+                                    <td class="text-end">S/ {{ "%.2f"|format(servicio.subtotal|default(0)) }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                    {% endif %}
-                    
-                    <!-- Detalle de productos (si los hay) -->
-                    {% if factura.productos and factura.productos|length > 0 %}
-                    <h5 class="border-bottom pb-2 mb-3">DETALLE DE PRODUCTOS</h5>
-                    <div class="table-responsive mb-4">
-                        <table class="table table-bordered table-factura">
-                            <thead class="table-light">
-                                <tr>
-                                    <th width="50%">Descripción</th>
-                                    <th width="10%" class="text-center">Cant.</th>
-                                    <th width="15%" class="text-end">P. Unitario</th>
-                                    <th width="10%" class="text-end">Desc.</th>
-                                    <th width="15%" class="text-end">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for producto in factura.productos %}
-                                <tr>
-                                    <td>{{ producto.descripcion }}</td>
-                                    <td class="text-center">{{ producto.cantidad }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(producto.precio_unitario) }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(producto.descuento or 0) }}</td>
-                                    <td class="text-end">S/ {{ "%.2f"|format(producto.subtotal) }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No hay servicios registrados en esta factura.
                     </div>
                     {% endif %}
                     
-                    <!-- Totales -->
-<div class="row justify-content-end">
-    <div class="col-md-6">
-        <div class="total-box">
-            {% if factura.total_servicios > 0 %}
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>Subtotal Servicios:</strong></div>
-                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_servicios) }}</div>
-            </div>
-            {% endif %}
-            
-            {% if factura.total_productos and factura.total_productos > 0 %}
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>Subtotal Productos:</strong></div>
-                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_productos) }}</div>
-            </div>
-            {% endif %}
-            
-            {% if factura.descuento_total and factura.descuento_total > 0 %}
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>Descuento:</strong></div>
-                <div class="col-6 text-end">- S/ {{ "%.2f"|format(factura.descuento_total) }}</div>
-            </div>
-            {% endif %}
-            
-            <!-- Esto es lo que debes cambiar: -->
-            {% if factura.tipo_comprobante == 'factura' %}
-            <!-- Para factura, mostramos base e IGV por separado -->
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>Base Imponible:</strong></div>
-                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.subtotal) }}</div>
-            </div>
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>IGV (18%):</strong></div>
-                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.igv) }}</div>
-            </div>
-            {% else %}
-            <!-- Para boleta, solo mostramos el total -->
-            <div class="row mb-2">
-                <div class="col-6 text-end"><strong>Total:</strong></div>
-                <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total) }}</div>
-            </div>
-            {% endif %}
-            
-            <!-- Solo en facturas mostramos el total final aquí -->
-            {% if factura.tipo_comprobante == 'factura' %}
-            <div class="row border-top pt-2 mt-2">
-                <div class="col-6 text-end"><h5 class="mb-0"><strong>TOTAL:</strong></h5></div>
-                <div class="col-6 text-end"><h5 class="mb-0 text-success">S/ {{ "%.2f"|format(factura.total) }}</h5></div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
+                    <!-- TOTALES -->
+                    <div class="row justify-content-end mt-4">
+                        <div class="col-md-6">
+                            <div class="total-box">
+                                <div class="row mb-2">
+                                    <div class="col-6 text-end"><strong>Subtotal Servicios:</strong></div>
+                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.total_servicios|default(0)) }}</div>
+                                </div>
+                                
+                                {% if factura.tipo_comprobante == 'factura' %}
+                                <div class="row mb-2">
+                                    <div class="col-6 text-end"><strong>Base Imponible:</strong></div>
+                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.subtotal|default(0)) }}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6 text-end"><strong>IGV (18%):</strong></div>
+                                    <div class="col-6 text-end">S/ {{ "%.2f"|format(factura.igv|default(0)) }}</div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="row border-top pt-2 mt-2">
+                                    <div class="col-6 text-end">
+                                        <h5 class="mb-0"><strong>TOTAL:</strong></h5>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <h5 class="mb-0 text-success">S/ {{ "%.2f"|format(factura.total|default(0)) }}</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
-                    <!-- Notas -->
+                    <!-- NOTAS -->
                     {% if factura.notas %}
                     <div class="mt-4">
-                        <h5 class="border-bottom pb-2">NOTAS</h5>
+                        <h5>OBSERVACIONES</h5>
                         <p class="mb-0">{{ factura.notas }}</p>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Panel lateral derecho - ACCIONES -->
-    <div class="col-lg-4 no-print">
-        <!-- Panel de acciones -->
-        <div class="card shadow mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones</h5>
+        
+        <!-- PANEL LATERAL -->
+        <div class="col-lg-4 no-print">
+            <!-- ACCIONES -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Acciones</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2 mb-3">
+                        {% if factura.estado == 'pendiente' %}
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalPagoCompleto">
+                            <i class="fas fa-money-bill-wave me-1"></i>Marcar como Pagada
+                        </button>
+                        {% elif factura.estado == 'credito' %}
+                        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalPagoParcial">
+                            <i class="fas fa-money-bill-alt me-1"></i>Pago Parcial
+                        </button>
+                        {% endif %}
+                        
+                        <button class="btn btn-primary btn-imprimir">
+                            <i class="fas fa-print me-1"></i>Imprimir
+                        </button>
+                        
+                        {% if factura.estado != 'anulada' and factura.estado != 'pagada' %}
+                        <button class="btn btn-danger" id="btnAnularFactura">
+                            <i class="fas fa-ban me-1"></i>Anular Factura
+                        </button>
+                        {% endif %}
+                        
+                        {% if factura.codigo_reserva %}
+                        <a href="{{ url_for('ver_reserva', id=factura.id_reserva) }}" class="btn btn-outline-info">
+                            <i class="fas fa-calendar-alt me-1"></i>Ver Reserva
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="d-grid gap-2 mb-3">
-                    {% if factura.estado == 'pendiente' %}
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalPago">
-                        <i class="fas fa-money-bill-wave me-1"></i>Registrar Pago
-                    </button>
-                    {% elif factura.estado == 'credito' %}
-                    <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalPagoParcial">
-                        <i class="fas fa-money-bill-alt me-1"></i>Pago Parcial
-                    </button>
-                    {% endif %}
+            
+            <!-- INFORMACIÓN -->
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Información</h5>
+                </div>
+                <div class="card-body">
+                    <p><i class="fas fa-hashtag me-2 text-muted"></i> 
+                        <strong>Número:</strong> {{ factura.numero }}</p>
                     
-                    <button class="btn btn-info btn-imprimir">
-                        <i class="fas fa-print me-1"></i>Imprimir Comprobante
-                    </button>
+                    <p><i class="fas fa-file-alt me-2 text-muted"></i> 
+                        <strong>Tipo:</strong> {{ factura.tipo_comprobante|title }}</p>
                     
-                    {% if factura.estado != 'anulada' and factura.estado != 'pagada' %}
-                    <button class="btn btn-danger" id="btnAnularFactura">
-                        <i class="fas fa-ban me-1"></i>Anular Factura
-                    </button>
-                    {% endif %}
+                    <p><i class="fas fa-calendar me-2 text-muted"></i> 
+                        <strong>Fecha:</strong> {{ factura.fecha_emision_str }}</p>
+                    
+                    <p><i class="fas fa-money-bill-wave me-2 text-muted"></i> 
+                        <strong>Método Pago:</strong> {{ factura.metodo_pago|title if factura.metodo_pago else 'No especificado' }}</p>
                     
                     {% if factura.codigo_reserva %}
-                    <a href="{{ url_for('ver_reserva', id=factura.id_reserva) }}" class="btn btn-outline-primary">
-                        <i class="fas fa-calendar-alt me-1"></i>Ver Reserva
-                    </a>
+                    <p><i class="fas fa-calendar-check me-2 text-muted"></i> 
+                        <strong>Reserva:</strong> {{ factura.codigo_reserva }}</p>
                     {% endif %}
                     
-                    <a href="{{ url_for('ventas') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-list me-1"></i>Volver a Ventas
-                    </a>
+                    {% if factura.empleado_nombre %}
+                    <p><i class="fas fa-user-tie me-2 text-muted"></i> 
+                        <strong>Cajero:</strong> {{ factura.empleado_nombre }} {{ factura.empleado_apellido }}</p>
+                    {% endif %}
                 </div>
-                
-                <!-- Historial de pagos -->
-                {% if factura.pagos %}
-                <h6 class="border-bottom pb-2">Historial de Pagos</h6>
-                <div class="lista-pagos">
-                    {% for pago in factura.pagos %}
-                    <div class="pago-item {{ pago.metodo_pago }}">
-                        <div class="d-flex w-100 justify-content-between">
-                            <small class="mb-1">{{ pago.concepto }}</small>
-                            <small>{{ pago.fecha_movimiento.strftime('%H:%M') }}</small>
-                        </div>
-                        <div class="d-flex w-100 justify-content-between">
-                            <small class="text-muted">{{ pago.metodo_pago|title }}</small>
-                            <strong class="text-success">S/ {{ "%.2f"|format(pago.monto) }}</strong>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Información adicional -->
-        <div class="card shadow">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Información</h5>
-            </div>
-            <div class="card-body">
-                <p><i class="fas fa-calendar-alt me-2 text-muted"></i> 
-                    <strong>Emisión:</strong> {{ factura.fecha_emision_str or 'No disponible' }}</p>
-                
-                {% if factura.fecha_pago %}
-                <p><i class="fas fa-clock me-2 text-muted"></i> 
-                    <strong>Pago:</strong> {{ factura.fecha_pago.strftime('%d/%m/%Y %H:%M') }}</p>
-                {% endif %}
-                
-                <p><i class="fas fa-user-tie me-2 text-muted"></i> 
-                    <strong>Cajero:</strong> Sistema</p>
-                
-                {% if factura.id_reserva %}
-                <p><i class="fas fa-link me-2 text-muted"></i> 
-                    <strong>Reserva ID:</strong> {{ factura.id_reserva }}</p>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal para pago completo -->
-<div class="modal fade modal-pago" id="modalPago" tabindex="-1">
+<!-- MODALES -->
+<!-- Modal Pago Completo -->
+<div class="modal fade" id="modalPagoCompleto" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content modal-pago">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-money-bill-wave me-2"></i>Registrar Pago</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>Marcar como Pagada
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Registrar pago completo de la factura <strong>{{ factura.numero }}</strong></p>
-                <div class="alert alert-info">
-                    <p class="mb-1"><strong>Total a pagar:</strong></p>
-                    <h4 class="mb-0 text-center text-success">S/ {{ "%.2f"|format(factura.total) }}</h4>
-                </div>
-                
+                <p>¿Confirmar pago completo de <strong>S/ {{ "%.2f"|format(factura.total) if factura.total else "0.00" }}</strong>?</p>
                 <div class="mb-3">
-                    <label for="metodoPagoModal" class="form-label">Método de Pago</label>
+                    <label class="form-label">Método de Pago</label>
                     <select class="form-select" id="metodoPagoModal">
-                        <option value="efectivo" selected>Efectivo</option>
+                        <option value="efectivo">Efectivo</option>
                         <option value="tarjeta">Tarjeta</option>
                         <option value="yape">Yape</option>
                         <option value="plin">Plin</option>
@@ -310,45 +289,34 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmarPago">
-                    <i class="fas fa-check me-1"></i>Confirmar Pago
-                </button>
+                <button type="button" class="btn btn-success" id="btnConfirmarPago">Confirmar Pago</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal para pago parcial -->
-<div class="modal fade modal-pago-parcial" id="modalPagoParcial" tabindex="-1">
+<!-- Modal Pago Parcial -->
+<div class="modal fade" id="modalPagoParcial" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content modal-pago-parcial">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-money-bill-alt me-2"></i>Pago Parcial</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title">
+                    <i class="fas fa-money-bill-wave me-2"></i>Pago Parcial
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Registrar pago parcial de la factura <strong>{{ factura.numero }}</strong></p>
-                <div class="alert alert-warning">
-                    <p class="mb-1"><strong>Total pendiente:</strong></p>
-                    <h4 class="mb-0 text-center text-danger">S/ {{ "%.2f"|format(factura.total) }}</h4>
-                </div>
-                
+                <p>Total: <strong>S/ {{ "%.2f"|format(factura.total) if factura.total else "0.00" }}</strong></p>
                 <div class="mb-3">
-                    <label for="montoParcial" class="form-label">Monto a Pagar</label>
-                    <div class="input-group">
-                        <span class="input-group-text">S/</span>
-                        <input type="number" class="form-control" id="montoParcial" 
-                               step="0.01" min="0.01" max="{{ factura.total }}" 
-                               value="{{ factura.total }}">
-                        <span class="input-group-text">.00</span>
-                    </div>
-                    <div class="form-text">Máximo: S/ {{ "%.2f"|format(factura.total) }}</div>
+                    <label class="form-label">Monto a Pagar</label>
+                    <input type="number" class="form-control" id="montoParcial" 
+                           value="{{ "%.2f"|format(factura.total) if factura.total else "0.00" }}" 
+                           min="0.01" max="{{ factura.total if factura.total else 0 }}" step="0.01">
                 </div>
-                
                 <div class="mb-3">
-                    <label for="metodoPagoParcial" class="form-label">Método de Pago</label>
+                    <label class="form-label">Método de Pago</label>
                     <select class="form-select" id="metodoPagoParcial">
-                        <option value="efectivo" selected>Efectivo</option>
+                        <option value="efectivo">Efectivo</option>
                         <option value="tarjeta">Tarjeta</option>
                         <option value="yape">Yape</option>
                         <option value="plin">Plin</option>
@@ -358,20 +326,18 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-warning" id="btnConfirmarPagoParcial">
-                    <i class="fas fa-check me-1"></i>Registrar Pago Parcial
-                </button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarPagoParcial">Registrar Pago</button>
             </div>
         </div>
     </div>
 </div>
-
-<!-- Spinner de carga -->
-<div id="cargando-spinner" style="display: none;"></div>
 {% endblock %}
 
 {% block extra_js %}
+<!-- Datos para JavaScript -->
 <meta name="factura-id" content="{{ factura.id_factura }}">
-<meta name="factura-total" content="{{ factura.total }}">
+<meta name="factura-total" content="{{ factura.total if factura.total else 0 }}">
+
+<!-- Incluir JavaScript -->
 <script src="{{ url_for('static', filename='js/facturas.js') }}"></script>
 {% endblock %}
