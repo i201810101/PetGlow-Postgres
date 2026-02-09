@@ -44,6 +44,19 @@ app.config['ADMIN_EMAIL'] = config.ADMIN_EMAIL
 app.config['MAIL_USE_TLS'] = config.MAIL_USE_TLS
 app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 
+# 🔥 NUEVO: Configurar Resend
+app.config['RESEND_API_KEY'] = config.RESEND_API_KEY
+
+# 🔥 Añade esto también para inicializar Resend
+try:
+    if config.RESEND_API_KEY:
+        resend.api_key = config.RESEND_API_KEY
+        print(f"✅ Resend configurado con API Key: {config.RESEND_API_KEY[:10]}...")
+    else:
+        print("⚠️ RESEND_API_KEY no configurada en config.py")
+except Exception as e:
+    print(f"⚠️ Error configurando Resend: {e}")
+    
 def parse_xml(xml_string):
     """Parse XML string to Element"""
     from xml.etree.ElementTree import fromstring
