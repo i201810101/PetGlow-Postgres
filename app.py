@@ -2397,7 +2397,8 @@ Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
         
     except Exception as e:
         print(f"❌ Error SMTP: {str(e)}")
-        return False== RUTAS API PARA EMPLEADOS ====================
+        return False
+===================== RUTAS API PARA EMPLEADOS ====================
 
 @app.route('/api/empleado/info')
 @login_required
