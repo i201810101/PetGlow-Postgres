@@ -4365,9 +4365,9 @@ def debug_routes():
         'caja_routes': caja_routes,
         'tiene_apertura_caja': any(r['endpoint'] == 'apertura_caja' for r in routes)
     })
-@app.route('/ventas/crear')
+@app.route('/ventas/crear', methods=['GET', 'POST'])  # Añade POST
 def crear_venta():
-    """Crear nueva venta directa (sin reserva)"""
+    """Crear nueva venta directa (sin reserva) - SOLO SERVICIOS"""
     conn = get_db_connection()
     
     if not conn:
@@ -4377,17 +4377,153 @@ def crear_venta():
     try:
         cursor = conn.cursor()
         
+        if request.method == 'POST':
+            # ========== PROCESAR VENTA ==========
+            print("🔍 Procesando nueva venta directa...")
+            
+            id_cliente = request.form.get('id_cliente', '').strip()
+            tipo_comprobante = request.form.get('tipo_comprobante', 'boleta')
+            metodo_pago = request.form.get('metodo_pago', 'efectivo')
+            servicios = request.form.getlist('servicios[]')
+            cantidades = request.form.getlist('cantidades[]')
+            notas = request.form.get('notas', '').strip()
+            
+            print(f"🔍 Datos recibidos:")
+            print(f"   Cliente: {id_cliente}")
+            print(f"   Tipo: {tipo_comprobante}")
+            print(f"   Método pago: {metodo_pago}")
+            print(f"   Servicios: {servicios}")
+            print(f"   Cantidades: {cantidades}")
+            
+            # Validaciones
+            if not servicios:
+                flash('Debe seleccionar al menos un servicio.', 'danger')
+                return redirect(url_for('crear_venta'))
+            
+            if tipo_comprobante == 'factura' and (not id_cliente or id_cliente == '0'):
+                flash('Para factura debe seleccionar un cliente.', 'danger')
+                return redirect(url_for('crear_venta'))
+            
+            # Validar DNI para factura
+            if tipo_comprobante == 'factura' and id_cliente and id_cliente != '0':
+                cursor.execute("SELECT dni FROM clientes WHERE id_cliente = %s", (id_cliente,))
+                cliente = cursor.fetchone()
+                if not cliente or not cliente['dni']:
+                    flash('Para factura, el cliente debe tener DNI registrado.', 'danger')
+                    return redirect(url_for('crear_venta'))
+            
+            # Calcular total
+            total = 0.0
+            servicios_detalle = []
+            
+            for i, servicio_id in enumerate(servicios):
+                cursor.execute("""
+                    SELECT id_servicio, nombre, precio 
+                    FROM servicios 
+                    WHERE id_servicio = %s AND activo = TRUE
+                """, (servicio_id,))
+                
+                servicio = cursor.fetchone()
+                
+                if servicio:
+                    cantidad = int(cantidades[i]) if i < len(cantidades) and cantidades[i] else 1
+                    precio_unit = float(servicio['precio'])
+                    subtotal = precio_unit * cantidad
+                    total += subtotal
+                    
+                    servicios_detalle.append({
+                        'id_servicio': servicio_id,
+                        'nombre': servicio['nombre'],
+                        'precio_unitario': precio_unit,
+                        'cantidad': cantidad,
+                        'subtotal': subtotal
+                    })
+                    
+                    print(f"🔍 Servicio {i+1}: {servicio['nombre']} x{cantidad} = S/ {subtotal:.2f}")
+            
+            print(f"🔍 Total calculado: S/ {total:.2f}")
+            
+            # Calcular IGV según tipo de comprobante
+            if tipo_comprobante == 'factura' and total > 0:
+                subtotal_val = total / 1.18  # Base imponible
+                igv = subtotal_val * 0.18    # IGV 18%
+                print(f"🔍 FACTURA - Base: {subtotal_val:.2f}, IGV: {igv:.2f}")
+            else:
+                subtotal_val = total
+                igv = 0.0
+                print(f"🔍 BOLETA - Total: {total:.2f}, IGV: 0.00")
+            
+            # Generar número de comprobante
+            cursor.execute("SELECT COALESCE(MAX(id_factura), 0) + 1 as next_id FROM facturas")
+            next_id = cursor.fetchone()['next_id']
+            
+            serie = 'B001' if tipo_comprobante == 'boleta' else 'F001'
+            numero = f"{next_id:04d}"
+            
+            print(f"🔍 Creando {tipo_comprobante.upper()} {serie}-{numero}")
+            
+            # Preparar datos del cliente
+            cliente_id = int(id_cliente) if id_cliente and id_cliente != '0' else None
+            
+            # Crear factura
+            cursor.execute("""
+                INSERT INTO facturas (
+                    serie, numero, tipo_comprobante, id_cliente,
+                    subtotal, igv, total, metodo_pago, notas, 
+                    id_empleado_cajero, estado, fecha_emision
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                RETURNING id_factura
+            """, (
+                serie, numero, tipo_comprobante, cliente_id,
+                round(subtotal_val, 2), round(igv, 2), round(total, 2),
+                metodo_pago, notas or None, 
+                session.get('id_usuario', 1), 'pagada'  # Venta directa = pagada
+            ))
+            
+            result = cursor.fetchone()
+            id_factura = result['id_factura'] if result else None
+            
+            if not id_factura:
+                raise Exception("No se pudo obtener el ID de la factura creada")
+            
+            print(f"✅ Factura creada con ID: {id_factura}")
+            
+            # Agregar servicios a la factura
+            for servicio in servicios_detalle:
+                cursor.execute("""
+                    INSERT INTO factura_servicios (
+                        id_factura, id_servicio, descripcion, 
+                        precio_unitario, cantidad, subtotal
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    id_factura, servicio['id_servicio'], servicio['nombre'],
+                    servicio['precio_unitario'], servicio['cantidad'], servicio['subtotal']
+                ))
+            
+            conn.commit()
+            
+            flash(f'Venta {serie}-{numero} creada exitosamente. Total: S/ {total:.2f}', 'success')
+            return redirect(url_for('ver_factura', id=id_factura))
+        
+        # ========== GET: Mostrar formulario ==========
+        print("🔍 Mostrando formulario de venta...")
+        
         # Obtener clientes para el select
-        cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
+        cursor.execute("""
+            SELECT id_cliente, nombre, apellido, dni 
+            FROM clientes 
+            ORDER BY apellido, nombre
+        """)
         clientes = cursor.fetchall()
         
         # Obtener servicios activos
-        cursor.execute("SELECT * FROM servicios WHERE activo = 1 ORDER BY nombre")
+        cursor.execute("""
+            SELECT id_servicio, nombre, precio, categoria, descripcion 
+            FROM servicios 
+            WHERE activo = TRUE 
+            ORDER BY categoria, nombre
+        """)
         servicios = cursor.fetchall()
-        
-        # Obtener productos con stock
-        cursor.execute("SELECT * FROM productos WHERE stock_actual > 0 AND activo = 1 ORDER BY nombre")
-        productos = cursor.fetchall()
         
         # Agrupar servicios por categoría
         servicios_por_categoria = {}
@@ -4397,16 +4533,31 @@ def crear_venta():
                 servicios_por_categoria[categoria] = []
             servicios_por_categoria[categoria].append(servicio)
         
+        print(f"🔍 Encontrados {len(servicios)} servicios en {len(servicios_por_categoria)} categorías")
+        
         return render_template('ventas/crear.html', 
                              clientes=clientes, 
                              servicios_por_categoria=servicios_por_categoria,
-                             productos=productos)
+                             productos=[])  # Lista vacía ya que no manejas productos
         
     except Error as e:
-        flash(f'Error obteniendo datos: {e}', 'danger')
+        if conn:
+            conn.rollback()
+        flash(f'Error creando venta: {e}', 'danger')
+        print(f"❌ Error en crear_venta: {e}")
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('ventas'))
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        flash(f'Error inesperado: {e}', 'danger')
+        print(f"❌ Error general en crear_venta: {e}")
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('ventas'))
     finally:
-        if cursor:
+        if 'cursor' in locals():
             cursor.close()
         if conn:
             conn.close()     
