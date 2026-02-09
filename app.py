@@ -2382,21 +2382,25 @@ Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
         
         try:
             if mail_use_ssl:
-            # Solo SSL
-            server = smtplib.SMTP_SSL(mail_server, mail_port, timeout=10)
-            server.login(mail_username, mail_password)
-        else:
-            # Solo TLS
-            server = smtplib.SMTP(mail_server, mail_port, timeout=10)
-            server.starttls()
-            server.login(mail_username, mail_password)
-        
-        server.send_message(msg)
-        server.quit()
-        return True
-        
+                # Solo SSL
+                server = smtplib.SMTP_SSL(mail_server, mail_port, timeout=10)
+                server.login(mail_username, mail_password)
+            else:
+                # Solo TLS
+                server = smtplib.SMTP(mail_server, mail_port, timeout=10)
+                server.starttls()
+                server.login(mail_username, mail_password)
+            
+            server.send_message(msg)
+            server.quit()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error SMTP: {str(e)}")
+            return False
+            
     except Exception as e:
-        print(f"❌ Error SMTP: {str(e)}")
+        print(f"❌ Error general: {str(e)}")
         return False
 # ===================== RUTAS API PARA EMPLEADOS ====================
 
