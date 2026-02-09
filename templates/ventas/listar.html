@@ -203,7 +203,7 @@ block extra_css %}
 </div>
 {% endblock %} {% block extra_js %}
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", function () {
     // Filtrado de tabla
     const buscador = document.getElementById("buscador-ventas");
     const filtroEstado = document.getElementById("filtro-estado");
@@ -211,61 +211,69 @@ block extra_css %}
     const filas = document.querySelectorAll(".ventas-table tbody tr");
 
     function filtrarVentas() {
-      const texto = buscador.value.toLowerCase();
-      const estado = filtroEstado.value;
-      const fecha = filtroFecha.value;
+        const texto = buscador.value.toLowerCase();
+        const estado = filtroEstado.value;
+        const fecha = filtroFecha.value;
 
-      filas.forEach((fila) => {
-        if (fila.classList.contains("no-data")) return;
+        let filasVisibles = 0;
 
-        const textoFila = fila.textContent.toLowerCase();
-        const estadoFila = fila
-          .querySelector(".badge")
-          .textContent.toLowerCase();
-        const fechaFila = fila.cells[1].textContent.trim();
+        filas.forEach((fila) => {
+            if (fila.classList.contains("no-data")) return;
 
-        let coincide = true;
-
-        // Filtrar por texto
-        if (texto && !textoFila.includes(texto)) {
-          coincide = false;
-        }
-
-        // Filtrar por estado
-        if (estado && !estadoFila.includes(estado)) {
-          coincide = false;
-        }
-
-        // Filtrar por fecha (formato dd/mm/yyyy)
-        if (fecha) {
-          const fechaInput = new Date(fecha);
-          const fechaParts = fechaFila.split(" ")[0].split("/");
-          if (fechaParts.length === 3) {
-            const fechaFilaDate = new Date(
-              fechaParts[2],
-              fechaParts[1] - 1,
-              fechaParts[0]
-            );
-            if (fechaInput.toDateString() !== fechaFilaDate.toDateString()) {
-              coincide = false;
+            const textoFila = fila.textContent.toLowerCase();
+            const estadoFila = fila.querySelector(".badge").textContent.toLowerCase();
+            const fechaCelda = fila.cells[1];
+            
+            // Obtener texto de la celda de fecha
+            let fechaFilaTexto = '';
+            if (fechaCelda) {
+                const spans = fechaCelda.querySelectorAll('strong, small');
+                spans.forEach(span => {
+                    fechaFilaTexto += span.textContent + ' ';
+                });
+                fechaFilaTexto = fechaFilaTexto.trim();
             }
-          }
-        }
 
-        fila.style.display = coincide ? "" : "none";
-      });
+            let coincide = true;
+
+            // Filtrar por texto
+            if (texto && !textoFila.includes(texto)) {
+                coincide = false;
+            }
+
+            // Filtrar por estado
+            if (estado && !estadoFila.includes(estado)) {
+                coincide = false;
+            }
+
+            // Filtrar por fecha (solo si se especificó fecha)
+            if (fecha) {
+                if (!fechaFilaTexto.includes(fecha.split('-').reverse().join('/'))) {
+                    coincide = false;
+                }
+            }
+
+            if (coincide) {
+                fila.style.display = "";
+                filasVisibles++;
+            } else {
+                fila.style.display = "none";
+            }
+        });
+
+        // Mostrar mensaje si no hay resultados
+        const sinResultados = document.querySelector("#sin-resultados");
+        if (sinResultados) {
+            sinResultados.style.display = filasVisibles === 0 ? "" : "none";
+        }
     }
 
     if (buscador) buscador.addEventListener("input", filtrarVentas);
     if (filtroEstado) filtroEstado.addEventListener("change", filtrarVentas);
     if (filtroFecha) filtroFecha.addEventListener("change", filtrarVentas);
 
-    // Establecer fecha de hoy como predeterminada
-    if (filtroFecha) {
-      const hoy = new Date().toISOString().split("T")[0];
-      filtroFecha.value = hoy;
-      filtrarVentas();
-    }
-  });
+    // NO establecer fecha de hoy automáticamente
+    // Dejar que el usuario elija si quiere filtrar por fecha
+});
 </script>
 {% endblock %}
