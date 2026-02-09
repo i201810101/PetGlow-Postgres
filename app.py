@@ -3794,7 +3794,7 @@ def facturar_reserva(id):
             SELECT r.*, 
                    m.id_mascota, m.nombre as mascota_nombre,
                    c.id_cliente, c.nombre as cliente_nombre, c.apellido as cliente_apellido,
-                   c.dni as cliente_dni
+                   c.dni as cliente_dni, c.direccion as cliente_direccion
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
             JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -3805,6 +3805,11 @@ def facturar_reserva(id):
         if not reserva:
             flash('Reserva no encontrada.', 'danger')
             return redirect(url_for('reservas'))
+        
+        # Convertir a dict mutable
+        reserva = dict(reserva)
+        
+        print(f"🔍 Reserva ID {id} encontrada. Estado: {reserva['estado']}")
         
         if reserva['estado'] != 'completada':
             flash('Solo se pueden facturar reservas completadas.', 'warning')
@@ -3819,102 +3824,231 @@ def facturar_reserva(id):
             return redirect(url_for('ver_factura', id=factura_existente['id_factura']))
         
         if request.method == 'POST':
+            print(f"🔍 POST recibido para facturar reserva {id}")
+            
             # 3. Obtener datos del formulario
             tipo_comprobante = request.form.get('tipo_comprobante', 'boleta')
             metodo_pago = request.form.get('metodo_pago', 'efectivo')
             notas = request.form.get('notas', '').strip()
             
-            # 4. Obtener servicios para calcular totales
+            print(f"🔍 Tipo comprobante: {tipo_comprobante}")
+            print(f"🔍 Método pago: {metodo_pago}")
+            
+            # Validar tipo de comprobante según DNI
+            if tipo_comprobante == 'factura' and not reserva['cliente_dni']:
+                flash('Para emitir factura el cliente debe tener DNI registrado.', 'danger')
+                return redirect(url_for('facturar_reserva', id=id))
+            
+            # 4. Obtener servicios para calcular totales (MANEJO DE NULLS)
             cursor.execute("""
-                SELECT SUM(rs.subtotal) as total_servicios
-                FROM reserva_servicios rs
-                WHERE rs.id_reserva = %s
+                SELECT 
+                    COALESCE(SUM(subtotal), 0) as total_subtotal,
+                    COALESCE(SUM(precio_unitario * COALESCE(cantidad, 1)), 0) as total_calculado
+                FROM reserva_servicios
+                WHERE id_reserva = %s
             """, (id,))
-            total_servicios = cursor.fetchone()['total_servicios'] or 0
-            total_servicios = float(total_servicios)
+            
+            total_result = cursor.fetchone()
+            print(f"🔍 Resultados total: {total_result}")
+            
+            # Usar el primer total no-cero
+            if total_result['total_subtotal'] and float(total_result['total_subtotal']) > 0:
+                total_servicios = float(total_result['total_subtotal'])
+            elif total_result['total_calculado'] and float(total_result['total_calculado']) > 0:
+                total_servicios = float(total_result['total_calculado'])
+            else:
+                total_servicios = 0.0
+            
+            print(f"🔍 Total servicios: {total_servicios}")
             
             # 5. Calcular según tipo de comprobante
             if tipo_comprobante == 'factura':
                 # Para factura: calcular IGV (18%)
-                subtotal = total_servicios / 1.18  # Base imponible
-                igv = subtotal * 0.18  # IGV 18%
-                total = subtotal + igv
+                if total_servicios > 0:
+                    subtotal = total_servicios / 1.18  # Base imponible
+                    igv = subtotal * 0.18  # IGV 18%
+                    total = subtotal + igv
+                else:
+                    subtotal = 0.0
+                    igv = 0.0
+                    total = 0.0
+                    
+                print(f"🔍 FACTURA - Subtotal: {subtotal:.2f}, IGV: {igv:.2f}, Total: {total:.2f}")
             else:
-                # Para boleta: no hay IGV
-                subtotal = total_servicios  # Base imponible = total
+                # Para boleta: no hay IGV (para régimen especial)
+                subtotal = total_servicios
                 igv = 0.00
                 total = total_servicios
+                print(f"🔍 BOLETA - Subtotal: {subtotal:.2f}, IGV: {igv:.2f}, Total: {total:.2f}")
             
             # 6. Generar número de factura/boleta
             cursor.execute("SELECT COALESCE(MAX(id_factura), 0) + 1 as next_id FROM facturas")
-            next_id = cursor.fetchone()['next_id']
+            next_id_result = cursor.fetchone()
+            next_id = next_id_result['next_id']
             
             serie = 'B001' if tipo_comprobante == 'boleta' else 'F001'
-            numero = f"{serie}-{next_id:04d}"
+            numero = f"{next_id:04d}"
             
-            # 7. Crear factura con todos los campos CORREGIDOS
+            print(f"🔍 Creando {tipo_comprobante.upper()} {serie}-{numero}")
+            
+            # 7. Crear factura con RETURNING para obtener ID (POSTGRESQL)
             cursor.execute("""
                 INSERT INTO facturas (
                     serie, numero, tipo_comprobante, id_cliente, id_reserva,
-                    metodo_pago, notas, id_empleado_cajero, estado
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (serie, numero, tipo_comprobante, reserva['id_cliente'], 
-                id, metodo_pago, notas or None, 1, 'pendiente'))
+                    subtotal, igv, total, metodo_pago, notas, 
+                    id_empleado_cajero, estado, fecha_emision
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                RETURNING id_factura
+            """, (
+                serie, numero, tipo_comprobante, reserva['id_cliente'], id,
+                round(subtotal, 2), round(igv, 2), round(total, 2),
+                metodo_pago, notas or None, 
+                1, 'pendiente'
+            ))
             
-            id_factura = cursor.lastrowid
+            # Obtener el ID de la factura creada
+            result = cursor.fetchone()
+            if not result or 'id_factura' not in result:
+                raise Exception("No se pudo obtener el ID de la factura creada")
             
-            # 8. Copiar servicios de reserva a factura
+            id_factura = result['id_factura']
+            print(f"✅ Factura creada con ID: {id_factura}")
+            
+            # 8. Copiar servicios de reserva a factura_servicios (MANEJO DE NULLS)
             cursor.execute("""
-                INSERT INTO factura_servicios (id_factura, id_servicio, descripcion, precio_unitario, cantidad)
+                INSERT INTO factura_servicios (
+                    id_factura, id_servicio, descripcion, 
+                    precio_unitario, cantidad, subtotal
+                )
                 SELECT 
-                %s,
-                rs.id_servicio,
-                s.nombre,
-                rs.precio_unitario,
-                rs.cantidad
-            FROM reserva_servicios rs
-            JOIN servicios s ON rs.id_servicio = s.id_servicio
-            WHERE rs.id_reserva = %s
-        """, (id_factura, id))
+                    %s,
+                    rs.id_servicio,
+                    s.nombre,
+                    COALESCE(rs.precio_unitario, s.precio, 0),
+                    COALESCE(rs.cantidad, 1),
+                    COALESCE(
+                        rs.subtotal, 
+                        COALESCE(rs.precio_unitario, s.precio, 0) * COALESCE(rs.cantidad, 1),
+                        0
+                    )
+                FROM reserva_servicios rs
+                JOIN servicios s ON rs.id_servicio = s.id_servicio
+                WHERE rs.id_reserva = %s
+            """, (id_factura, id))
+            
+            # 9. Actualizar estado de la reserva a "facturada" (opcional)
+            cursor.execute("""
+                UPDATE reservas 
+                SET estado = 'facturada' 
+                WHERE id_reserva = %s
+            """, (id,))
             
             conn.commit()
             
-            flash(f'{tipo_comprobante.capitalize()} {numero} creada exitosamente.', 'success')
+            flash(f'{tipo_comprobante.capitalize()} {serie}-{numero} creada exitosamente.', 'success')
             return redirect(url_for('ver_factura', id=id_factura))
         
-        # GET: Mostrar formulario de facturación
-        # Obtener servicios de la reserva para mostrar resumen
+        # ========== GET: Mostrar formulario de facturación ==========
+        print(f"🔍 GET: Mostrando formulario para reserva {id}")
+        
+        # Obtener servicios de la reserva para mostrar resumen (MANEJO DE NULLS)
         cursor.execute("""
-            SELECT s.*, rs.precio_unitario, rs.cantidad, rs.subtotal
+            SELECT 
+                s.id_servicio,
+                s.nombre,
+                s.categoria,
+                COALESCE(rs.precio_unitario, s.precio, 0) as precio_unitario,
+                COALESCE(rs.cantidad, 1) as cantidad,
+                COALESCE(
+                    rs.subtotal, 
+                    COALESCE(rs.precio_unitario, s.precio, 0) * COALESCE(rs.cantidad, 1),
+                    0
+                ) as subtotal
             FROM reserva_servicios rs
             JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE rs.id_reserva = %s
+            ORDER BY s.nombre
         """, (id,))
-        servicios = cursor.fetchall()
         
-        total = sum(float(s['subtotal']) for s in servicios) if servicios else 0
+        servicios_raw = cursor.fetchall()
+        servicios = []
+        total = 0.0
         
-        # Calcular subtotal (sin IGV) - Solo para mostrar en formulario
-        subtotal = total / 1.18  # Perú tiene 18% IGV
-        igv = total - subtotal
+        print(f"🔍 Encontrados {len(servicios_raw)} servicios")
+        
+        for i, servicio in enumerate(servicios_raw):
+            servicio_dict = dict(servicio)
+            
+            # Asegurar que todos los valores sean numéricos
+            precio = float(servicio_dict.get('precio_unitario', 0))
+            cantidad = int(servicio_dict.get('cantidad', 1))
+            subtotal_serv = float(servicio_dict.get('subtotal', 0))
+            
+            # Si subtotal es 0, calcularlo
+            if subtotal_serv == 0 and precio > 0:
+                subtotal_serv = precio * cantidad
+                servicio_dict['subtotal'] = subtotal_serv
+            
+            servicio_dict['precio_unitario'] = precio
+            servicio_dict['cantidad'] = cantidad
+            servicio_dict['subtotal'] = subtotal_serv
+            
+            total += subtotal_serv
+            servicios.append(servicio_dict)
+            
+            print(f"🔍 Servicio {i+1}: {servicio_dict['nombre']} - Precio: {precio}, Cant: {cantidad}, Subtotal: {subtotal_serv}")
+        
+        print(f"🔍 Total general: {total:.2f}")
+        
+        # Calcular para mostrar en formulario
+        if total > 0:
+            subtotal_display = total / 1.18  # Perú tiene 18% IGV
+            igv_display = total - subtotal_display
+        else:
+            subtotal_display = 0.0
+            igv_display = 0.0
         
         # Verificar si cliente tiene DNI para factura
-        puede_factura = bool(reserva['cliente_dni'])
+        puede_factura = bool(reserva.get('cliente_dni'))
+        print(f"🔍 Cliente tiene DNI: {puede_factura} ({reserva.get('cliente_dni')})")
+        
+        # Obtener datos del cliente para mostrar
+        cliente_info = {
+            'nombre_completo': f"{reserva.get('cliente_nombre', '')} {reserva.get('cliente_apellido', '')}".strip(),
+            'dni': reserva.get('cliente_dni', 'No registrado'),
+            'direccion': reserva.get('cliente_direccion', 'No registrada')
+        }
         
     except Error as e:
+        if conn:
+            conn.rollback()
         flash(f'Error creando factura: {e}', 'danger')
+        print(f"❌ Error en facturar_reserva: {e}")
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('ver_reserva', id=id))
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        flash(f'Error inesperado: {e}', 'danger')
+        print(f"❌ Error general en facturar_reserva: {e}")
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('ver_reserva', id=id))
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals():
+            cursor.close()
+        if conn:
+            conn.close()
     
     return render_template('facturas/crear.html', 
                          reserva=reserva, 
                          servicios=servicios,
                          total=round(total, 2),
-                         subtotal=round(subtotal, 2),
-                         igv=round(igv, 2),
-                         puede_factura=puede_factura)
+                         subtotal=round(subtotal_display, 2),
+                         igv=round(igv_display, 2),
+                         puede_factura=puede_factura,
+                         cliente_info=cliente_info)
 # ================= RUTAS DE REPORTES Y CONFIGURACIÓN =================
 
 # Ruta para configuración PRINCIPAL
