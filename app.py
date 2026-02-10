@@ -6680,7 +6680,7 @@ def exportar_reporte(tipo):
     return redirect(url_for('reportes'))
 
 def exportar_excel(reporte, fecha_inicio, fecha_fin):
-    """Exportar a Excel - VERSIÓN CORREGIDA para PostgreSQL"""
+    """Exportar a Excel - VERSIÓN COMPLETAMENTE CORREGIDA para PostgreSQL"""
     try:
         import pandas as pd
         from io import BytesIO
@@ -6695,7 +6695,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         cursor = conn.cursor()
         
         if reporte == 'ventas':
-            # CORRECCIÓN: Usar comillas dobles para alias y TO_CHAR para fechas
+            # 1. Datos principales de ventas
             cursor.execute("""
                 SELECT 
                     f.numero as "N° Factura",
@@ -6721,7 +6721,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             
             datos_principales = cursor.fetchall()
             
-            # CORRECCIÓN en resumen por método de pago
+            # 2. Resumen por método de pago
             cursor.execute("""
                 SELECT 
                     COALESCE(metodo_pago, 'No especificado') as "Método de Pago",
@@ -6737,7 +6737,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             
             resumen_metodos = cursor.fetchall()
             
-            # CORRECCIÓN en resumen por día
+            # 3. Resumen por día - CORREGIDO
             cursor.execute("""
                 SELECT 
                     TO_CHAR(fecha_emision, 'DD/MM/YYYY') as "Fecha",
@@ -6750,13 +6750,13 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
                 FROM facturas
                 WHERE fecha_emision::date BETWEEN %s AND %s
                     AND estado = 'pagada'
-                GROUP BY DATE(fecha_emision)
+                GROUP BY TO_CHAR(fecha_emision, 'DD/MM/YYYY'), DATE(fecha_emision)
                 ORDER BY DATE(fecha_emision)
             """, (fecha_inicio, fecha_fin))
             
             resumen_diario = cursor.fetchall()
             
-            # CORRECCIÓN en top servicios
+            # 4. Top servicios - CORREGIDO
             cursor.execute("""
                 SELECT 
                     s.nombre as "Servicio",
@@ -6804,24 +6804,37 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
                     df_servicios.to_excel(writer, sheet_name='Servicios Más Vendidos', index=False)
                 
                 # Hoja de estadísticas
-                total_recaudado = sum(float(d.get('Total', 0) or 0) for d in datos_principales if d.get('Estado') == 'pagada')
-                total_pendiente = sum(float(d.get('Total', 0) or 0) for d in datos_principales if d.get('Estado') == 'pendiente')
+                total_recaudado = 0
+                total_pendiente = 0
+                facturas_pagadas = 0
+                facturas_pendientes = 0
+                
+                for d in datos_principales:
+                    estado = d.get('Estado')
+                    total = float(d.get('Total', 0) or 0)
+                    
+                    if estado == 'pagada':
+                        total_recaudado += total
+                        facturas_pagadas += 1
+                    elif estado == 'pendiente':
+                        total_pendiente += total
+                        facturas_pendientes += 1
                 
                 estadisticas_data = [{
                     'Período': f'{fecha_inicio} al {fecha_fin}',
                     'Total Facturas': len(datos_principales) if datos_principales else 0,
                     'Total Recaudado': total_recaudado,
                     'Total Pendiente': total_pendiente,
-                    'Facturas Pagadas': sum(1 for d in datos_principales if d.get('Estado') == 'pagada'),
-                    'Facturas Pendientes': sum(1 for d in datos_principales if d.get('Estado') == 'pendiente'),
+                    'Facturas Pagadas': facturas_pagadas,
+                    'Facturas Pendientes': facturas_pendientes,
                     'Fecha Generación': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }]
                 
                 df_estadisticas = pd.DataFrame(estadisticas_data)
                 df_estadisticas.to_excel(writer, sheet_name='Estadísticas', index=False)
                 
-        except ImportError:
-            # Fallback a CSV si no hay pandas
+        except ImportError as e:
+            print(f"❌ Error de importación: {e}")
             flash('Pandas no está instalado. Instala con: pip install pandas openpyxl', 'warning')
             return redirect(url_for('reporte_ventas'))
         
@@ -6842,7 +6855,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         print(traceback.format_exc())
         flash(f'Error exportando a Excel: {str(e)}', 'danger')
         return redirect(url_for('reporte_ventas'))
-
+        
 def exportar_pdf(reporte, fecha_inicio, fecha_fin):
     """Exportar a PDF usando FPDF - VERSIÓN MEJORADA"""
     try:
