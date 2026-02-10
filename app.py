@@ -6667,14 +6667,21 @@ def exportar_reporte(tipo):
                 return jsonify({'success': False, 'error': 'Reporte no válido'}), 400
                 
         elif tipo == 'pdf':
-            # Para PDF y Word, puedes usar versiones simplificadas como hicimos para ventas
-            # O crear funciones específicas para cada reporte
-            return exportar_pdf_simple(reporte, fecha_inicio, fecha_fin)
+            # CAMBIA ESTA LÍNEA:
+            # return exportar_pdf_simple(reporte, fecha_inicio, fecha_fin)  # <- ESTO NO EXISTE
+            # POR ESTA:
+            return exportar_pdf(reporte, fecha_inicio, fecha_fin)  # <- ESTA SÍ EXISTE
             
         elif tipo == 'word':
-            return exportar_word_simple(reporte, fecha_inicio, fecha_fin)
+            # CAMBIA ESTA LÍNEA:
+            # return exportar_word_simple(reporte, fecha_inicio, fecha_fin)  # <- ESTO NO EXISTE
+            # POR ESTA:
+            return exportar_word(reporte, fecha_inicio, fecha_fin)  # <- ESTA SÍ EXISTE
             
     except Exception as e:
+        print(f"❌ Error en exportar_reporte: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
     
     return redirect(url_for('reportes'))
