@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request, session, send_file, , make_response
+from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request, session, send_file, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
