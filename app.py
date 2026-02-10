@@ -6857,7 +6857,7 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         return redirect(url_for('reporte_ventas'))
         
 def exportar_pdf(reporte, fecha_inicio, fecha_fin):
-    """Exportar a PDF - VERSIÓN SIMPLIFICADA Y FUNCIONAL"""
+    """Exportar a PDF - VERSIÓN CORREGIDA Y FUNCIONAL"""
     try:
         from fpdf import FPDF
         from io import BytesIO
@@ -6883,8 +6883,9 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
                 FROM facturas f
                 LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
                 WHERE f.fecha_emision::date BETWEEN %s AND %s
+                    AND f.estado != 'anulado'
                 ORDER BY f.fecha_emision DESC
-                LIMIT 50  # Limitar para PDF
+                LIMIT 50
             """, (fecha_inicio, fecha_fin))
             
             datos = cursor.fetchall()
@@ -6898,9 +6899,10 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
                 FROM facturas
                 WHERE fecha_emision::date BETWEEN %s AND %s
                     AND estado = 'pagada'
+                    AND estado != 'anulado'
             """, (fecha_inicio, fecha_fin))
             
-            stats = cursor.fetchone()
+            stats_result = cursor.fetchone()
             
         elif reporte == 'caja':
             cursor.execute("""
@@ -6931,7 +6933,44 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
                 WHERE fecha BETWEEN %s AND %s
             """, (fecha_inicio, fecha_fin))
             
-            stats = cursor.fetchone()
+            stats_result = cursor.fetchone()
+        
+        elif reporte == 'servicios':
+            cursor.execute("""
+                SELECT 
+                    s.nombre,
+                    s.categoria,
+                    s.precio,
+                    COUNT(ds.id_detalle_servicio) as veces_vendido,
+                    SUM(ds.cantidad) as cantidad_total,
+                    SUM(ds.subtotal) as ingresos_totales,
+                    (SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad)) as ganancia_real,
+                    ROUND((SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad)) / SUM(ds.subtotal) * 100, 2) as margen
+                FROM servicios s
+                LEFT JOIN detalle_servicio ds ON s.id_servicio = ds.id_servicio
+                LEFT JOIN facturas f ON ds.id_factura = f.id_factura
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
+                    AND f.estado != 'anulado'
+                GROUP BY s.id_servicio, s.nombre, s.categoria, s.precio
+                ORDER BY veces_vendido DESC
+                LIMIT 30
+            """, (fecha_inicio, fecha_fin))
+            
+            datos = cursor.fetchall()
+            
+            cursor.execute("""
+                SELECT 
+                    COUNT(DISTINCT s.id_servicio) as total_servicios,
+                    SUM(ds.subtotal) as ingresos_totales,
+                    AVG(s.precio) as precio_promedio
+                FROM servicios s
+                LEFT JOIN detalle_servicio ds ON s.id_servicio = ds.id_servicio
+                LEFT JOIN facturas f ON ds.id_factura = f.id_factura
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
+                    AND f.estado != 'anulado'
+            """, (fecha_inicio, fecha_fin))
+            
+            stats_result = cursor.fetchone()
         
         cursor.close()
         conn.close()
@@ -6952,18 +6991,30 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
         pdf.ln(10)
         
         # Estadísticas
-        if stats:
+        if stats_result:
             pdf.set_font("Arial", 'B', 14)
             pdf.cell(200, 10, txt="Estadísticas", ln=1)
             pdf.set_font("Arial", size=12)
             
             if reporte == 'ventas':
-                pdf.cell(200, 10, txt=f"Total facturas: {stats['total'] or 0}", ln=1)
-                pdf.cell(200, 10, txt=f"Ingresos totales: S/ {float(stats['ingresos'] or 0):,.2f}", ln=1)
-                pdf.cell(200, 10, txt=f"Ticket promedio: S/ {float(stats['promedio'] or 0):,.2f}", ln=1)
+                total = stats_result[0] or 0
+                ingresos = float(stats_result[1] or 0)
+                promedio = float(stats_result[2] or 0)
+                pdf.cell(200, 10, txt=f"Total facturas: {total}", ln=1)
+                pdf.cell(200, 10, txt=f"Ingresos totales: S/ {ingresos:,.2f}", ln=1)
+                pdf.cell(200, 10, txt=f"Ticket promedio: S/ {promedio:,.2f}", ln=1)
             elif reporte == 'caja':
-                pdf.cell(200, 10, txt=f"Total ventas: S/ {float(stats['total_ventas'] or 0):,.2f}", ln=1)
-                pdf.cell(200, 10, txt=f"Diferencia promedio: S/ {float(stats['dif_promedio'] or 0):,.2f}", ln=1)
+                total_ventas = float(stats_result[0] or 0)
+                dif_promedio = float(stats_result[1] or 0)
+                pdf.cell(200, 10, txt=f"Total ventas: S/ {total_ventas:,.2f}", ln=1)
+                pdf.cell(200, 10, txt=f"Diferencia promedio: S/ {dif_promedio:,.2f}", ln=1)
+            elif reporte == 'servicios':
+                total_servicios = stats_result[0] or 0
+                ingresos_totales = float(stats_result[1] or 0)
+                precio_promedio = float(stats_result[2] or 0)
+                pdf.cell(200, 10, txt=f"Total servicios: {total_servicios}", ln=1)
+                pdf.cell(200, 10, txt=f"Ingresos totales: S/ {ingresos_totales:,.2f}", ln=1)
+                pdf.cell(200, 10, txt=f"Precio promedio: S/ {precio_promedio:,.2f}", ln=1)
         
         pdf.ln(10)
         
@@ -6977,9 +7028,12 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             if reporte == 'ventas':
                 encabezados = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
                 anchos = [25, 15, 25, 25, 45, 25, 25]
-            else:  # caja
-                encabezados = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia']
-                anchos = [25, 35, 25, 25, 25, 25, 25, 25]
+            elif reporte == 'caja':
+                encabezados = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia', 'Estado']
+                anchos = [20, 30, 25, 25, 25, 25, 25, 25, 20]
+            else:  # servicios
+                encabezados = ['Servicio', 'Categoría', 'Precio', 'Veces', 'Cantidad', 'Ingresos', 'Ganancia', 'Margen']
+                anchos = [40, 25, 20, 15, 20, 25, 25, 20]
             
             # Dibujar encabezados
             pdf.set_font("Arial", 'B', 10)
@@ -6987,11 +7041,12 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
                 pdf.cell(anchos[i], 10, txt=header, border=1)
             pdf.ln()
             
-            # Dibujar datos
+            # Dibujar datos - CORRECCIÓN IMPORTANTE: Acceder por índice, no por clave
             pdf.set_font("Arial", size=9)
             for fila in datos:
-                for i, valor in enumerate(fila.values()):
-                    texto = str(valor)[:20] if valor else ""
+                for i in range(len(fila)):
+                    valor = fila[i] if fila[i] is not None else ""
+                    texto = str(valor)[:25]  # Limitar texto para que quepa
                     pdf.cell(anchos[i], 10, txt=texto, border=1)
                 pdf.ln()
         
@@ -7003,7 +7058,8 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
         
         # Guardar en buffer
         buffer = BytesIO()
-        buffer.write(pdf.output(dest='S').encode('latin1'))
+        pdf_output = pdf.output(dest='S').encode('latin1')
+        buffer.write(pdf_output)
         buffer.seek(0)
         
         nombre_archivo = f"reporte_{reporte}_{fecha_inicio}_{fecha_fin}.pdf"
@@ -7014,20 +7070,25 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             download_name=nombre_archivo
         )
         
-    except ImportError:
+    except ImportError as e:
+        print(f"❌ Error de importación: {e}")
         flash('Error: Para exportar a PDF necesitas instalar fpdf2.', 'danger')
         return redirect(url_for(f'reporte_{reporte}'))
     except Exception as e:
-        print(f"❌ Error exportando a PDF: {e}")
+        print(f"❌ Error exportando a PDF: {str(e)}")
+        import traceback
+        traceback.print_exc()
         flash(f'Error generando PDF: {str(e)}', 'danger')
         return redirect(url_for(f'reporte_{reporte}'))
 
 def exportar_word(reporte, fecha_inicio, fecha_fin):
-    """Exportar a Word - VERSIÓN SIMPLIFICADA Y FUNCIONAL"""
+    """Exportar a Word - VERSIÓN CORREGIDA Y FUNCIONAL"""
     try:
         from docx import Document
-        from docx.shared import Inches
+        from docx.shared import Inches, Pt
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from io import BytesIO
+        from datetime import datetime
         
         conn = get_db_connection()
         if not conn:
@@ -7048,6 +7109,7 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
                 FROM facturas f
                 LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
                 WHERE f.fecha_emision::date BETWEEN %s AND %s
+                    AND f.estado != 'anulado'
                 ORDER BY f.fecha_emision DESC
                 LIMIT 30
             """, (fecha_inicio, fecha_fin))
@@ -7070,6 +7132,27 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
                 ORDER BY c.fecha DESC
                 LIMIT 30
             """, (fecha_inicio, fecha_fin))
+            
+        elif reporte == 'servicios':
+            cursor.execute("""
+                SELECT 
+                    s.nombre,
+                    s.categoria,
+                    s.precio,
+                    COUNT(ds.id_detalle_servicio) as veces_vendido,
+                    SUM(ds.cantidad) as cantidad_total,
+                    SUM(ds.subtotal) as ingresos_totales,
+                    (SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad)) as ganancia_real,
+                    ROUND((SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad)) / SUM(ds.subtotal) * 100, 2) as margen
+                FROM servicios s
+                LEFT JOIN detalle_servicio ds ON s.id_servicio = ds.id_servicio
+                LEFT JOIN facturas f ON ds.id_factura = f.id_factura
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
+                    AND f.estado != 'anulado'
+                GROUP BY s.id_servicio, s.nombre, s.categoria, s.precio
+                ORDER BY veces_vendido DESC
+                LIMIT 20
+            """, (fecha_inicio, fecha_fin))
         
         datos = cursor.fetchall()
         cursor.close()
@@ -7079,18 +7162,25 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
         doc = Document()
         
         # Título
-        doc.add_heading(f'Reporte de {reporte.capitalize()}', 0)
+        title = doc.add_heading(f'Reporte de {reporte.capitalize()}', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Información del período
         doc.add_paragraph(f'Período: {fecha_inicio} a {fecha_fin}')
         doc.add_paragraph(f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
         doc.add_paragraph()
         
         # Crear tabla
         if datos:
+            # Definir columnas según el reporte
             if reporte == 'ventas':
-                columnas = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
-            else:
+                columnas = ['Factura', 'Tipo', 'Fecha', 'Método Pago', 'Cliente', 'Total', 'Estado']
+            elif reporte == 'caja':
                 columnas = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia', 'Estado']
+            else:  # servicios
+                columnas = ['Servicio', 'Categoría', 'Precio', 'Veces', 'Cantidad', 'Ingresos', 'Ganancia', 'Margen (%)']
             
+            # Crear tabla
             tabla = doc.add_table(rows=1, cols=len(columnas))
             tabla.style = 'Table Grid'
             
@@ -7098,18 +7188,29 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             header_cells = tabla.rows[0].cells
             for i, col in enumerate(columnas):
                 header_cells[i].text = col
+                header_cells[i].paragraphs[0].runs[0].bold = True
+                header_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             
-            # Datos
+            # Datos - CORRECCIÓN: Acceder por índice
             for fila in datos:
                 row_cells = tabla.add_row().cells
-                for i, valor in enumerate(fila.values()):
-                    row_cells[i].text = str(valor) if valor else ""
+                for i in range(min(len(fila), len(columnas))):
+                    valor = fila[i] if fila[i] is not None else ""
+                    row_cells[i].text = str(valor)
+                    # Centrar columnas numéricas
+                    if i in [2, 3, 5, 6, 7] if reporte == 'servicios' else [5, 6, 7] if reporte == 'caja' else [5]:
+                        row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    else:
+                        row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Añadir salto de página
+        doc.add_page_break()
         
         # Pie de documento
-        doc.add_page_break()
-        doc.add_paragraph('---')
+        doc.add_paragraph('_' * 50)
         doc.add_paragraph('PetGlow Peluquería Canina')
         doc.add_paragraph('Sistema de Gestión Integral')
+        doc.add_paragraph(f'Documento generado automáticamente el {datetime.now().strftime("%d/%m/%Y")}')
         
         # Guardar en buffer
         buffer = BytesIO()
@@ -7124,11 +7225,14 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             download_name=nombre_archivo
         )
         
-    except ImportError:
+    except ImportError as e:
+        print(f"❌ Error de importación Word: {e}")
         flash('Error: Para exportar a Word necesitas instalar python-docx.', 'danger')
         return redirect(url_for(f'reporte_{reporte}'))
     except Exception as e:
-        print(f"❌ Error exportando a Word: {e}")
+        print(f"❌ Error exportando a Word: {str(e)}")
+        import traceback
+        traceback.print_exc()
         flash(f'Error generando Word: {str(e)}', 'danger')
         return redirect(url_for(f'reporte_{reporte}'))
 
