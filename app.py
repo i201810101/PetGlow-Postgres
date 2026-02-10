@@ -6680,14 +6680,13 @@ def exportar_reporte(tipo):
     return redirect(url_for('reportes'))
 
 def exportar_excel(reporte, fecha_inicio, fecha_fin):
-    """Exportar a Excel - IMPLEMENTACIÓN COMPLETA"""
+    """Exportar a Excel - VERSIÓN CORREGIDA para PostgreSQL"""
     try:
         import pandas as pd
         from io import BytesIO
         from flask import send_file
         from datetime import datetime
         
-        # Obtener datos según el tipo de reporte
         conn = get_db_connection()
         if not conn:
             flash('Error de conexión.', 'danger')
@@ -6696,41 +6695,41 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         cursor = conn.cursor()
         
         if reporte == 'ventas':
-            # Datos principales de ventas
+            # CORRECCIÓN: Usar comillas dobles para alias y TO_CHAR para fechas
             cursor.execute("""
                 SELECT 
-                    f.numero as 'N° Factura',
-                    f.tipo_comprobante as 'Tipo',
-                    DATE(f.fecha_emision) as 'Fecha',
-                    f.metodo_pago as 'Método Pago',
-                    CONCAT(c.nombre, ' ', c.apellido) as 'Cliente',
-                    f.subtotal as 'Subtotal',
-                    f.igv as 'IGV',
-                    f.total as 'Total',
-                    f.estado as 'Estado',
+                    f.numero as "N° Factura",
+                    f.tipo_comprobante as "Tipo",
+                    TO_CHAR(f.fecha_emision, 'DD/MM/YYYY') as "Fecha",
+                    f.metodo_pago as "Método Pago",
+                    CONCAT(c.nombre, ' ', c.apellido) as "Cliente",
+                    f.subtotal as "Subtotal",
+                    f.igv as "IGV",
+                    f.total as "Total",
+                    f.estado as "Estado",
                     CASE 
                         WHEN f.estado = 'pagada' THEN 'Pagado'
                         WHEN f.estado = 'pendiente' THEN 'Pendiente'
                         WHEN f.estado = 'credito' THEN 'Crédito'
                         ELSE f.estado
-                    END as 'Estado Texto'
+                    END as "Estado Texto"
                 FROM facturas f
                 LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-                WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
                 ORDER BY f.fecha_emision DESC
             """, (fecha_inicio, fecha_fin))
             
             datos_principales = cursor.fetchall()
             
-            # Resumen por método de pago
+            # CORRECCIÓN en resumen por método de pago
             cursor.execute("""
                 SELECT 
-                    COALESCE(metodo_pago, 'No especificado') as 'Método de Pago',
-                    COUNT(*) as 'Cantidad Facturas',
-                    SUM(total) as 'Total Recaudado',
-                    ROUND(AVG(total), 2) as 'Promedio por Factura'
+                    COALESCE(metodo_pago, 'No especificado') as "Método de Pago",
+                    COUNT(*) as "Cantidad Facturas",
+                    SUM(total) as "Total Recaudado",
+                    ROUND(AVG(total)::numeric, 2) as "Promedio por Factura"
                 FROM facturas
-                WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                WHERE fecha_emision::date BETWEEN %s AND %s
                     AND estado = 'pagada'
                 GROUP BY metodo_pago
                 ORDER BY SUM(total) DESC
@@ -6738,18 +6737,18 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             
             resumen_metodos = cursor.fetchall()
             
-            # Resumen por día
+            # CORRECCIÓN en resumen por día
             cursor.execute("""
                 SELECT 
-                    DATE(fecha_emision) as 'Fecha',
-                    COUNT(*) as 'Facturas del Día',
-                    SUM(total) as 'Total del Día',
-                    ROUND(AVG(total), 2) as 'Promedio del Día',
-                    SUM(CASE WHEN metodo_pago = 'efectivo' THEN total ELSE 0 END) as 'Efectivo',
-                    SUM(CASE WHEN metodo_pago = 'tarjeta' THEN total ELSE 0 END) as 'Tarjeta',
-                    SUM(CASE WHEN metodo_pago IN ('yape', 'plin', 'transferencia') THEN total ELSE 0 END) as 'Digital'
+                    TO_CHAR(fecha_emision, 'DD/MM/YYYY') as "Fecha",
+                    COUNT(*) as "Facturas del Día",
+                    SUM(total) as "Total del Día",
+                    ROUND(AVG(total)::numeric, 2) as "Promedio del Día",
+                    SUM(CASE WHEN metodo_pago = 'efectivo' THEN total ELSE 0 END) as "Efectivo",
+                    SUM(CASE WHEN metodo_pago = 'tarjeta' THEN total ELSE 0 END) as "Tarjeta",
+                    SUM(CASE WHEN metodo_pago IN ('yape', 'plin', 'transferencia') THEN total ELSE 0 END) as "Digital"
                 FROM facturas
-                WHERE DATE(fecha_emision) BETWEEN %s AND %s
+                WHERE fecha_emision::date BETWEEN %s AND %s
                     AND estado = 'pagada'
                 GROUP BY DATE(fecha_emision)
                 ORDER BY DATE(fecha_emision)
@@ -6757,19 +6756,19 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             
             resumen_diario = cursor.fetchall()
             
-            # Top servicios
+            # CORRECCIÓN en top servicios
             cursor.execute("""
                 SELECT 
-                    s.nombre as 'Servicio',
-                    s.categoria as 'Categoría',
-                    COUNT(fs.id_detalle) as 'Veces Vendido',
-                    SUM(fs.cantidad) as 'Cantidad Total',
-                    SUM(fs.subtotal) as 'Ingresos Totales',
-                    ROUND(AVG(fs.precio_unitario), 2) as 'Precio Promedio'
+                    s.nombre as "Servicio",
+                    s.categoria as "Categoría",
+                    COUNT(fs.id_detalle) as "Veces Vendido",
+                    SUM(fs.cantidad) as "Cantidad Total",
+                    SUM(fs.subtotal) as "Ingresos Totales",
+                    ROUND(AVG(fs.precio_unitario)::numeric, 2) as "Precio Promedio"
                 FROM factura_servicios fs
                 JOIN servicios s ON fs.id_servicio = s.id_servicio
                 JOIN facturas f ON fs.id_factura = f.id_factura
-                WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
                     AND f.estado = 'pagada'
                 GROUP BY s.id_servicio, s.nombre, s.categoria
                 ORDER BY SUM(fs.subtotal) DESC
@@ -6784,40 +6783,47 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         # Crear archivo Excel en memoria
         output = BytesIO()
         
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Hoja 1: Detalle de ventas
-            if datos_principales:
-                df_principales = pd.DataFrame(datos_principales)
-                df_principales.to_excel(writer, sheet_name='Ventas Detalladas', index=False)
-            
-            # Hoja 2: Resumen por método de pago
-            if resumen_metodos:
-                df_metodos = pd.DataFrame(resumen_metodos)
-                df_metodos.to_excel(writer, sheet_name='Por Método de Pago', index=False)
-            
-            # Hoja 3: Resumen diario
-            if resumen_diario:
-                df_diario = pd.DataFrame(resumen_diario)
-                df_diario.to_excel(writer, sheet_name='Resumen Diario', index=False)
-            
-            # Hoja 4: Top servicios
-            if top_servicios:
-                df_servicios = pd.DataFrame(top_servicios)
-                df_servicios.to_excel(writer, sheet_name='Servicios Más Vendidos', index=False)
-            
-            # Hoja 5: Estadísticas generales
-            estadisticas_data = [{
-                'Período': f'{fecha_inicio} al {fecha_fin}',
-                'Total Facturas': len(datos_principales) if datos_principales else 0,
-                'Total Recaudado': sum(float(d['Total'] or 0) for d in datos_principales if d.get('Estado') == 'pagada'),
-                'Total Pendiente': sum(float(d['Total'] or 0) for d in datos_principales if d.get('Estado') == 'pendiente'),
-                'Facturas Pagadas': sum(1 for d in datos_principales if d.get('Estado') == 'pagada'),
-                'Facturas Pendientes': sum(1 for d in datos_principales if d.get('Estado') == 'pendiente'),
-                'Fecha Generación': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }]
-            
-            df_estadisticas = pd.DataFrame(estadisticas_data)
-            df_estadisticas.to_excel(writer, sheet_name='Estadísticas', index=False)
+        # USAR XLSXWRITER si openpyxl falla (más compatible)
+        try:
+            engine = 'openpyxl'
+            with pd.ExcelWriter(output, engine=engine) as writer:
+                if datos_principales:
+                    df_principales = pd.DataFrame(datos_principales)
+                    df_principales.to_excel(writer, sheet_name='Ventas Detalladas', index=False)
+                
+                if resumen_metodos:
+                    df_metodos = pd.DataFrame(resumen_metodos)
+                    df_metodos.to_excel(writer, sheet_name='Por Método de Pago', index=False)
+                
+                if resumen_diario:
+                    df_diario = pd.DataFrame(resumen_diario)
+                    df_diario.to_excel(writer, sheet_name='Resumen Diario', index=False)
+                
+                if top_servicios:
+                    df_servicios = pd.DataFrame(top_servicios)
+                    df_servicios.to_excel(writer, sheet_name='Servicios Más Vendidos', index=False)
+                
+                # Hoja de estadísticas
+                total_recaudado = sum(float(d.get('Total', 0) or 0) for d in datos_principales if d.get('Estado') == 'pagada')
+                total_pendiente = sum(float(d.get('Total', 0) or 0) for d in datos_principales if d.get('Estado') == 'pendiente')
+                
+                estadisticas_data = [{
+                    'Período': f'{fecha_inicio} al {fecha_fin}',
+                    'Total Facturas': len(datos_principales) if datos_principales else 0,
+                    'Total Recaudado': total_recaudado,
+                    'Total Pendiente': total_pendiente,
+                    'Facturas Pagadas': sum(1 for d in datos_principales if d.get('Estado') == 'pagada'),
+                    'Facturas Pendientes': sum(1 for d in datos_principales if d.get('Estado') == 'pendiente'),
+                    'Fecha Generación': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }]
+                
+                df_estadisticas = pd.DataFrame(estadisticas_data)
+                df_estadisticas.to_excel(writer, sheet_name='Estadísticas', index=False)
+                
+        except ImportError:
+            # Fallback a CSV si no hay pandas
+            flash('Pandas no está instalado. Instala con: pip install pandas openpyxl', 'warning')
+            return redirect(url_for('reporte_ventas'))
         
         output.seek(0)
         
@@ -6830,10 +6836,10 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
             download_name=nombre_archivo
         )
         
-    except ImportError:
-        flash('Error: Para exportar a Excel necesitas instalar pandas y openpyxl.', 'danger')
-        return redirect(url_for('reporte_ventas'))
     except Exception as e:
+        print(f"❌ Error en exportar_excel: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         flash(f'Error exportando a Excel: {str(e)}', 'danger')
         return redirect(url_for('reporte_ventas'))
 
@@ -7290,7 +7296,7 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
         return redirect(url_for('reporte_ventas'))
 
 def exportar_excel_caja(fecha_inicio, fecha_fin):
-    """Exportar reporte de caja a Excel"""
+    """Exportar reporte de caja a Excel - VERSIÓN CORREGIDA"""
     try:
         import pandas as pd
         from io import BytesIO
@@ -7299,18 +7305,22 @@ def exportar_excel_caja(fecha_inicio, fecha_fin):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Cierres de caja
+        # CORRECCIÓN: Usar comillas dobles
         cursor.execute("""
             SELECT 
-                c.fecha,
-                CONCAT(e.nombre, ' ', e.apellido) as cajero,
-                c.monto_apertura,
-                c.venta_efectivo,
-                c.venta_tarjeta,
-                c.venta_digital,
-                c.total_ventas,
-                c.diferencia,
-                c.estado
+                TO_CHAR(c.fecha, 'DD/MM/YYYY') as "Fecha",
+                CONCAT(e.nombre, ' ', e.apellido) as "Cajero",
+                c.monto_apertura as "Apertura",
+                c.venta_efectivo as "Efectivo",
+                c.venta_tarjeta as "Tarjeta",
+                c.venta_digital as "Digital",
+                c.total_ventas as "Total Ventas",
+                c.diferencia as "Diferencia",
+                CASE 
+                    WHEN c.estado = 'cerrada' THEN 'Cerrada'
+                    WHEN c.estado = 'abierta' THEN 'Abierta'
+                    ELSE c.estado
+                END as "Estado"
             FROM caja_diaria c
             JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
             WHERE c.fecha BETWEEN %s AND %s
@@ -7341,6 +7351,7 @@ def exportar_excel_caja(fecha_inicio, fecha_fin):
         )
         
     except Exception as e:
+        print(f"❌ Error en exportar_excel_caja: {e}")
         flash(f'Error exportando a Excel: {str(e)}', 'danger')
         return redirect(url_for('reporte_caja'))
 
