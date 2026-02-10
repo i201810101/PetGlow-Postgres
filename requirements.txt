@@ -26,6 +26,7 @@ colorama==0.4.6
 openpyxl==3.1.2
 python-docx==1.1.0
 reportlab==4.0.4
+fpdf2==2.7.7
 
 # Para formularios y seguridad
 WTForms==3.1.2
