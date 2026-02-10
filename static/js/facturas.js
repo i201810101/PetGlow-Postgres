@@ -478,102 +478,122 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // REGISTRAR PAGO - CORREGIDO CON DEBUG
-    // ============================================
-    const registrarPago = (datos) => {
-        mostrarCargando();
-        
-        // Construir la URL correctamente - VERSIÓN 1: Usando la ruta actual
-        const currentPath = window.location.pathname; // Ej: "/facturas/1"
-        let url = '';
-        
-        // Opción 1: Si ya estamos en la página de factura, usar ruta relativa
-        if (currentPath.includes('/facturas/')) {
-            url = `${currentPath}/pagar`;
-        } else {
-            // Opción 2: Construir la URL directamente
-            url = `/facturas/${facturaId}/pagar`;
-        }
-        
-        console.log('URL de pago:', url);
-        console.log('Datos a enviar:', datos);
-        
-        // Configurar headers
-        const headers = {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        };
-        
-        // Agregar CSRF token si existe
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
-        
-        // Hacer la petición con manejo de errores mejorado
-        fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(datos),
-            credentials: 'same-origin' // Importante para cookies de sesión
-        })
-        .then(response => {
-            console.log('Respuesta HTTP:', response.status, response.statusText);
-            
-            if (!response.ok) {
-                // Si la respuesta no es OK, intentar leer el error
-                return response.text().then(text => {
-                    throw new Error(`HTTP ${response.status}: ${text}`);
-                });
-            }
-            
-            // Intentar parsear como JSON
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                return response.json();
-            } else {
-                // Si no es JSON, devolver texto
-                return response.text().then(text => {
-                    return { 
-                        success: false, 
-                        message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
-                    };
-                });
-            }
-        })
-        .then(data => {
-            console.log('Respuesta del servidor:', data);
-            ocultarCargando();
-            
-            if (data.success) {
-                mostrarAlerta('success', data.message || 'Pago registrado correctamente');
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            } else {
-                mostrarAlerta('error', data.message || 'Error al registrar pago');
-            }
-        })
-        .catch(error => {
-            console.error('Error completo:', error);
-            ocultarCargando();
-            
-            let mensajeError = 'Error al registrar pago. ';
-            
-            if (error.message.includes('Failed to fetch')) {
-                mensajeError += 'No se pudo conectar al servidor. Verifique su conexión.';
-            } else if (error.message.includes('HTTP 404')) {
-                mensajeError += 'La ruta no existe (404). Verifique la URL.';
-            } else if (error.message.includes('HTTP 500')) {
-                mensajeError += 'Error interno del servidor (500).';
-            } else if (error.message.includes('HTTP 403')) {
-                mensajeError += 'Acceso denegado (403). Verifique permisos.';
-            } else {
-                mensajeError += error.message;
-            }
-            
-            mostrarAlerta('error', mensajeError);
-        });
+// REGISTRAR PAGO - CORREGIDO CON DEBUG
+// ============================================
+const registrarPago = (datos) => {
+    mostrarCargando();
+    
+    // Construir la URL correctamente - VERSIÓN 1: Usando la ruta actual
+    const currentPath = window.location.pathname; // Ej: "/facturas/1"
+    let url = '';
+    
+    // Opción 1: Si ya estamos en la página de factura, usar ruta relativa
+    if (currentPath.includes('/facturas/')) {
+        url = `${currentPath}/pagar`;
+    } else {
+        // Opción 2: Construir la URL directamente
+        url = `/facturas/${facturaId}/pagar`;
+    }
+    
+    console.log('URL de pago:', url);
+    console.log('Datos a enviar:', datos);
+    
+    // Configurar headers
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
     };
+    
+    // Agregar CSRF token si existe
+    if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+    }
+    
+    // Hacer la petición con manejo de errores mejorado
+    fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(datos),
+        credentials: 'same-origin' // Importante para cookies de sesión
+    })
+    .then(response => {
+        console.log('Respuesta HTTP:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            // Si la respuesta no es OK, intentar leer el error
+            return response.json().then(errorData => {
+                // Si hay mensaje en el JSON, usarlo
+                if (errorData && errorData.message) {
+                    throw new Error(errorData.message);
+                } else {
+                    // Si no, usar el texto plano
+                    return response.text().then(text => {
+                        throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                    });
+                }
+            }).catch(() => {
+                // Si falla parsear como JSON, devolver texto plano
+                return response.text().then(text => {
+                    throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                });
+            });
+        }
+        
+        // Intentar parsear como JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            // Si no es JSON, devolver texto
+            return response.text().then(text => {
+                return { 
+                    success: false, 
+                    message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
+                };
+            });
+        }
+    })
+    .then(data => {
+        console.log('Respuesta del servidor:', data);
+        ocultarCargando();
+        
+        if (data.success) {
+            mostrarAlerta('success', data.message || 'Pago registrado correctamente');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            mostrarAlerta('error', data.message || 'Error al registrar pago');
+        }
+    })
+    .catch(error => {
+        console.error('Error completo:', error);
+        ocultarCargando();
+        
+        let mensajeError = error.message;
+        
+        // Filtrar el mensaje para que sea más amigable
+        if (error.message.includes('Debes aperturar una caja')) {
+            mensajeError = '⚠️ Debes aperturar una caja antes de registrar pagos\n\n' +
+                          'Por favor, ve al módulo de Caja y haz clic en "Aperturar Caja"';
+        } else if (error.message.includes('HTTP 400')) {
+            // Extraer solo el mensaje útil, no todo el texto técnico
+            const match = error.message.match(/message":"([^"]+)"/);
+            if (match && match[1]) {
+                mensajeError = match[1];
+            }
+        } else if (error.message.includes('Failed to fetch')) {
+            mensajeError = '❌ No se pudo conectar al servidor. Verifica tu conexión a internet.';
+        } else if (error.message.includes('HTTP 500')) {
+            mensajeError = '❌ Error interno del servidor. Por favor, inténtalo más tarde.';
+        } else if (error.message.includes('HTTP 404')) {
+            mensajeError = '❌ La página no existe. Verifica la URL.';
+        }
+        
+        // Mostrar el mensaje más amigable
+        mostrarAlerta('error', mensajeError);
+    });
+};
     
     // ============================================
     // ANULAR FACTURA - CORREGIDO CON DEBUG
@@ -661,102 +681,48 @@ document.addEventListener('DOMContentLoaded', function() {
     // FUNCIONES DE UI
     // ============================================
     const mostrarAlerta = (tipo, mensaje, tiempo = 4000) => {
-        // Remover alertas anteriores
-        document.querySelectorAll('.alert-flotante').forEach(el => {
-            el.remove();
-        });
-        
-        const alerta = document.createElement('div');
-        alerta.className = `alert alert-${tipo} alert-dismissible fade show position-fixed alert-flotante`;
-        alerta.style.cssText = `
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            max-width: 500px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        `;
-        
-        const iconos = {
-            'success': 'fa-check-circle',
-            'error': 'fa-exclamation-circle',
-            'warning': 'fa-exclamation-triangle',
-            'info': 'fa-info-circle'
-        };
-        
-        const icono = iconos[tipo] || 'fa-info-circle';
-        
-        alerta.innerHTML = `
-            <i class="fas ${icono} me-2"></i>
-            <strong>${tipo === 'success' ? 'Éxito' : tipo === 'error' ? 'Error' : tipo === 'warning' ? 'Advertencia' : 'Información'}</strong>
-            <span class="ms-2">${mensaje}</span>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        document.body.appendChild(alerta);
-        
-        if (tiempo > 0) {
-            setTimeout(() => {
-                if (alerta.parentNode) {
-                    alerta.remove();
-                }
-            }, tiempo);
-        }
+    // Remover alertas anteriores
+    document.querySelectorAll('.alert-flotante').forEach(el => {
+        el.remove();
+    });
+    
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo} alert-dismissible fade show position-fixed alert-flotante`;
+    alerta.style.cssText = `
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        max-width: 500px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    const iconos = {
+        'success': 'fa-check-circle',
+        'error': 'fa-exclamation-circle',
+        'warning': 'fa-exclamation-triangle',
+        'info': 'fa-info-circle'
     };
     
-    const mostrarCargando = () => {
-        let overlay = document.getElementById('cargando-overlay');
-        
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'cargando-overlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 99999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            `;
-            
-            overlay.innerHTML = `
-                <div class="text-center">
-                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                        <span class="visually-hidden">Cargando...</span>
-                    </div>
-                    <p class="mt-3 text-white">Procesando...</p>
-                </div>
-            `;
-            
-            document.body.appendChild(overlay);
-        }
-        
-        overlay.style.display = 'flex';
-    };
+    const icono = iconos[tipo] || 'fa-info-circle';
     
-    const ocultarCargando = () => {
-        const overlay = document.getElementById('cargando-overlay');
-        if (overlay) {
-            overlay.style.display = 'none';
-        }
-    };
+    // Convertir saltos de línea a <br>
+    const mensajeHTML = mensaje.replace(/\n/g, '<br>');
     
-    const getMetodoPagoTexto = (metodo) => {
-        const metodos = {
-            'efectivo': 'Efectivo',
-            'tarjeta': 'Tarjeta',
-            'yape': 'Yape',
-            'plin': 'Plin',
-            'transferencia': 'Transferencia',
-            'mixto': 'Pago Mixto'
-        };
-        return metodos[metodo] || metodo;
-    };
+    alerta.innerHTML = `
+        <i class="fas ${icono} me-2"></i>
+        <strong>${tipo === 'success' ? 'Éxito' : tipo === 'error' ? 'Error' : tipo === 'warning' ? 'Advertencia' : 'Información'}</strong>
+        <div class="ms-2 mt-1">${mensajeHTML}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
     
-    // Inicializar
-    initFacturas();
-});
+    document.body.appendChild(alerta);
+    
+    if (tiempo > 0) {
+        setTimeout(() => {
+            if (alerta.parentNode) {
+                alerta.remove();
+            }
+        }, tiempo);
+    }
+};
