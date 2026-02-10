@@ -4720,7 +4720,7 @@ def anular_factura(id):
 
 @app.route('/facturas/<int:id>/pagar', methods=['POST'])
 def pagar_factura(id):
-    """Registrar pago de factura - VERSIÓN CORREGIDA"""
+    """Registrar pago de factura - VERSIÓN CORREGIDA para PostgreSQL"""
     print(f"🔍 DEBUG: Pago para factura {id}")
     
     conn = get_db_connection()
@@ -4779,7 +4779,31 @@ def pagar_factura(id):
         if monto_pagado > total_factura:
             return jsonify({'success': False, 'message': f'El monto excede el total. Total: S/ {total_factura:.2f}'}), 400
         
-        # 3. Determinar nuevo estado
+        # 3. VERIFICAR QUE HAYA CAJA ABIERTA (RESTRICCIÓN IMPORTANTE)
+        id_empleado = session.get('id_empleado', 1)
+        cursor.execute("""
+            SELECT id_caja 
+            FROM caja_diaria 
+            WHERE fecha = CURRENT_DATE 
+            AND estado = 'abierta'
+            AND id_empleado_cajero = %s
+            LIMIT 1
+        """, (id_empleado,))
+        
+        caja_abierta = cursor.fetchone()
+        
+        if not caja_abierta:
+            # NO HAY CAJA ABIERTA - NO SE PUEDE PAGAR
+            print("❌ NO hay caja abierta para el empleado")
+            return jsonify({
+                'success': False, 
+                'message': 'Debes aperturar una caja antes de registrar pagos. Ve a Caja → Aperturar Caja.'
+            }), 400
+        
+        id_caja = caja_abierta['id_caja']
+        print(f"📦 Caja abierta encontrada: ID {id_caja}")
+        
+        # 4. Determinar nuevo estado
         if es_parcial and monto_pagado < total_factura:
             nuevo_estado = 'credito'
             saldo_pendiente = total_factura - monto_pagado
@@ -4811,25 +4835,20 @@ def pagar_factura(id):
         
         print(f"🔄 Actualizando factura {id} a estado: {nuevo_estado}")
         
-        # 4. Registrar movimiento en caja
-        id_empleado = session.get('id_empleado', 1)
-        cursor.execute("""
-            SELECT id_caja 
-            FROM caja_diaria 
-            WHERE fecha = CURRENT_DATE 
-            AND estado = 'abierta'
-            AND id_empleado_cajero = %s
-            LIMIT 1
-        """, (id_empleado,))
-        
-        caja_abierta = cursor.fetchone()
-        
-        if caja_abierta:
-            id_caja = caja_abierta['id_caja']
-            print(f"📦 Caja abierta encontrada: ID {id_caja}")
+        # 5. Registrar movimiento en caja
+        try:
+            # Primero verificar si existe la tabla movimientos_caja
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'movimientos_caja'
+                )
+            """)
             
-            # Registrar movimiento en caja
-            try:
+            tabla_movimientos_existe = cursor.fetchone()[0]
+            
+            if tabla_movimientos_existe:
                 cursor.execute("""
                     INSERT INTO movimientos_caja 
                     (id_caja, id_factura, tipo, metodo_pago, concepto, monto, fecha_movimiento, id_empleado)
@@ -4839,30 +4858,41 @@ def pagar_factura(id):
                       monto_pagado, id_empleado))
                 
                 print("✅ Movimiento en caja registrado")
+            else:
+                print("⚠️ Tabla movimientos_caja no existe, saltando...")
                 
-                # Actualizar totales en caja
-                campo_venta = ''
-                if metodo_pago == 'efectivo':
-                    campo_venta = 'venta_efectivo'
-                elif metodo_pago == 'tarjeta':
-                    campo_venta = 'venta_tarjeta'
-                else:
-                    campo_venta = 'venta_digital'
-                
-                cursor.execute(f"""
-                    UPDATE caja_diaria 
-                    SET {campo_venta} = COALESCE({campo_venta}, 0) + %s,
-                        total_ventas = COALESCE(total_ventas, 0) + %s
-                    WHERE id_caja = %s
-                """, (monto_pagado, monto_pagado, id_caja))
-                
-            except Exception as e:
-                print(f"⚠️  Error registrando en caja: {e}")
-                # Continuar aunque falle la caja
-                mensaje_estado += " (Error en caja, pero pago registrado)"
+        except Exception as e:
+            print(f"⚠️ Error registrando en movimientos_caja: {e}")
+            # Continuar aunque falle el registro detallado
+        
+        # 6. Actualizar totales en caja_diaria
+        campo_venta = ''
+        if metodo_pago == 'efectivo':
+            campo_venta = 'venta_efectivo'
+        elif metodo_pago == 'tarjeta':
+            campo_venta = 'venta_tarjeta'
+        elif metodo_pago in ['yape', 'plin', 'transferencia', 'digital']:
+            campo_venta = 'venta_digital'
         else:
-            print("⚠️  No hay caja abierta")
-            mensaje_estado += " (Sin registro en caja)"
+            campo_venta = 'venta_efectivo'  # default
+        
+        try:
+            cursor.execute(f"""
+                UPDATE caja_diaria 
+                SET {campo_venta} = COALESCE({campo_venta}, 0) + %s,
+                    total_ventas = COALESCE(total_ventas, 0) + %s
+                WHERE id_caja = %s
+            """, (monto_pagado, monto_pagado, id_caja))
+            
+            print(f"✅ Totales actualizados en caja_diaria ({campo_venta}: +{monto_pagado})")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando caja_diaria: {e}")
+            conn.rollback()
+            return jsonify({
+                'success': False, 
+                'message': f'Error actualizando caja: {str(e)}'
+            }), 500
         
         conn.commit()
         
@@ -4873,7 +4903,8 @@ def pagar_factura(id):
             'message': mensaje_estado,
             'nuevo_estado': nuevo_estado,
             'monto_pagado': monto_pagado,
-            'caja_registrada': caja_abierta is not None
+            'caja_registrada': True,
+            'id_caja': id_caja
         })
             
     except Exception as e:
