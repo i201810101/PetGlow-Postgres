@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request, session
+from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify, request, session, send_file, , make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -7,6 +7,9 @@ import resend
 import json
 import os
 import smtplib
+import io
+import locale
+import traceback
 from flask import current_app
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -6864,22 +6867,14 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         return redirect(url_for('reporte_ventas'))
         
 def exportar_pdf(reporte, fecha_inicio, fecha_fin):
-    """Exportar a PDF - VERSIÓN COMPLETAMENTE CORREGIDA"""
+    """Exportar a PDF - VERSIÓN SIN LOCALE"""
     try:
         from fpdf import FPDF
         from io import BytesIO
-        from datetime import datetime
-        import locale
-        
-        # Configurar locale para español
-        try:
-            locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8')
-        except:
-            locale.setlocale(locale.LC_ALL, 'Spanish_Spain.1252')
         
         conn = get_db_connection()
         if not conn:
-            return "Error de conexión", 500
+            return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
         
         cursor = conn.cursor()
         
@@ -6911,19 +6906,6 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             columnas = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
             anchos = [25, 15, 25, 25, 40, 25, 25]
             
-            # Estadísticas
-            cursor.execute("""
-                SELECT 
-                    COUNT(*) as total,
-                    COALESCE(SUM(total), 0) as ingresos,
-                    COALESCE(AVG(total), 0) as promedio
-                FROM facturas
-                WHERE fecha_emision::date BETWEEN %s AND %s
-                    AND estado = 'pagada'
-            """, (fecha_inicio, fecha_fin))
-            
-            stats = cursor.fetchone()
-            
         elif reporte == 'caja':
             cursor.execute("""
                 SELECT 
@@ -6950,16 +6932,6 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             datos = cursor.fetchall()
             columnas = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia', 'Estado']
             anchos = [20, 30, 20, 20, 20, 20, 20, 20, 20]
-            
-            cursor.execute("""
-                SELECT 
-                    COALESCE(SUM(total_ventas), 0) as total_ventas,
-                    COALESCE(AVG(diferencia), 0) as dif_promedio
-                FROM caja_diaria
-                WHERE fecha BETWEEN %s AND %s
-            """, (fecha_inicio, fecha_fin))
-            
-            stats = cursor.fetchone()
         
         elif reporte == 'servicios':
             cursor.execute("""
@@ -6985,77 +6957,21 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             datos = cursor.fetchall()
             columnas = ['Servicio', 'Categoría', 'Precio', 'Veces', 'Cantidad', 'Ingresos', 'Ganancia']
             anchos = [40, 25, 20, 15, 20, 25, 25]
-            
-            cursor.execute("""
-                SELECT 
-                    COUNT(DISTINCT s.id_servicio) as total_servicios,
-                    COALESCE(SUM(ds.subtotal), 0) as ingresos_totales,
-                    COALESCE(AVG(s.precio), 0) as precio_promedio
-                FROM servicios s
-                LEFT JOIN detalle_servicio ds ON s.id_servicio = ds.id_servicio
-                LEFT JOIN facturas f ON ds.id_factura = f.id_factura
-                    AND f.fecha_emision::date BETWEEN %s AND %s
-                    AND f.estado != 'anulado'
-            """, (fecha_inicio, fecha_fin))
-            
-            stats = cursor.fetchone()
         
         cursor.close()
         conn.close()
         
-        # Crear PDF con UTF-8 support
+        # Crear PDF
         pdf = FPDF()
         pdf.add_page()
-        
-        # Configurar fuentes UTF-8
-        try:
-            pdf.add_font('Arial', '', r'C:\Windows\Fonts\arial.ttf', uni=True)
-            pdf.add_font('Arial', 'B', r'C:\Windows\Fonts\arialbd.ttf', uni=True)
-            pdf.add_font('Arial', 'I', r'C:\Windows\Fonts\ariali.ttf', uni=True)
-        except:
-            # Usar fuentes por defecto si falla
-            pass
         
         # Título
         pdf.set_font('Arial', 'B', 16)
         pdf.cell(200, 10, txt=f"Reporte de {reporte.capitalize()}", ln=1, align='C')
         
         pdf.set_font('Arial', '', 12)
-        pdf.cell(200, 8, txt=f"Período: {fecha_inicio} a {fecha_fin}", ln=1, align='C')
-        pdf.cell(200, 8, txt=f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", ln=1, align='C')
-        pdf.ln(10)
-        
-        # Estadísticas
-        if stats:
-            pdf.set_font('Arial', 'B', 14)
-            pdf.cell(200, 10, txt="Resumen Estadístico", ln=1)
-            pdf.set_font('Arial', '', 12)
-            
-            if reporte == 'ventas':
-                total = stats[0] or 0
-                ingresos = float(stats[1] or 0)
-                promedio = float(stats[2] or 0)
-                
-                pdf.cell(100, 8, txt=f"Total de facturas: {total}", ln=0)
-                pdf.cell(100, 8, txt=f"Ingresos totales: S/ {ingresos:,.2f}", ln=1)
-                pdf.cell(100, 8, txt=f"Promedio por factura: S/ {promedio:,.2f}", ln=1)
-                
-            elif reporte == 'caja':
-                total_ventas = float(stats[0] or 0)
-                dif_promedio = float(stats[1] or 0)
-                
-                pdf.cell(100, 8, txt=f"Ventas totales: S/ {total_ventas:,.2f}", ln=0)
-                pdf.cell(100, 8, txt=f"Diferencia promedio: S/ {dif_promedio:,.2f}", ln=1)
-                
-            elif reporte == 'servicios':
-                total_servicios = stats[0] or 0
-                ingresos_totales = float(stats[1] or 0)
-                precio_promedio = float(stats[2] or 0)
-                
-                pdf.cell(100, 8, txt=f"Servicios vendidos: {total_servicios}", ln=0)
-                pdf.cell(100, 8, txt=f"Ingresos totales: S/ {ingresos_totales:,.2f}", ln=1)
-                pdf.cell(100, 8, txt=f"Precio promedio: S/ {precio_promedio:,.2f}", ln=1)
-        
+        pdf.cell(200, 8, txt=f"Periodo: {fecha_inicio} a {fecha_fin}", ln=1, align='C')
+        pdf.cell(200, 8, txt=f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='C')
         pdf.ln(10)
         
         # Tabla de datos
@@ -7077,10 +6993,13 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
                     if valor is None:
                         texto = ""
                     elif isinstance(valor, (int, float)):
-                        if i in [2, 5, 6] if reporte == 'servicios' else [5] if reporte == 'ventas' else [2, 3, 4, 5, 6, 7]:
+                        # Formatear números como moneda cuando sea apropiado
+                        if (reporte == 'ventas' and i == 5) or \
+                           (reporte == 'caja' and i in [2, 3, 4, 5, 6, 7]) or \
+                           (reporte == 'servicios' and i in [2, 5, 6]):
                             texto = f"S/ {float(valor):,.2f}"
                         else:
-                            texto = str(valor)
+                            texto = str(int(valor)) if valor == int(valor) else str(valor)
                     else:
                         texto = str(valor)
                     
@@ -7094,16 +7013,18 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
         # Pie de página
         pdf.set_y(-30)
         pdf.set_font('Arial', 'I', 8)
-        pdf.cell(0, 10, txt=f"Página {pdf.page_no()}", ln=1, align='C')
-        pdf.cell(0, 10, txt="PetGlow Peluquería Canina - Sistema de Gestión", ln=1, align='C')
-        pdf.cell(0, 10, txt=f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='C')
+        pdf.cell(0, 10, txt=f"Pagina {pdf.page_no()}", ln=1, align='C')
+        pdf.cell(0, 10, txt="PetGlow Peluqueria Canina - Sistema de Gestion", ln=1, align='C')
         
-        # Guardar en buffer con encoding correcto
+        # Guardar en buffer
         buffer = BytesIO()
+        try:
+            pdf_output = pdf.output(dest='S')
+            buffer.write(pdf_output.encode('latin-1'))
+        except:
+            pdf_output = pdf.output(dest='S')
+            buffer.write(pdf_output)
         
-        # Método 1: Usar output a bytes directamente
-        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')
-        buffer.write(pdf_output)
         buffer.seek(0)
         
         nombre_archivo = f"reporte_{reporte}_{fecha_inicio}_{fecha_fin}.pdf"
@@ -7116,45 +7037,37 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
         )
         
     except Exception as e:
-        print(f"❌ Error exportando a PDF: {str(e)}")
-        import traceback
+        print(f"Error exportando a PDF: {str(e)}")
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 def exportar_word(reporte, fecha_inicio, fecha_fin):
-    """Exportar a Word - VERSIÓN COMPLETAMENTE CORREGIDA"""
+    """Exportar a Word - VERSIÓN SIMPLIFICADA Y FUNCIONAL"""
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, Cm
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.table import WD_TABLE_ALIGNMENT
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
+        from docx.shared import Inches
         from io import BytesIO
-        from datetime import datetime
         
         conn = get_db_connection()
         if not conn:
-            return "Error de conexión", 500
+            return jsonify({'success': False, 'error': 'Error de conexión'}), 500
         
         cursor = conn.cursor()
         
-        # Obtener datos según el reporte
+        # Obtener datos
         if reporte == 'ventas':
             cursor.execute("""
                 SELECT 
-                    f.numero as factura,
-                    f.tipo_comprobante as tipo,
+                    f.numero,
+                    f.tipo_comprobante,
                     TO_CHAR(f.fecha_emision, 'DD/MM/YYYY') as fecha,
-                    COALESCE(f.metodo_pago, 'No especificado') as metodo_pago,
-                    COALESCE(CONCAT(c.nombre, ' ', c.apellido), 'Sin cliente') as cliente,
+                    COALESCE(f.metodo_pago, 'No especificado'),
+                    COALESCE(CONCAT(c.nombre, ' ', c.apellido), 'Sin cliente'),
                     f.total,
                     CASE 
                         WHEN f.estado = 'pagada' THEN 'Pagada'
                         WHEN f.estado = 'pendiente' THEN 'Pendiente'
-                        WHEN f.estado = 'anulado' THEN 'Anulada'
                         ELSE f.estado
-                    END as estado
+                    END
                 FROM facturas f
                 LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
                 WHERE f.fecha_emision::date BETWEEN %s AND %s
@@ -7164,24 +7077,24 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             """, (fecha_inicio, fecha_fin))
             
             datos = cursor.fetchall()
-            encabezados = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
+            encabezados = ['Factura', 'Tipo', 'Fecha', 'Método Pago', 'Cliente', 'Total', 'Estado']
             
         elif reporte == 'caja':
             cursor.execute("""
                 SELECT 
-                    TO_CHAR(c.fecha, 'DD/MM/YYYY') as fecha,
-                    COALESCE(CONCAT(e.nombre, ' ', e.apellido), 'Sin especificar') as cajero,
-                    COALESCE(c.monto_apertura, 0) as apertura,
-                    COALESCE(c.venta_efectivo, 0) as efectivo,
-                    COALESCE(c.venta_tarjeta, 0) as tarjeta,
-                    COALESCE(c.venta_digital, 0) as digital,
-                    COALESCE(c.total_ventas, 0) as total,
-                    COALESCE(c.diferencia, 0) as diferencia,
+                    TO_CHAR(c.fecha, 'DD/MM/YYYY'),
+                    COALESCE(CONCAT(e.nombre, ' ', e.apellido), 'Sin especificar'),
+                    COALESCE(c.monto_apertura, 0),
+                    COALESCE(c.venta_efectivo, 0),
+                    COALESCE(c.venta_tarjeta, 0),
+                    COALESCE(c.venta_digital, 0),
+                    COALESCE(c.total_ventas, 0),
+                    COALESCE(c.diferencia, 0),
                     CASE 
                         WHEN c.estado = 'cerrada' THEN 'Cerrada'
                         WHEN c.estado = 'abierta' THEN 'Abierta'
                         ELSE c.estado
-                    END as estado
+                    END
                 FROM caja_diaria c
                 LEFT JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
                 WHERE c.fecha BETWEEN %s AND %s
@@ -7191,17 +7104,17 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             
             datos = cursor.fetchall()
             encabezados = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia', 'Estado']
-            
+        
         elif reporte == 'servicios':
             cursor.execute("""
                 SELECT 
-                    COALESCE(s.nombre, 'No especificado') as nombre,
-                    COALESCE(s.categoria, 'General') as categoria,
-                    COALESCE(s.precio, 0) as precio,
-                    COUNT(ds.id_detalle_servicio) as veces,
-                    COALESCE(SUM(ds.cantidad), 0) as cantidad,
-                    COALESCE(SUM(ds.subtotal), 0) as ingresos,
-                    COALESCE(SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad), 0) as ganancia
+                    COALESCE(s.nombre, 'No especificado'),
+                    COALESCE(s.categoria, 'General'),
+                    COALESCE(s.precio, 0),
+                    COUNT(ds.id_detalle_servicio),
+                    COALESCE(SUM(ds.cantidad), 0),
+                    COALESCE(SUM(ds.subtotal), 0),
+                    COALESCE(SUM(ds.subtotal) - SUM(ds.costo * ds.cantidad), 0)
                 FROM servicios s
                 LEFT JOIN detalle_servicio ds ON s.id_servicio = ds.id_servicio
                 LEFT JOIN facturas f ON ds.id_factura = f.id_factura
@@ -7209,7 +7122,7 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
                     AND f.estado != 'anulado'
                 GROUP BY s.id_servicio, s.nombre, s.categoria, s.precio
                 HAVING COUNT(ds.id_detalle_servicio) > 0
-                ORDER BY veces DESC
+                ORDER BY COUNT(ds.id_detalle_servicio) DESC
                 LIMIT 20
             """, (fecha_inicio, fecha_fin))
             
@@ -7219,59 +7132,27 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
         cursor.close()
         conn.close()
         
-        # Crear documento Word
+        # Crear documento
         doc = Document()
         
-        # Configurar márgenes
-        sections = doc.sections
-        for section in sections:
-            section.top_margin = Cm(2)
-            section.bottom_margin = Cm(2)
-            section.left_margin = Cm(2)
-            section.right_margin = Cm(2)
-        
         # Título
-        titulo = doc.add_heading(f'Reporte de {reporte.capitalize()}', 0)
-        titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Información del período
+        doc.add_heading(f'Reporte de {reporte.capitalize()}', 0)
         doc.add_paragraph(f'Período: {fecha_inicio} a {fecha_fin}')
-        doc.add_paragraph(f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}')
-        doc.add_paragraph('PetGlow Peluquería Canina')
+        doc.add_paragraph(f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
         doc.add_paragraph()
         
-        # Crear tabla con datos
+        # Crear tabla si hay datos
         if datos:
-            # Crear tabla
             tabla = doc.add_table(rows=1, cols=len(encabezados))
             tabla.style = 'Table Grid'
             
-            # Configurar ancho de columnas
-            if reporte == 'ventas':
-                anchos = [2.5, 1.5, 2.0, 2.0, 4.0, 2.0, 1.5]
-            elif reporte == 'caja':
-                anchos = [2.0, 3.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
-            else:  # servicios
-                anchos = [4.0, 2.5, 1.5, 1.0, 1.5, 2.0, 2.0]
-            
-            # Configurar encabezados
+            # Encabezados
             header_cells = tabla.rows[0].cells
             for i, encabezado in enumerate(encabezados):
                 header_cells[i].text = encabezado
-                header_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 header_cells[i].paragraphs[0].runs[0].bold = True
-                header_cells[i].paragraphs[0].runs[0].font.size = Pt(10)
-                
-                # Configurar ancho de columna
-                if i < len(anchos):
-                    tc = header_cells[i]._tc
-                    tcPr = tc.get_or_add_tcPr()
-                    tcW = OxmlElement('w:tcW')
-                    tcW.set(qn('w:w'), str(int(anchos[i] * 500)))  # Convertir a twips
-                    tcW.set(qn('w:type'), 'dxa')
-                    tcPr.append(tcW)
             
-            # Agregar datos a la tabla
+            # Datos
             for fila in datos:
                 row_cells = tabla.add_row().cells
                 for i in range(min(len(fila), len(encabezados))):
@@ -7279,35 +7160,26 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
                     if valor is None:
                         texto = ""
                     elif isinstance(valor, (int, float)):
-                        if i in [2, 5, 6] if reporte == 'servicios' else [5] if reporte == 'ventas' else [2, 3, 4, 5, 6, 7]:
+                        # Formatear como moneda cuando corresponda
+                        if (reporte == 'ventas' and i == 5) or \
+                           (reporte == 'caja' and i in [2, 3, 4, 5, 6, 7]) or \
+                           (reporte == 'servicios' and i in [2, 5, 6]):
                             texto = f"S/ {float(valor):,.2f}"
                         else:
-                            texto = f"{valor}"
+                            texto = str(int(valor)) if valor == int(valor) else str(valor)
                     else:
                         texto = str(valor)
                     
                     row_cells[i].text = texto
-                    
-                    # Alinear contenido
-                    if isinstance(valor, (int, float)):
-                        row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                    else:
-                        row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    
-                    row_cells[i].paragraphs[0].runs[0].font.size = Pt(9)
         
-        # Agregar pie de documento
+        # Pie de documento
         doc.add_page_break()
-        doc.add_paragraph('_' * 50)
-        doc.add_paragraph()
+        doc.add_paragraph('---')
+        doc.add_paragraph('PetGlow Peluquería Canina')
+        doc.add_paragraph('Sistema de Gestión Integral')
+        doc.add_paragraph(f'Documento generado el {datetime.now().strftime("%d/%m/%Y")}')
         
-        pie = doc.add_paragraph()
-        pie.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        pie.add_run('PetGlow Peluquería Canina\n').bold = True
-        pie.add_run('Sistema de Gestión Integral\n')
-        pie.add_run(f'Documento generado automáticamente el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}').italic = True
-        
-        # Guardar documento en memoria
+        # Guardar en buffer
         buffer = BytesIO()
         doc.save(buffer)
         buffer.seek(0)
@@ -7318,15 +7190,14 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
             buffer,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,
-            download_name=nombre_archivo,
-            as_attachment_filename=nombre_archivo
+            download_name=nombre_archivo
         )
         
     except Exception as e:
-        print(f"❌ Error exportando a Word: {str(e)}")
-        import traceback
+        print(f"Error exportando a Word: {str(e)}")
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+        
 def exportar_excel_caja(fecha_inicio, fecha_fin):
     """Exportar reporte de caja a Excel - VERSIÓN CORREGIDA"""
     try:
@@ -7386,7 +7257,48 @@ def exportar_excel_caja(fecha_inicio, fecha_fin):
         print(f"❌ Error en exportar_excel_caja: {e}")
         flash(f'Error exportando a Excel: {str(e)}', 'danger')
         return redirect(url_for('reporte_caja'))
+@app.route('/api/reportes/exportar/pdf')
+@login_required
+@admin_required
+def exportar_pdf_route():
+    """Ruta específica para PDF"""
+    try:
+        reporte = request.args.get('reporte', 'ventas')
+        fecha_inicio = request.args.get('fecha_inicio', '')
+        fecha_fin = request.args.get('fecha_fin', '')
+        
+        if not fecha_inicio or not fecha_fin:
+            return jsonify({'success': False, 'error': 'Fechas requeridas'}), 400
+        
+        return exportar_pdf(reporte, fecha_inicio, fecha_fin)
+        
+    except Exception as e:
+        print(f"Error en ruta PDF: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/reportes/exportar/word')
+@login_required
+@admin_required
+def exportar_word_route():
+    """Ruta específica para Word"""
+    try:
+        reporte = request.args.get('reporte', 'ventas')
+        fecha_inicio = request.args.get('fecha_inicio', '')
+        fecha_fin = request.args.get('fecha_fin', '')
+        
+        if not fecha_inicio or not fecha_fin:
+            return jsonify({'success': False, 'error': 'Fechas requeridas'}), 400
+        
+        return exportar_word(reporte, fecha_inicio, fecha_fin)
+        
+    except Exception as e:
+        print(f"Error en ruta Word: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+    
 def exportar_excel_empleados(fecha_inicio, fecha_fin):
     """Exportar reporte de empleados a Excel"""
     try:
