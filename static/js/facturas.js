@@ -596,86 +596,93 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // ANULAR FACTURA - CORREGIDO CON DEBUG
-    // ============================================
-    const anularFactura = (motivo = '') => {
-        mostrarCargando();
-        
-        const datos = {};
-        if (motivo.trim()) {
-            datos.motivo = motivo.trim();
-        }
-        
-        // Construir URL
-        const url = `/facturas/${facturaId}/anular`;
-        console.log('URL de anulación:', url);
-        console.log('Datos:', datos);
-        
-        const headers = {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        };
-        
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
-        
-        fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(datos),
-            credentials: 'same-origin'
-        })
-        .then(response => {
-            console.log('Respuesta anulación:', response.status, response.statusText);
-            
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`HTTP ${response.status}: ${text}`);
-                });
-            }
-            
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                return response.json();
-            } else {
-                return response.text().then(text => {
-                    return { 
-                        success: false, 
-                        message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
-                    };
-                });
-            }
-        })
-        .then(data => {
-            console.log('Respuesta anulación:', data);
-            ocultarCargando();
-            
-            if (data.success) {
-                mostrarAlerta('success', data.message || 'Factura anulada correctamente');
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            } else {
-                mostrarAlerta('error', data.message || 'Error al anular factura');
-            }
-        })
-        .catch(error => {
-            console.error('Error anulación:', error);
-            ocultarCargando();
-            
-            let mensajeError = 'Error al anular factura. ';
-            if (error.message.includes('Failed to fetch')) {
-                mensajeError += 'No se pudo conectar al servidor.';
-            } else if (error.message.includes('HTTP 404')) {
-                mensajeError += 'La ruta no existe (404).';
-            } else {
-                mensajeError += error.message;
-            }
-            
-            mostrarAlerta('error', mensajeError);
-        });
+// ANULAR FACTURA - CORREGIDO (sin error de body stream)
+// ============================================
+const anularFactura = (motivo = '') => {
+    mostrarCargando();
+    
+    const datos = {};
+    if (motivo.trim()) {
+        datos.motivo = motivo.trim();
+    }
+    
+    // Construir URL
+    const url = `/facturas/${facturaId}/anular`;
+    console.log('URL de anulación:', url);
+    console.log('Datos:', datos);
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
     };
+    
+    if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+    }
+    
+    fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(datos),
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        console.log('Respuesta anulación:', response.status, response.statusText);
+        
+        const contentType = response.headers.get('content-type');
+        
+        if (!response.ok) {
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                });
+            } else {
+                return response.text().then(text => {
+                    throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                });
+            }
+        }
+        
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                return { 
+                    success: false, 
+                    message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
+                };
+            });
+        }
+    })
+    .then(data => {
+        console.log('Respuesta anulación:', data);
+        ocultarCargando();
+        
+        if (data.success) {
+            mostrarAlerta('success', data.message || 'Factura anulada correctamente');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            mostrarAlerta('error', data.message || 'Error al anular factura');
+        }
+    })
+    .catch(error => {
+        console.error('Error anulación:', error);
+        ocultarCargando();
+        
+        let mensajeError = 'Error al anular factura. ';
+        if (error.message.includes('Failed to fetch')) {
+            mensajeError += 'No se pudo conectar al servidor.';
+        } else if (error.message.includes('HTTP 404')) {
+            mensajeError += 'La ruta no existe (404).';
+        } else {
+            mensajeError += error.message;
+        }
+        
+        mostrarAlerta('error', mensajeError);
+    });
+};
     
     // ============================================
     // FUNCIONES DE UI
