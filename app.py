@@ -3861,8 +3861,11 @@ def facturar_reserva(id):
         
         print(f"🔍 Reserva ID {id} encontrada. Estado: {reserva['estado']}")
         
-        if reserva['estado'] != 'completada':
-            flash('Solo se pueden facturar reservas completadas.', 'warning')
+        # Estados que pueden ser facturados
+        estados_facturables = ['completada', 'pendiente_pago', 'finalizada']
+
+        if reserva['estado'] not in estados_facturables:
+            flash(f'Solo se pueden facturar reservas en estado: {", ".join(estados_facturables)}', 'warning')
             return redirect(url_for('ver_reserva', id=id))
         
         # 2. Verificar que no tenga factura ya
@@ -4276,16 +4279,35 @@ def cierre_caja():
             flash('ℹ️ No tienes caja abierta para hoy.', 'info')
             return redirect(url_for('dashboard'))
         
+        # AQUÍ ESTÁ LA CORRECCIÓN - Crear un nuevo dict con los valores convertidos
+        caja = dict(caja_actual)  # Convertir a dict mutable
+        
+        # Función para convertir valores Decimal a float de forma segura
+        def safe_float(value, default=0.0):
+            if value is None:
+                return default
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        # Convertir todos los valores Decimal a float para la plantilla
+        caja['monto_apertura_float'] = safe_float(caja.get('monto_apertura'))
+        caja['monto_cierre_float'] = safe_float(caja.get('monto_cierre'))
+        caja['venta_efectivo_float'] = safe_float(caja.get('venta_efectivo'))
+        caja['venta_tarjeta_float'] = safe_float(caja.get('venta_tarjeta'))
+        caja['venta_digital_float'] = safe_float(caja.get('venta_digital'))
+        caja['total_ventas_float'] = safe_float(caja.get('total_ventas'))
+        caja['total_egresos_float'] = safe_float(caja.get('total_egresos'))
+        caja['diferencia_float'] = safe_float(caja.get('diferencia'))
+        
         if request.method == 'POST':
             monto_cierre = float(request.form.get('monto_cierre', 0))
             observaciones = request.form.get('observaciones', '')
             
-            # Convertir todos los valores a float
-            monto_apertura = safe_float(caja_actual['monto_apertura'])
-            venta_efectivo = safe_float(caja_actual['venta_efectivo'])
-            venta_tarjeta = safe_float(caja_actual['venta_tarjeta'])
-            venta_digital = safe_float(caja_actual['venta_digital'])
-            total_ventas = safe_float(caja_actual['total_ventas'])
+            # Usar valores seguros
+            monto_apertura = caja['monto_apertura_float']
+            venta_efectivo = caja['venta_efectivo_float']
             
             # Calcular diferencia
             efectivo_esperado = monto_apertura + venta_efectivo
@@ -4307,7 +4329,7 @@ def cierre_caja():
                     estado = 'cerrada',
                     hora_cierre = NOW()
                 WHERE id_caja = %s
-            """, (monto_cierre, diferencia, observaciones, caja_actual['id_caja']))
+            """, (monto_cierre, diferencia, observaciones, caja['id_caja']))
             
             conn.commit()
             
@@ -4323,17 +4345,11 @@ def cierre_caja():
             return redirect(url_for('dashboard'))
         
         # GET request: preparar datos para la plantilla
-        # Convertir todos los valores Decimal a float para la plantilla
-        for key in ['monto_apertura', 'venta_efectivo', 'venta_tarjeta', 
-                   'venta_digital', 'total_ventas', 'monto_cierre', 'diferencia']:
-            if key in caja_actual:
-                caja_actual[f'{key}_float'] = safe_float(caja_actual[key])
-        
         # Calcular efectivo esperado para mostrar
-        efectivo_esperado = safe_float(caja_actual['monto_apertura']) + safe_float(caja_actual['venta_efectivo'])
-        caja_actual['efectivo_esperado'] = efectivo_esperado
+        efectivo_esperado = caja['monto_apertura_float'] + caja['venta_efectivo_float']
+        caja['efectivo_esperado'] = efectivo_esperado
         
-        return render_template('caja/cierre.html', caja=caja_actual)
+        return render_template('caja/cierre.html', caja=caja)
         
     except Exception as e:
         flash(f'❌ Error al cerrar caja: {str(e)}', 'danger')
@@ -4345,7 +4361,6 @@ def cierre_caja():
             cursor.close()
         if conn:
             conn.close()
-
 @app.route('/api/caja/estado')
 def estado_caja():
     """API para verificar estado de caja (para AJAX)"""
@@ -4852,7 +4867,7 @@ def pagar_factura(id):
                 cursor.execute("""
                     INSERT INTO movimientos_caja 
                     (id_caja, id_factura, tipo, metodo_pago, concepto, monto, fecha_movimiento, id_empleado)
-                    VALUES (%s, %s, 'ingreso', %s, %s, %s, NOW(), %s)
+                    VALUES (%s, %s, 'ingreso', %s, %s, %s, CURRENT_TIMESTAMP, %s)
                 """, (id_caja, id, metodo_pago, 
                       f'Pago de {factura["tipo_comprobante"]} {factura["numero"]}', 
                       monto_pagado, id_empleado))
