@@ -106,20 +106,20 @@ def admin_required(f):
 
 # Configuración de la base de datos MySQL
 def get_db_connection():
-    """Obtener conexión a PostgreSQL con zona horaria corregida"""
+
     try:
+        DATABASE_URL = os.getenv("DATABASE_URL")
+
         conn = psycopg2.connect(
-            host=os.environ.get('PGHOST'),
-            database=os.environ.get('PGDATABASE'),
-            user=os.environ.get('PGUSER'),
-            password=os.environ.get('PGPASSWORD'),
-            port=os.environ.get('PGPORT', 5432),
-            # Agregar esta línea para usar zona horaria de Perú
-            options=f"-c timezone=America/Lima"
+            DATABASE_URL,
+            cursor_factory=psycopg2.extras.DictCursor
+
         )
+
         return conn
+
     except Exception as e:
-        print(f"❌ Error conectando a PostgreSQL: {e}")
+        print("ERROR CONEXION POSTGRES:", e)
         return None
 
 
