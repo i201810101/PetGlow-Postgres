@@ -4649,187 +4649,6 @@ def crear_venta():
         if conn:
             conn.close()     
 
-
-@app.route('/facturas/<int:id>/pagar', methods=['POST'])
-def pagar_factura(id):
-    """Registrar pago de factura - VERSIÓN CORREGIDA"""
-    print(f"🔍 DEBUG: Pago para factura {id}")
-    
-    conn = get_db_connection()
-    
-    if not conn:
-        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
-    
-    try:
-        # Verificar que recibimos JSON
-        if not request.is_json:
-            return jsonify({'success': False, 'message': 'Solo se aceptan solicitudes JSON.'}), 400
-        
-        data = request.get_json()
-        print(f"📦 Datos recibidos: {data}")
-        
-        if not data:
-            return jsonify({'success': False, 'message': 'No se recibieron datos.'}), 400
-        
-        monto_pagado = data.get('monto', 0)
-        metodo_pago = data.get('metodo_pago', 'efectivo')
-        es_parcial = data.get('es_parcial', False)
-        
-        # Convertir y validar monto
-        try:
-            monto_pagado = float(monto_pagado)
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'message': 'Monto inválido.'}), 400
-        
-        if monto_pagado <= 0:
-            return jsonify({'success': False, 'message': 'El monto debe ser mayor a 0.'}), 400
-        
-        cursor = conn.cursor()
-        
-        # 1. Obtener factura
-        cursor.execute("""
-            SELECT f.*, c.nombre, c.apellido, c.dni
-            FROM facturas f
-            LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-            WHERE f.id_factura = %s
-        """, (id,))
-        
-        factura = cursor.fetchone()
-        print(f"📄 Factura obtenida: {factura}")
-        
-        if not factura:
-            return jsonify({'success': False, 'message': 'Factura no encontrada.'}), 404
-        
-        if factura['estado'] == 'pagada':
-            return jsonify({'success': False, 'message': 'La factura ya está pagada.'}), 400
-        
-        if factura['estado'] == 'anulada':
-            return jsonify({'success': False, 'message': 'No se puede pagar una factura anulada.'}), 400
-        
-        # 2. Verificar monto
-        total_factura = safe_float(factura['total'])
-        if monto_pagado > total_factura:
-            return jsonify({'success': False, 'message': f'El monto excede el total. Total: S/ {total_factura:.2f}'}), 400
-        
-        # 3. Determinar nuevo estado
-        if es_parcial and monto_pagado < total_factura:
-            nuevo_estado = 'credito'
-            saldo_pendiente = total_factura - monto_pagado
-            mensaje_estado = f'Pago parcial de S/ {monto_pagado:.2f} registrado. Pendiente: S/ {saldo_pendiente:.2f}'
-            
-            # Verificar si existe columna saldo_pendiente
-            cursor.execute("SHOW COLUMNS FROM facturas LIKE 'saldo_pendiente'")
-            tiene_saldo_pendiente = cursor.fetchone()
-            
-            if tiene_saldo_pendiente:
-                cursor.execute("""
-                    UPDATE facturas 
-                    SET estado = 'credito', 
-                        metodo_pago = %s, 
-                        fecha_pago = NOW(),
-                        saldo_pendiente = %s
-                    WHERE id_factura = %s
-                """, (metodo_pago, saldo_pendiente, id))
-            else:
-                cursor.execute("""
-                    UPDATE facturas 
-                    SET estado = 'credito', 
-                        metodo_pago = %s, 
-                        fecha_pago = NOW()
-                    WHERE id_factura = %s
-                """, (metodo_pago, id))
-        else:
-            # Pago completo
-            nuevo_estado = 'pagada'
-            monto_pagado = total_factura
-            mensaje_estado = f'Pago completo de S/ {monto_pagado:.2f} registrado.'
-            
-            cursor.execute("""
-                UPDATE facturas 
-                SET estado = 'pagada', 
-                    metodo_pago = %s, 
-                    fecha_pago = NOW()
-                WHERE id_factura = %s
-            """, (metodo_pago, id))
-        
-        print(f"🔄 Actualizando factura {id} a estado: {nuevo_estado}")
-        
-        # 4. Registrar movimiento en caja
-        id_empleado = session.get('id_empleado', 1)
-        cursor.execute("""
-            SELECT id_caja 
-            FROM caja_diaria 
-            WHERE fecha = CURRENT_DATE 
-            AND estado = 'abierta'
-            AND id_empleado_cajero = %s
-            LIMIT 1
-        """, (id_empleado,))
-        
-        caja_abierta = cursor.fetchone()
-        
-        if caja_abierta:
-            id_caja = caja_abierta['id_caja']
-            print(f"📦 Caja abierta encontrada: ID {id_caja}")
-            
-            # Registrar movimiento en caja
-            try:
-                cursor.execute("""
-                    INSERT INTO movimientos_caja 
-                    (id_caja, id_factura, tipo, metodo_pago, concepto, monto, fecha_movimiento, id_empleado)
-                    VALUES (%s, %s, 'ingreso', %s, %s, %s, NOW(), %s)
-                """, (id_caja, id, metodo_pago, 
-                      f'Pago de {factura["tipo_comprobante"]} {factura["numero"]}', 
-                      monto_pagado, id_empleado))
-                
-                print("✅ Movimiento en caja registrado")
-                
-                # Actualizar totales en caja
-                campo_venta = ''
-                if metodo_pago == 'efectivo':
-                    campo_venta = 'venta_efectivo'
-                elif metodo_pago == 'tarjeta':
-                    campo_venta = 'venta_tarjeta'
-                else:
-                    campo_venta = 'venta_digital'
-                
-                cursor.execute(f"""
-                    UPDATE caja_diaria 
-                    SET {campo_venta} = COALESCE({campo_venta}, 0) + %s,
-                        total_ventas = COALESCE(total_ventas, 0) + %s
-                    WHERE id_caja = %s
-                """, (monto_pagado, monto_pagado, id_caja))
-                
-            except Exception as e:
-                print(f"⚠️  Error registrando en caja: {e}")
-        else:
-            print("⚠️  No hay caja abierta")
-            mensaje_estado += " (Sin registro en caja)"
-        
-        conn.commit()
-        
-        print(f"✅ Pago registrado para factura {id}")
-        
-        return jsonify({
-            'success': True, 
-            'message': mensaje_estado,
-            'nuevo_estado': nuevo_estado,
-            'monto_pagado': monto_pagado,
-            'caja_registrada': caja_abierta is not None
-        })
-            
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"❌ Error en pagar_factura: {e}")
-        import traceback
-        print(f"🔍 Traceback: {traceback.format_exc()}")
-        return jsonify({'success': False, 'message': f'Error registrando pago: {str(e)}'}), 500
-    finally:
-        if 'cursor' in locals() and cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
 @app.route('/facturas/<int:id>/anular', methods=['POST'])
 def anular_factura(id):
     """Anular factura"""
@@ -4895,7 +4714,180 @@ def anular_factura(id):
             cursor.close()
         if conn:
             conn.close()
+# ============================================
+# RUTAS PARA PAGAR FACTURAS - CORREGIDAS
+# ============================================
 
+@app.route('/facturas/<int:id>/pagar', methods=['POST'])
+def pagar_factura(id):
+    """Registrar pago de factura - VERSIÓN CORREGIDA"""
+    print(f"🔍 DEBUG: Pago para factura {id}")
+    
+    conn = get_db_connection()
+    
+    if not conn:
+        return jsonify({'success': False, 'message': 'No hay conexión a la base de datos.'}), 500
+    
+    try:
+        # Verificar que recibimos JSON
+        if not request.is_json:
+            return jsonify({'success': False, 'message': 'Solo se aceptan solicitudes JSON.'}), 400
+        
+        data = request.get_json()
+        print(f"📦 Datos recibidos: {data}")
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No se recibieron datos.'}), 400
+        
+        monto_pagado = data.get('monto', 0)
+        metodo_pago = data.get('metodo_pago', 'efectivo')
+        es_parcial = data.get('es_parcial', False)
+        
+        # Convertir y validar monto
+        try:
+            monto_pagado = float(monto_pagado)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Monto inválido.'}), 400
+        
+        if monto_pagado <= 0:
+            return jsonify({'success': False, 'message': 'El monto debe ser mayor a 0.'}), 400
+        
+        cursor = conn.cursor()
+        
+        # 1. Obtener factura
+        cursor.execute("""
+            SELECT f.*, c.nombre, c.apellido, c.dni
+            FROM facturas f
+            LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+            WHERE f.id_factura = %s
+        """, (id,))
+        
+        factura = cursor.fetchone()
+        print(f"📄 Factura obtenida: {factura}")
+        
+        if not factura:
+            return jsonify({'success': False, 'message': 'Factura no encontrada.'}), 404
+        
+        if factura['estado'] == 'pagada':
+            return jsonify({'success': False, 'message': 'La factura ya está pagada.'}), 400
+        
+        if factura['estado'] == 'anulada':
+            return jsonify({'success': False, 'message': 'No se puede pagar una factura anulada.'}), 400
+        
+        # 2. Verificar monto
+        total_factura = float(factura['total']) if factura['total'] else 0
+        if monto_pagado > total_factura:
+            return jsonify({'success': False, 'message': f'El monto excede el total. Total: S/ {total_factura:.2f}'}), 400
+        
+        # 3. Determinar nuevo estado
+        if es_parcial and monto_pagado < total_factura:
+            nuevo_estado = 'credito'
+            saldo_pendiente = total_factura - monto_pagado
+            mensaje_estado = f'Pago parcial de S/ {monto_pagado:.2f} registrado. Pendiente: S/ {saldo_pendiente:.2f}'
+            
+            # Actualizar factura con saldo pendiente
+            cursor.execute("""
+                UPDATE facturas 
+                SET estado = 'credito', 
+                    metodo_pago = %s, 
+                    fecha_pago = NOW(),
+                    saldo_pendiente = %s
+                WHERE id_factura = %s
+            """, (metodo_pago, saldo_pendiente, id))
+        else:
+            # Pago completo
+            nuevo_estado = 'pagada'
+            monto_pagado = total_factura
+            mensaje_estado = f'Pago completo de S/ {monto_pagado:.2f} registrado.'
+            
+            cursor.execute("""
+                UPDATE facturas 
+                SET estado = 'pagada', 
+                    metodo_pago = %s, 
+                    fecha_pago = NOW(),
+                    saldo_pendiente = 0
+                WHERE id_factura = %s
+            """, (metodo_pago, id))
+        
+        print(f"🔄 Actualizando factura {id} a estado: {nuevo_estado}")
+        
+        # 4. Registrar movimiento en caja
+        id_empleado = session.get('id_empleado', 1)
+        cursor.execute("""
+            SELECT id_caja 
+            FROM caja_diaria 
+            WHERE fecha = CURRENT_DATE 
+            AND estado = 'abierta'
+            AND id_empleado_cajero = %s
+            LIMIT 1
+        """, (id_empleado,))
+        
+        caja_abierta = cursor.fetchone()
+        
+        if caja_abierta:
+            id_caja = caja_abierta['id_caja']
+            print(f"📦 Caja abierta encontrada: ID {id_caja}")
+            
+            # Registrar movimiento en caja
+            try:
+                cursor.execute("""
+                    INSERT INTO movimientos_caja 
+                    (id_caja, id_factura, tipo, metodo_pago, concepto, monto, fecha_movimiento, id_empleado)
+                    VALUES (%s, %s, 'ingreso', %s, %s, %s, NOW(), %s)
+                """, (id_caja, id, metodo_pago, 
+                      f'Pago de {factura["tipo_comprobante"]} {factura["numero"]}', 
+                      monto_pagado, id_empleado))
+                
+                print("✅ Movimiento en caja registrado")
+                
+                # Actualizar totales en caja
+                campo_venta = ''
+                if metodo_pago == 'efectivo':
+                    campo_venta = 'venta_efectivo'
+                elif metodo_pago == 'tarjeta':
+                    campo_venta = 'venta_tarjeta'
+                else:
+                    campo_venta = 'venta_digital'
+                
+                cursor.execute(f"""
+                    UPDATE caja_diaria 
+                    SET {campo_venta} = COALESCE({campo_venta}, 0) + %s,
+                        total_ventas = COALESCE(total_ventas, 0) + %s
+                    WHERE id_caja = %s
+                """, (monto_pagado, monto_pagado, id_caja))
+                
+            except Exception as e:
+                print(f"⚠️  Error registrando en caja: {e}")
+                # Continuar aunque falle la caja
+                mensaje_estado += " (Error en caja, pero pago registrado)"
+        else:
+            print("⚠️  No hay caja abierta")
+            mensaje_estado += " (Sin registro en caja)"
+        
+        conn.commit()
+        
+        print(f"✅ Pago registrado para factura {id}")
+        
+        return jsonify({
+            'success': True, 
+            'message': mensaje_estado,
+            'nuevo_estado': nuevo_estado,
+            'monto_pagado': monto_pagado,
+            'caja_registrada': caja_abierta is not None
+        })
+            
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Error en pagar_factura: {e}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'message': f'Error registrando pago: {str(e)}'}), 500
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 # Añadir estas rutas a tu app.py
 
 @app.route('/empleados')
