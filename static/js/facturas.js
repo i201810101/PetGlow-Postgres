@@ -1,6 +1,5 @@
 // ============================================
-// FACTURAS.JS - Versión Corregida
-// Funcionalidades para módulo de facturación
+// FACTURAS.JS - Versión con Debug Mejorado
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -8,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let facturaId = null;
     let facturaTotal = 0;
     let saldoPendiente = 0;
+    let csrfToken = '';
     
     // Inicializar
     const initFacturas = () => {
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const facturaMeta = document.querySelector('meta[name="factura-id"]');
         const totalMeta = document.querySelector('meta[name="factura-total"]');
         const saldoMeta = document.querySelector('meta[name="saldo-pendiente"]');
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         
         if (facturaMeta) {
             facturaId = parseInt(facturaMeta.getAttribute('content'));
@@ -30,6 +31,10 @@ document.addEventListener('DOMContentLoaded', function() {
             saldoPendiente = facturaTotal;
         }
         
+        if (csrfMeta) {
+            csrfToken = csrfMeta.getAttribute('content');
+        }
+        
         console.log(`Factura ID: ${facturaId}, Total: ${facturaTotal}, Saldo: ${saldoPendiente}`);
         
         // Inicializar componentes
@@ -37,13 +42,12 @@ document.addEventListener('DOMContentLoaded', function() {
         initPagoParcial();
         initAnularFactura();
         initImpresion();
-        initValidaciones();
         initCalculadora();
         initEventListeners();
     };
     
     // ============================================
-    // 1. PAGO COMPLETO - CORREGIDO
+    // 1. PAGO COMPLETO
     // ============================================
     const initPagoCompleto = () => {
         const btnConfirmarPago = document.getElementById('btnConfirmarPago');
@@ -58,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Usar confirmación personalizada, NO alert() nativa
+            // Usar confirmación personalizada
             confirmarAccionPersonalizada({
                 titulo: 'Confirmar Pago Completo',
                 mensaje: `¿Confirmar pago de S/ ${montoPendiente.toFixed(2)} con ${getMetodoPagoTexto(metodoPago)}?`,
@@ -78,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // 2. PAGO PARCIAL - CORREGIDO
+    // 2. PAGO PARCIAL
     // ============================================
     const initPagoParcial = () => {
         const btnConfirmarPagoParcial = document.getElementById('btnConfirmarPagoParcial');
@@ -138,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // 3. ANULAR FACTURA - COMPLETAMENTE REESCRITO
+    // 3. ANULAR FACTURA
     // ============================================
     const initAnularFactura = () => {
         const btnAnularFactura = document.getElementById('btnAnularFactura');
@@ -158,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = new bootstrap.Modal(modalAnular);
             modal.show();
             
-            // Configurar botón de confirmación dentro del modal
+            // Configurar botón de confirmación
             const btnConfirmarAnulacion = document.getElementById('btnConfirmarAnulacion');
             if (btnConfirmarAnulacion) {
                 // Remover event listeners anteriores
@@ -262,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // 5. CALCULADORA DE PAGOS
+    // 5. CALCULADORA
     // ============================================
     const initCalculadora = () => {
         const btnCalculadora = document.getElementById('btnCalculadora');
@@ -311,16 +315,12 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // Agregar al DOM si no existe
         if (!document.getElementById('modalCalculadora')) {
             document.body.insertAdjacentHTML('beforeend', modalHTML);
         }
         
-        // Mostrar modal
         const modal = new bootstrap.Modal(document.getElementById('modalCalculadora'));
         modal.show();
-        
-        // Configurar eventos de la calculadora
         configurarCalculadora(modal, montoInput);
     };
     
@@ -328,7 +328,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const display = document.getElementById('displayCalculadora');
         if (!display) return;
         
-        // Botones numéricos
         document.querySelectorAll('#modalCalculadora [data-val]').forEach(btn => {
             btn.addEventListener('click', function() {
                 const val = this.getAttribute('data-val');
@@ -344,12 +343,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Botón limpiar
         document.querySelector('#modalCalculadora [data-clear]').addEventListener('click', function() {
             display.value = '0';
         });
         
-        // Botón retroceso
         document.querySelector('#modalCalculadora [data-back]').addEventListener('click', function() {
             if (display.value.length > 1) {
                 display.value = display.value.slice(0, -1);
@@ -358,12 +355,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Botón máximo
         document.querySelector('#modalCalculadora [data-max]').addEventListener('click', function() {
             display.value = saldoPendiente.toFixed(2);
         });
         
-        // Botón aplicar
         document.querySelector('#modalCalculadora [data-apply]').addEventListener('click', function() {
             const valor = parseFloat(display.value) || 0;
             montoInput.value = valor.toFixed(2);
@@ -372,13 +367,11 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // 6. EVENT LISTENERS ADICIONALES
+    // 6. EVENT LISTENERS
     // ============================================
     const initEventListeners = () => {
-        // Actualizar estado de botones según saldo
         actualizarEstadoBotones();
         
-        // Copiar número de factura
         const btnCopiarFactura = document.getElementById('btnCopiarFactura');
         if (btnCopiarFactura) {
             btnCopiarFactura.addEventListener('click', copiarNumeroFactura);
@@ -402,39 +395,11 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // ============================================
-    // 7. VALIDACIONES
-    // ============================================
-    const initValidaciones = () => {
-        const formFacturar = document.querySelector('form[action*="facturar"]');
-        if (formFacturar) {
-            formFacturar.addEventListener('submit', validarFormularioFacturacion);
-        }
-    };
-    
-    const validarFormularioFacturacion = (e) => {
-        const tipoComprobante = document.getElementById('tipo_comprobante');
-        const metodoPago = document.getElementById('metodo_pago');
-        
-        if (!tipoComprobante || !tipoComprobante.value) {
-            e.preventDefault();
-            mostrarAlerta('error', 'Seleccione el tipo de comprobante');
-            return;
-        }
-        
-        if (!metodoPago || !metodoPago.value) {
-            e.preventDefault();
-            mostrarAlerta('error', 'Seleccione el método de pago');
-            return;
-        }
-    };
-    
-    // ============================================
     // FUNCIONES AUXILIARES CORREGIDAS
     // ============================================
     
-    // CONFIRMACIÓN PERSONALIZADA (sin alert() nativa)
+    // CONFIRMACIÓN PERSONALIZADA
     const confirmarAccionPersonalizada = (opciones) => {
-        // Si SweetAlert2 está disponible, usarlo
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 title: opciones.titulo || 'Confirmar',
@@ -452,20 +417,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         } else {
-            // Si no hay SweetAlert, crear nuestro propio modal de confirmación
             crearModalConfirmacionPersonalizada(opciones);
         }
     };
     
-    // Crear modal de confirmación personalizada
     const crearModalConfirmacionPersonalizada = (opciones) => {
         const modalId = 'modalConfirmacionPersonalizada';
         let modal = document.getElementById(modalId);
         
-        // Si ya existe, eliminarlo
         if (modal) modal.remove();
         
-        // Crear modal
         const modalHTML = `
             <div class="modal fade" id="${modalId}" tabindex="-1">
                 <div class="modal-dialog">
@@ -494,12 +455,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
-        // Mostrar modal
         modal = document.getElementById(modalId);
         const bsModal = new bootstrap.Modal(modal);
         bsModal.show();
         
-        // Configurar botones
         document.getElementById('btnConfirmarAccion').addEventListener('click', function() {
             bsModal.hide();
             if (opciones.onConfirm) opciones.onConfirm();
@@ -509,7 +468,6 @@ document.addEventListener('DOMContentLoaded', function() {
             bsModal.hide();
         });
         
-        // Auto-eliminar al cerrar
         modal.addEventListener('hidden.bs.modal', function() {
             setTimeout(() => {
                 if (modal && modal.parentNode) {
@@ -519,25 +477,71 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
     
-    // Registrar pago
+    // ============================================
+    // REGISTRAR PAGO - CORREGIDO CON DEBUG
+    // ============================================
     const registrarPago = (datos) => {
         mostrarCargando();
         
-        fetch(`/facturas/${facturaId}/pagar`, {
+        // Construir la URL correctamente - VERSIÓN 1: Usando la ruta actual
+        const currentPath = window.location.pathname; // Ej: "/facturas/1"
+        let url = '';
+        
+        // Opción 1: Si ya estamos en la página de factura, usar ruta relativa
+        if (currentPath.includes('/facturas/')) {
+            url = `${currentPath}/pagar`;
+        } else {
+            // Opción 2: Construir la URL directamente
+            url = `/facturas/${facturaId}/pagar`;
+        }
+        
+        console.log('URL de pago:', url);
+        console.log('Datos a enviar:', datos);
+        
+        // Configurar headers
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        
+        // Agregar CSRF token si existe
+        if (csrfToken) {
+            headers['X-CSRF-Token'] = csrfToken;
+        }
+        
+        // Hacer la petición con manejo de errores mejorado
+        fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(datos)
+            headers: headers,
+            body: JSON.stringify(datos),
+            credentials: 'same-origin' // Importante para cookies de sesión
         })
         .then(response => {
+            console.log('Respuesta HTTP:', response.status, response.statusText);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Si la respuesta no es OK, intentar leer el error
+                return response.text().then(text => {
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                });
             }
-            return response.json();
+            
+            // Intentar parsear como JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json();
+            } else {
+                // Si no es JSON, devolver texto
+                return response.text().then(text => {
+                    return { 
+                        success: false, 
+                        message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
+                    };
+                });
+            }
         })
         .then(data => {
+            console.log('Respuesta del servidor:', data);
             ocultarCargando();
             
             if (data.success) {
@@ -550,13 +554,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            console.error('Error completo:', error);
             ocultarCargando();
-            console.error('Error:', error);
-            mostrarAlerta('error', 'Error al registrar pago. Verifique la conexión.');
+            
+            let mensajeError = 'Error al registrar pago. ';
+            
+            if (error.message.includes('Failed to fetch')) {
+                mensajeError += 'No se pudo conectar al servidor. Verifique su conexión.';
+            } else if (error.message.includes('HTTP 404')) {
+                mensajeError += 'La ruta no existe (404). Verifique la URL.';
+            } else if (error.message.includes('HTTP 500')) {
+                mensajeError += 'Error interno del servidor (500).';
+            } else if (error.message.includes('HTTP 403')) {
+                mensajeError += 'Acceso denegado (403). Verifique permisos.';
+            } else {
+                mensajeError += error.message;
+            }
+            
+            mostrarAlerta('error', mensajeError);
         });
     };
     
-    // Anular factura
+    // ============================================
+    // ANULAR FACTURA - CORREGIDO CON DEBUG
+    // ============================================
     const anularFactura = (motivo = '') => {
         mostrarCargando();
         
@@ -565,21 +586,49 @@ document.addEventListener('DOMContentLoaded', function() {
             datos.motivo = motivo.trim();
         }
         
-        fetch(`/facturas/${facturaId}/anular`, {
+        // Construir URL
+        const url = `/facturas/${facturaId}/anular`;
+        console.log('URL de anulación:', url);
+        console.log('Datos:', datos);
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        
+        if (csrfToken) {
+            headers['X-CSRF-Token'] = csrfToken;
+        }
+        
+        fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(datos)
+            headers: headers,
+            body: JSON.stringify(datos),
+            credentials: 'same-origin'
         })
         .then(response => {
+            console.log('Respuesta anulación:', response.status, response.statusText);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                return response.text().then(text => {
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                });
             }
-            return response.json();
+            
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json();
+            } else {
+                return response.text().then(text => {
+                    return { 
+                        success: false, 
+                        message: 'Respuesta no es JSON: ' + text.substring(0, 100) 
+                    };
+                });
+            }
         })
         .then(data => {
+            console.log('Respuesta anulación:', data);
             ocultarCargando();
             
             if (data.success) {
@@ -592,15 +641,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            console.error('Error anulación:', error);
             ocultarCargando();
-            console.error('Error:', error);
-            mostrarAlerta('error', 'Error al anular factura. Verifique la conexión.');
+            
+            let mensajeError = 'Error al anular factura. ';
+            if (error.message.includes('Failed to fetch')) {
+                mensajeError += 'No se pudo conectar al servidor.';
+            } else if (error.message.includes('HTTP 404')) {
+                mensajeError += 'La ruta no existe (404).';
+            } else {
+                mensajeError += error.message;
+            }
+            
+            mostrarAlerta('error', mensajeError);
         });
     };
     
-    // Mostrar alerta (sin cambios)
+    // ============================================
+    // FUNCIONES DE UI
+    // ============================================
     const mostrarAlerta = (tipo, mensaje, tiempo = 4000) => {
-        // ... (mantener el mismo código de alerta que ya tenías)
+        // Remover alertas anteriores
+        document.querySelectorAll('.alert-flotante').forEach(el => {
+            el.remove();
+        });
+        
         const alerta = document.createElement('div');
         alerta.className = `alert alert-${tipo} alert-dismissible fade show position-fixed alert-flotante`;
         alerta.style.cssText = `
@@ -610,9 +675,6 @@ document.addEventListener('DOMContentLoaded', function() {
             min-width: 300px;
             max-width: 500px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            animation: slideInRight 0.3s ease-out;
-            border-left: 4px solid;
-            border-left-color: ${tipo === 'success' ? '#198754' : tipo === 'error' ? '#dc3545' : tipo === 'warning' ? '#ffc107' : '#0dcaf0'};
         `;
         
         const iconos = {
@@ -622,25 +684,13 @@ document.addEventListener('DOMContentLoaded', function() {
             'info': 'fa-info-circle'
         };
         
-        const titulos = {
-            'success': 'Éxito',
-            'error': 'Error',
-            'warning': 'Advertencia',
-            'info': 'Información'
-        };
-        
         const icono = iconos[tipo] || 'fa-info-circle';
-        const titulo = titulos[tipo] || 'Información';
         
         alerta.innerHTML = `
-            <div class="d-flex align-items-center">
-                <i class="fas ${icono} fa-2x me-3"></i>
-                <div class="flex-grow-1">
-                    <strong>${titulo}</strong>
-                    <div class="small">${mensaje}</div>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
+            <i class="fas ${icono} me-2"></i>
+            <strong>${tipo === 'success' ? 'Éxito' : tipo === 'error' ? 'Error' : tipo === 'warning' ? 'Advertencia' : 'Información'}</strong>
+            <span class="ms-2">${mensaje}</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
         
         document.body.appendChild(alerta);
@@ -648,53 +698,53 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tiempo > 0) {
             setTimeout(() => {
                 if (alerta.parentNode) {
-                    alerta.style.opacity = '0';
-                    alerta.style.transition = 'opacity 0.3s';
-                    setTimeout(() => {
-                        if (alerta.parentNode) alerta.remove();
-                    }, 300);
+                    alerta.remove();
                 }
             }, tiempo);
         }
     };
     
-    // Mostrar cargando
     const mostrarCargando = () => {
-        const overlay = document.createElement('div');
-        overlay.id = 'cargando-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 99999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(2px);
-        `;
+        let overlay = document.getElementById('cargando-overlay');
         
-        overlay.innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border text-light" style="width: 3rem; height: 3rem;"></div>
-                <p class="mt-3 text-white">Procesando...</p>
-            </div>
-        `;
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'cargando-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            overlay.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-3 text-white">Procesando...</p>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+        }
         
-        document.body.appendChild(overlay);
+        overlay.style.display = 'flex';
     };
     
-    // Ocultar cargando
     const ocultarCargando = () => {
         const overlay = document.getElementById('cargando-overlay');
         if (overlay) {
-            overlay.remove();
+            overlay.style.display = 'none';
         }
     };
     
-    // Obtener texto del método de pago
     const getMetodoPagoTexto = (metodo) => {
         const metodos = {
             'efectivo': 'Efectivo',
