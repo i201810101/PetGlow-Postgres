@@ -6857,228 +6857,156 @@ def exportar_excel(reporte, fecha_inicio, fecha_fin):
         return redirect(url_for('reporte_ventas'))
         
 def exportar_pdf(reporte, fecha_inicio, fecha_fin):
-    """Exportar a PDF usando FPDF - VERSIÓN MEJORADA"""
+    """Exportar a PDF - VERSIÓN SIMPLIFICADA Y FUNCIONAL"""
     try:
         from fpdf import FPDF
         from io import BytesIO
-        from flask import send_file
-        import datetime as dt
+        from datetime import datetime
         
-        # Obtener datos
         conn = get_db_connection()
         if not conn:
-            return jsonify({'success': False, 'error': 'Error de conexión a la base de datos'}), 500
+            return "Error de conexión", 500
         
         cursor = conn.cursor()
         
-        # Datos principales
-        cursor.execute("""
-            SELECT 
-                f.numero,
-                f.tipo_comprobante,
-                DATE(f.fecha_emision) as fecha,
-                f.metodo_pago,
-                CONCAT(c.nombre, ' ', c.apellido) as cliente,
-                f.subtotal,
-                f.igv,
-                f.total,
-                f.estado
-            FROM facturas f
-            LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
-                AND f.estado = 'pagada'
-            ORDER BY f.fecha_emision DESC
-        """, (fecha_inicio, fecha_fin))
-        
-        ventas = cursor.fetchall()
-        
-        # Métodos de pago
-        cursor.execute("""
-            SELECT 
-                COALESCE(metodo_pago, 'No especificado') as metodo_pago,
-                COUNT(*) as cantidad,
-                SUM(total) as total
-            FROM facturas
-            WHERE DATE(fecha_emision) BETWEEN %s AND %s
-                AND estado = 'pagada'
-            GROUP BY metodo_pago
-            ORDER BY SUM(total) DESC
-        """, (fecha_inicio, fecha_fin))
-        
-        metodos = cursor.fetchall()
-        
-        # Estadísticas
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as total_facturas,
-                SUM(total) as total_ingresos,
-                AVG(total) as promedio_venta,
-                MIN(total) as venta_minima,
-                MAX(total) as venta_maxima
-            FROM facturas
-            WHERE DATE(fecha_emision) BETWEEN %s AND %s
-                AND estado = 'pagada'
-        """, (fecha_inicio, fecha_fin))
-        
-        estadisticas = cursor.fetchone()
+        if reporte == 'ventas':
+            # Datos básicos para PDF
+            cursor.execute("""
+                SELECT 
+                    f.numero,
+                    f.tipo_comprobante,
+                    TO_CHAR(f.fecha_emision, 'DD/MM/YYYY') as fecha,
+                    f.metodo_pago,
+                    COALESCE(CONCAT(c.nombre, ' ', c.apellido), 'Sin cliente') as cliente,
+                    f.total,
+                    f.estado
+                FROM facturas f
+                LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
+                ORDER BY f.fecha_emision DESC
+                LIMIT 50  # Limitar para PDF
+            """, (fecha_inicio, fecha_fin))
+            
+            datos = cursor.fetchall()
+            
+            # Estadísticas básicas
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(total) as ingresos,
+                    AVG(total) as promedio
+                FROM facturas
+                WHERE fecha_emision::date BETWEEN %s AND %s
+                    AND estado = 'pagada'
+            """, (fecha_inicio, fecha_fin))
+            
+            stats = cursor.fetchone()
+            
+        elif reporte == 'caja':
+            cursor.execute("""
+                SELECT 
+                    TO_CHAR(c.fecha, 'DD/MM/YYYY') as fecha,
+                    CONCAT(e.nombre, ' ', e.apellido) as cajero,
+                    c.monto_apertura,
+                    c.venta_efectivo,
+                    c.venta_tarjeta,
+                    c.venta_digital,
+                    c.total_ventas,
+                    c.diferencia,
+                    c.estado
+                FROM caja_diaria c
+                JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
+                WHERE c.fecha BETWEEN %s AND %s
+                ORDER BY c.fecha DESC
+                LIMIT 50
+            """, (fecha_inicio, fecha_fin))
+            
+            datos = cursor.fetchall()
+            
+            cursor.execute("""
+                SELECT 
+                    SUM(total_ventas) as total_ventas,
+                    AVG(diferencia) as dif_promedio
+                FROM caja_diaria
+                WHERE fecha BETWEEN %s AND %s
+            """, (fecha_inicio, fecha_fin))
+            
+            stats = cursor.fetchone()
         
         cursor.close()
         conn.close()
         
-        # Crear PDF con diseño profesional
-        pdf = FPDF(orientation='L')  # Horizontal
+        # Crear PDF simple
+        pdf = FPDF()
         pdf.add_page()
         
-        # Configuración de márgenes
-        pdf.set_margins(10, 10, 10)
-        pdf.set_auto_page_break(True, margin=15)
+        # Configurar fuente
+        pdf.set_font("Arial", size=12)
         
-        # Título con estilo
-        pdf.set_font('Arial', 'B', 18)
-        pdf.set_text_color(102, 126, 234)  # Color PetGlow
-        pdf.cell(0, 15, 'REPORTE DE VENTAS', 0, 1, 'C')
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 8, 'PetGlow Peluquería Canina', 0, 1, 'C')
-        
-        # Información del período
-        pdf.set_font('Arial', '', 10)
-        pdf.cell(0, 6, f'Período: {fecha_inicio} al {fecha_fin}', 0, 1, 'C')
-        pdf.cell(0, 6, f'Generado: {dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}', 0, 1, 'C')
-        pdf.ln(5)
-        
-        # Línea decorativa
-        pdf.set_draw_color(102, 126, 234)
-        pdf.set_line_width(0.5)
-        pdf.line(10, pdf.get_y(), 280, pdf.get_y())
-        pdf.ln(8)
-        
-        # Estadísticas generales en una tabla
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(0, 10, 'ESTADÍSTICAS GENERALES', 0, 1, 'L', True)
-        pdf.ln(2)
-        
-        pdf.set_font('Arial', '', 10)
-        col_widths = [60, 40, 60, 40, 40]
-        headers = ['Total Facturas', 'Ingresos Totales', 'Ticket Promedio', 'Venta Mínima', 'Venta Máxima']
-        valores = [
-            f"{estadisticas['total_facturas'] or 0}",
-            f"S/ {float(estadisticas['total_ingresos'] or 0):,.2f}",
-            f"S/ {float(estadisticas['promedio_venta'] or 0):,.2f}",
-            f"S/ {float(estadisticas['venta_minima'] or 0):,.2f}",
-            f"S/ {float(estadisticas['venta_maxima'] or 0):,.2f}"
-        ]
-        
-        for i, (header, valor) in enumerate(zip(headers, valores)):
-            pdf.set_font('Arial', 'B', 9)
-            pdf.set_fill_color(245, 245, 245)
-            pdf.cell(col_widths[i], 8, header, 1, 0, 'L', True)
-        pdf.ln()
-        
-        for i, valor in enumerate(valores):
-            pdf.set_font('Arial', '', 9)
-            pdf.set_fill_color(255, 255, 255)
-            pdf.cell(col_widths[i], 8, valor, 1, 0, 'C', True)
+        # Título
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt=f"Reporte de {reporte.capitalize()}", ln=1, align='C')
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt=f"Período: {fecha_inicio} a {fecha_fin}", ln=1, align='C')
+        pdf.cell(200, 10, txt=f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='C')
         pdf.ln(10)
         
-        # Métodos de pago
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(0, 10, 'DISTRIBUCIÓN POR MÉTODO DE PAGO', 0, 1, 'L', True)
-        pdf.ln(2)
-        
-        # Tabla de métodos de pago
-        col_widths_metodos = [80, 50, 60]
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(118, 75, 162)  # Color morado
-        pdf.set_text_color(255, 255, 255)
-        
-        headers_metodos = ['Método de Pago', 'Cantidad', 'Total (S/)']
-        for i, header in enumerate(headers_metodos):
-            pdf.cell(col_widths_metodos[i], 8, header, 1, 0, 'C', True)
-        pdf.ln()
-        
-        pdf.set_text_color(0, 0, 0)
-        total_general = 0
-        for i, metodo in enumerate(metodos):
-            # Alternar colores de fondo
-            if i % 2 == 0:
-                pdf.set_fill_color(255, 255, 255)
-            else:
-                pdf.set_fill_color(248, 249, 250)
+        # Estadísticas
+        if stats:
+            pdf.set_font("Arial", 'B', 14)
+            pdf.cell(200, 10, txt="Estadísticas", ln=1)
+            pdf.set_font("Arial", size=12)
             
-            pdf.set_font('Arial', '', 9)
-            pdf.cell(col_widths_metodos[0], 8, metodo['metodo_pago'], 1, 0, 'L', True)
-            pdf.cell(col_widths_metodos[1], 8, str(metodo['cantidad']), 1, 0, 'C', True)
-            pdf.cell(col_widths_metodos[2], 8, f"{float(metodo['total'] or 0):,.2f}", 1, 0, 'R', True)
-            pdf.ln()
-            total_general += float(metodo['total'] or 0)
+            if reporte == 'ventas':
+                pdf.cell(200, 10, txt=f"Total facturas: {stats['total'] or 0}", ln=1)
+                pdf.cell(200, 10, txt=f"Ingresos totales: S/ {float(stats['ingresos'] or 0):,.2f}", ln=1)
+                pdf.cell(200, 10, txt=f"Ticket promedio: S/ {float(stats['promedio'] or 0):,.2f}", ln=1)
+            elif reporte == 'caja':
+                pdf.cell(200, 10, txt=f"Total ventas: S/ {float(stats['total_ventas'] or 0):,.2f}", ln=1)
+                pdf.cell(200, 10, txt=f"Diferencia promedio: S/ {float(stats['dif_promedio'] or 0):,.2f}", ln=1)
         
-        # Total general
-        pdf.set_font('Arial', 'B', 10)
-        pdf.set_fill_color(67, 233, 123)  # Color verde
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(col_widths_metodos[0] + col_widths_metodos[1], 8, 'TOTAL GENERAL', 1, 0, 'R', True)
-        pdf.cell(col_widths_metodos[2], 8, f"S/ {total_general:,.2f}", 1, 0, 'R', True)
-        pdf.ln(12)
+        pdf.ln(10)
         
-        # Detalle de ventas
-        if ventas:
-            pdf.add_page()
-            pdf.set_font('Arial', 'B', 12)
-            pdf.set_fill_color(240, 240, 240)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 10, 'DETALLE DE VENTAS', 0, 1, 'L', True)
-            pdf.ln(2)
+        # Tabla de datos
+        if datos:
+            pdf.set_font("Arial", 'B', 14)
+            pdf.cell(200, 10, txt="Detalles", ln=1)
+            pdf.set_font("Arial", size=10)
             
-            # Encabezados de la tabla de ventas
-            col_widths_ventas = [30, 30, 25, 60, 30, 30, 30, 25]
-            headers_ventas = ['N° Factura', 'Tipo', 'Fecha', 'Cliente', 'Método', 'Subtotal', 'IGV', 'Total']
+            # Encabezados según el reporte
+            if reporte == 'ventas':
+                encabezados = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
+                anchos = [25, 15, 25, 25, 45, 25, 25]
+            else:  # caja
+                encabezados = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia']
+                anchos = [25, 35, 25, 25, 25, 25, 25, 25]
             
-            pdf.set_fill_color(245, 111, 108)  # Color rojo
-            pdf.set_text_color(255, 255, 255)
-            pdf.set_font('Arial', 'B', 8)
-            
-            for i, header in enumerate(headers_ventas):
-                pdf.cell(col_widths_ventas[i], 8, header, 1, 0, 'C', True)
+            # Dibujar encabezados
+            pdf.set_font("Arial", 'B', 10)
+            for i, header in enumerate(encabezados):
+                pdf.cell(anchos[i], 10, txt=header, border=1)
             pdf.ln()
             
-            # Datos de ventas
-            pdf.set_text_color(0, 0, 0)
-            for i, venta in enumerate(ventas[:80]):  # Limitar a 80 registros
-                if i % 2 == 0:
-                    pdf.set_fill_color(255, 255, 255)
-                else:
-                    pdf.set_fill_color(248, 249, 250)
-                
-                pdf.set_font('Arial', '', 7)
-                pdf.cell(col_widths_ventas[0], 8, venta['numero'][:12], 1, 0, 'L', True)
-                pdf.cell(col_widths_ventas[1], 8, venta['tipo_comprobante'][:1].upper(), 1, 0, 'C', True)
-                pdf.cell(col_widths_ventas[2], 8, str(venta['fecha']), 1, 0, 'C', True)
-                pdf.cell(col_widths_ventas[3], 8, (venta['cliente'] or 'N/A')[:25], 1, 0, 'L', True)
-                pdf.cell(col_widths_ventas[4], 8, venta['metodo_pago'][:8], 1, 0, 'C', True)
-                pdf.cell(col_widths_ventas[5], 8, f"{float(venta['subtotal'] or 0):,.2f}", 1, 0, 'R', True)
-                pdf.cell(col_widths_ventas[6], 8, f"{float(venta['igv'] or 0):,.2f}", 1, 0, 'R', True)
-                pdf.cell(col_widths_ventas[7], 8, f"{float(venta['total'] or 0):,.2f}", 1, 0, 'R', True)
+            # Dibujar datos
+            pdf.set_font("Arial", size=9)
+            for fila in datos:
+                for i, valor in enumerate(fila.values()):
+                    texto = str(valor)[:20] if valor else ""
+                    pdf.cell(anchos[i], 10, txt=texto, border=1)
                 pdf.ln()
         
         # Pie de página
-        pdf.set_y(-20)
-        pdf.set_font('Arial', 'I', 8)
-        pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 10, f'Página {pdf.page_no()}', 0, 0, 'C')
-        pdf.ln(5)
-        pdf.cell(0, 10, 'PetGlow Peluquería Canina - Sistema de Gestión Integral', 0, 0, 'C')
+        pdf.set_y(-30)
+        pdf.set_font("Arial", 'I', 8)
+        pdf.cell(0, 10, txt=f"Página {pdf.page_no()}", ln=1, align='C')
+        pdf.cell(0, 10, txt="PetGlow - Sistema de Gestión", ln=1, align='C')
         
         # Guardar en buffer
         buffer = BytesIO()
-        pdf_output = pdf.output(dest='S').encode('latin1')
-        buffer.write(pdf_output)
+        buffer.write(pdf.output(dest='S').encode('latin1'))
         buffer.seek(0)
         
-        # Enviar archivo
-        nombre_archivo = f"reporte_ventas_{fecha_inicio}_{fecha_fin}.pdf"
+        nombre_archivo = f"reporte_{reporte}_{fecha_inicio}_{fecha_fin}.pdf"
         return send_file(
             buffer,
             mimetype='application/pdf',
@@ -7086,214 +7014,109 @@ def exportar_pdf(reporte, fecha_inicio, fecha_fin):
             download_name=nombre_archivo
         )
         
+    except ImportError:
+        flash('Error: Para exportar a PDF necesitas instalar fpdf2.', 'danger')
+        return redirect(url_for(f'reporte_{reporte}'))
     except Exception as e:
-        flash(f'Error exportando a PDF: {str(e)}', 'danger')
-        return redirect(url_for('reporte_ventas'))
+        print(f"❌ Error exportando a PDF: {e}")
+        flash(f'Error generando PDF: {str(e)}', 'danger')
+        return redirect(url_for(f'reporte_{reporte}'))
 
 def exportar_word(reporte, fecha_inicio, fecha_fin):
-    """Exportar a Word - VERSIÓN SIMPLIFICADA"""
+    """Exportar a Word - VERSIÓN SIMPLIFICADA Y FUNCIONAL"""
     try:
         from docx import Document
-        from docx.shared import Inches, Pt
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches
         from io import BytesIO
-        from flask import send_file
         
-        # Obtener datos
         conn = get_db_connection()
         if not conn:
-            flash('Error de conexión.', 'danger')
-            return redirect(url_for('reporte_ventas'))
+            return "Error de conexión", 500
         
         cursor = conn.cursor()
         
-        # 1. Estadísticas generales
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as total_facturas,
-                SUM(total) as total_ingresos,
-                AVG(total) as promedio_venta,
-                MIN(total) as venta_minima,
-                MAX(total) as venta_maxima
-            FROM facturas
-            WHERE DATE(fecha_emision) BETWEEN %s AND %s
-                AND estado = 'pagada'
-        """, (fecha_inicio, fecha_fin))
+        if reporte == 'ventas':
+            cursor.execute("""
+                SELECT 
+                    f.numero,
+                    f.tipo_comprobante,
+                    TO_CHAR(f.fecha_emision, 'DD/MM/YYYY') as fecha,
+                    f.metodo_pago,
+                    COALESCE(CONCAT(c.nombre, ' ', c.apellido), 'Sin cliente') as cliente,
+                    f.total,
+                    f.estado
+                FROM facturas f
+                LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+                WHERE f.fecha_emision::date BETWEEN %s AND %s
+                ORDER BY f.fecha_emision DESC
+                LIMIT 30
+            """, (fecha_inicio, fecha_fin))
+            
+        elif reporte == 'caja':
+            cursor.execute("""
+                SELECT 
+                    TO_CHAR(c.fecha, 'DD/MM/YYYY') as fecha,
+                    CONCAT(e.nombre, ' ', e.apellido) as cajero,
+                    c.monto_apertura,
+                    c.venta_efectivo,
+                    c.venta_tarjeta,
+                    c.venta_digital,
+                    c.total_ventas,
+                    c.diferencia,
+                    c.estado
+                FROM caja_diaria c
+                JOIN empleados e ON c.id_empleado_cajero = e.id_empleado
+                WHERE c.fecha BETWEEN %s AND %s
+                ORDER BY c.fecha DESC
+                LIMIT 30
+            """, (fecha_inicio, fecha_fin))
         
-        estadisticas = cursor.fetchone()
-        
-        # 2. Métodos de pago
-        cursor.execute("""
-            SELECT 
-                COALESCE(metodo_pago, 'No especificado') as metodo_pago,
-                COUNT(*) as cantidad,
-                SUM(total) as total
-            FROM facturas
-            WHERE DATE(fecha_emision) BETWEEN %s AND %s
-                AND estado = 'pagada'
-            GROUP BY metodo_pago
-            ORDER BY SUM(total) DESC
-        """, (fecha_inicio, fecha_fin))
-        
-        metodos = cursor.fetchall()
-        
-        # 3. Top 10 clientes
-        cursor.execute("""
-            SELECT 
-                c.nombre,
-                c.apellido,
-                COUNT(f.id_factura) as cantidad_facturas,
-                SUM(f.total) as total_gastado
-            FROM facturas f
-            JOIN clientes c ON f.id_cliente = c.id_cliente
-            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
-                AND f.estado = 'pagada'
-            GROUP BY c.id_cliente, c.nombre, c.apellido
-            ORDER BY total_gastado DESC
-            LIMIT 10
-        """, (fecha_inicio, fecha_fin))
-        
-        clientes = cursor.fetchall()
-        
-        # 4. Top 10 servicios
-        cursor.execute("""
-            SELECT 
-                s.nombre,
-                COUNT(fs.id_detalle) as veces_vendido,
-                SUM(fs.subtotal) as ingresos_totales
-            FROM factura_servicios fs
-            JOIN servicios s ON fs.id_servicio = s.id_servicio
-            JOIN facturas f ON fs.id_factura = f.id_factura
-            WHERE DATE(f.fecha_emision) BETWEEN %s AND %s
-                AND f.estado = 'pagada'
-            GROUP BY s.id_servicio, s.nombre
-            ORDER BY SUM(fs.subtotal) DESC
-            LIMIT 10
-        """, (fecha_inicio, fecha_fin))
-        
-        servicios = cursor.fetchall()
-        
+        datos = cursor.fetchall()
         cursor.close()
         conn.close()
         
-        # Crear documento Word MUY SIMPLE
+        # Crear documento Word simple
         doc = Document()
         
         # Título
-        title = doc.add_heading('REPORTE DE VENTAS', 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Subtítulo
-        subtitle = doc.add_heading('PetGlow Peluquería Canina', 1)
-        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Información del período
-        doc.add_paragraph(f'Período: {fecha_inicio} al {fecha_fin}')
+        doc.add_heading(f'Reporte de {reporte.capitalize()}', 0)
+        doc.add_paragraph(f'Período: {fecha_inicio} a {fecha_fin}')
         doc.add_paragraph(f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
         doc.add_paragraph()
         
-        # 1. Estadísticas generales
-        doc.add_heading('ESTADÍSTICAS GENERALES', level=1)
-        
-        stats_data = [
-            ('Total Facturas', f"{estadisticas['total_facturas'] or 0}"),
-            ('Ingresos Totales', f"S/ {float(estadisticas['total_ingresos'] or 0):,.2f}"),
-            ('Ticket Promedio', f"S/ {float(estadisticas['promedio_venta'] or 0):,.2f}"),
-            ('Venta Mínima', f"S/ {float(estadisticas['venta_minima'] or 0):,.2f}"),
-            ('Venta Máxima', f"S/ {float(estadisticas['venta_maxima'] or 0):,.2f}")
-        ]
-        
-        for label, value in stats_data:
-            p = doc.add_paragraph()
-            p.add_run(f'{label}: ').bold = True
-            p.add_run(value)
-        
-        doc.add_paragraph()
-        
-        # 2. Métodos de pago
-        doc.add_heading('DISTRIBUCIÓN POR MÉTODO DE PAGO', level=1)
-        
-        if metodos:
-            table = doc.add_table(rows=len(metodos) + 1, cols=3)
-            table.style = 'Table Grid'
+        # Crear tabla
+        if datos:
+            if reporte == 'ventas':
+                columnas = ['Factura', 'Tipo', 'Fecha', 'Método', 'Cliente', 'Total', 'Estado']
+            else:
+                columnas = ['Fecha', 'Cajero', 'Apertura', 'Efectivo', 'Tarjeta', 'Digital', 'Total', 'Diferencia', 'Estado']
             
-            # Encabezado
-            hdr_cells = table.rows[0].cells
-            hdr_cells[0].text = 'Método'
-            hdr_cells[1].text = 'Cantidad'
-            hdr_cells[2].text = 'Total (S/)'
+            tabla = doc.add_table(rows=1, cols=len(columnas))
+            tabla.style = 'Table Grid'
+            
+            # Encabezados
+            header_cells = tabla.rows[0].cells
+            for i, col in enumerate(columnas):
+                header_cells[i].text = col
             
             # Datos
-            for i, metodo in enumerate(metodos, 1):
-                row_cells = table.rows[i].cells
-                row_cells[0].text = metodo['metodo_pago']
-                row_cells[1].text = str(metodo['cantidad'])
-                row_cells[2].text = f"{float(metodo['total'] or 0):,.2f}"
-        else:
-            doc.add_paragraph('No hay datos de métodos de pago')
+            for fila in datos:
+                row_cells = tabla.add_row().cells
+                for i, valor in enumerate(fila.values()):
+                    row_cells[i].text = str(valor) if valor else ""
         
-        doc.add_paragraph()
-        
-        # 3. Top clientes
-        doc.add_heading('TOP 10 CLIENTES', level=1)
-        
-        if clientes:
-            table_clientes = doc.add_table(rows=len(clientes) + 1, cols=3)
-            table_clientes.style = 'Table Grid'
-            
-            # Encabezado
-            hdr_cells = table_clientes.rows[0].cells
-            hdr_cells[0].text = 'Cliente'
-            hdr_cells[1].text = 'Facturas'
-            hdr_cells[2].text = 'Total Gastado (S/)'
-            
-            # Datos
-            for i, cliente in enumerate(clientes, 1):
-                row_cells = table_clientes.rows[i].cells
-                row_cells[0].text = f"{cliente['nombre']} {cliente['apellido']}"
-                row_cells[1].text = str(cliente['cantidad_facturas'])
-                row_cells[2].text = f"{float(cliente['total_gastado'] or 0):,.2f}"
-        else:
-            doc.add_paragraph('No hay datos de clientes')
-        
-        doc.add_paragraph()
-        
-        # 4. Top servicios
-        doc.add_heading('TOP 10 SERVICIOS', level=1)
-        
-        if servicios:
-            table_servicios = doc.add_table(rows=len(servicios) + 1, cols=3)
-            table_servicios.style = 'Table Grid'
-            
-            # Encabezado
-            hdr_cells = table_servicios.rows[0].cells
-            hdr_cells[0].text = 'Servicio'
-            hdr_cells[1].text = 'Veces Vendido'
-            hdr_cells[2].text = 'Ingresos Totales (S/)'
-            
-            # Datos
-            for i, servicio in enumerate(servicios, 1):
-                row_cells = table_servicios.rows[i].cells
-                row_cells[0].text = servicio['nombre']
-                row_cells[1].text = str(servicio['veces_vendido'])
-                row_cells[2].text = f"{float(servicio['ingresos_totales'] or 0):,.2f}"
-        else:
-            doc.add_paragraph('No hay datos de servicios')
-        
-        # Pie de página
+        # Pie de documento
         doc.add_page_break()
         doc.add_paragraph('---')
         doc.add_paragraph('PetGlow Peluquería Canina')
         doc.add_paragraph('Sistema de Gestión Integral')
-        doc.add_paragraph(f'Documento generado el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}')
         
         # Guardar en buffer
         buffer = BytesIO()
         doc.save(buffer)
         buffer.seek(0)
         
-        # Enviar archivo
-        nombre_archivo = f"reporte_ventas_{fecha_inicio}_{fecha_fin}.docx"
+        nombre_archivo = f"reporte_{reporte}_{fecha_inicio}_{fecha_fin}.docx"
         return send_file(
             buffer,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -7303,10 +7126,11 @@ def exportar_word(reporte, fecha_inicio, fecha_fin):
         
     except ImportError:
         flash('Error: Para exportar a Word necesitas instalar python-docx.', 'danger')
-        return redirect(url_for('reporte_ventas'))
+        return redirect(url_for(f'reporte_{reporte}'))
     except Exception as e:
-        flash(f'Error exportando a Word: {str(e)}', 'danger')
-        return redirect(url_for('reporte_ventas'))
+        print(f"❌ Error exportando a Word: {e}")
+        flash(f'Error generando Word: {str(e)}', 'danger')
+        return redirect(url_for(f'reporte_{reporte}'))
 
 def exportar_excel_caja(fecha_inicio, fecha_fin):
     """Exportar reporte de caja a Excel - VERSIÓN CORREGIDA"""
