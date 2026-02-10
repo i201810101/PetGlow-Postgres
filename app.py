@@ -104,22 +104,34 @@ def admin_required(f):
 
 
 
-# Configuración de la base de datos MySQL
 def get_db_connection():
-
+    """
+    Obtener conexión a PostgreSQL (forma más simple)
+    """
     try:
+        # Render.com provee DATABASE_URL como string de conexión
         DATABASE_URL = os.getenv("DATABASE_URL")
-
+        
+        if not DATABASE_URL:
+            print("❌ DATABASE_URL no configurada")
+            return None
+        
+        # Conectar usando la URL directamente (PostgreSQL lo soporta)
         conn = psycopg2.connect(
             DATABASE_URL,
+            sslmode='require',  # Importante para Render.com
             cursor_factory=psycopg2.extras.DictCursor
-
         )
-
+        
+        # Configurar zona horaria
+        with conn.cursor() as cursor:
+            cursor.execute("SET TIME ZONE 'America/Lima';")
+        
+        print("✅ Conexión PostgreSQL establecida")
         return conn
-
+        
     except Exception as e:
-        print("ERROR CONEXION POSTGRES:", e)
+        print(f"❌ ERROR CONEXIÓN POSTGRES: {str(e)}")
         return None
 
 
