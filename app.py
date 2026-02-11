@@ -2556,7 +2556,7 @@ def api_empleado_info():
 @app.route('/empleado/reservas')
 @login_required
 def empleado_reservas():
-    """Vista especial para empleados - Ver sus reservas asignadas"""
+    """Vista especial para empleados - Ver sus reservas asignadas - CORREGIDA para PostgreSQL"""
     id_empleado = session.get('id_empleado')
     
     if not id_empleado:
@@ -2572,10 +2572,15 @@ def empleado_reservas():
         cursor = conn.cursor()
         
         # Obtener reservas asignadas a este empleado
-        # Hoy + próximos 7 días
+        # Hoy + próximos 7 días - VERSIÓN CORREGIDA PARA POSTGRESQL
         cursor.execute("""
             SELECT 
-                r.*,
+                r.id_reserva,
+                r.codigo_reserva,
+                r.fecha_reserva,
+                r.estado,
+                r.notas,  -- Usando 'notas' en lugar de 'observaciones'
+                r.id_empleado,
                 m.id_mascota,
                 m.nombre as mascota_nombre,
                 m.especie,
@@ -2586,12 +2591,13 @@ def empleado_reservas():
                 c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
+                c.email as cliente_email,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
                 STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres,
-                SUM(s.duracion_min) as duracion_total,
-                -- Extraer hora desde fecha_reserva
-                EXTRACT(HOUR FROM r.fecha_reserva) as hora,
-                EXTRACT(MINUTE FROM r.fecha_reserva) as minuto
+                COALESCE(SUM(s.precio * rs.cantidad), 0) as total_servicios,
+                -- Extraer fecha y hora por separado
+                TO_CHAR(r.fecha_reserva, 'DD/MM/YYYY') as fecha_formateada,
+                TO_CHAR(r.fecha_reserva, 'HH24:MI') as hora_formateada
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
             JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -2601,7 +2607,11 @@ def empleado_reservas():
             WHERE r.id_empleado = %s
             AND r.fecha_reserva::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
-            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.nombre, e.apellido, r.fecha_reserva, r.estado, r.observaciones
+            GROUP BY 
+                r.id_reserva, r.codigo_reserva, r.fecha_reserva, r.estado, r.notas, r.id_empleado,
+                m.id_mascota, m.nombre, m.especie, m.raza, m.color, m.tamano,
+                c.id_cliente, c.nombre, c.apellido, c.telefono, c.email,
+                e.id_empleado, e.nombre, e.apellido
             ORDER BY 
                 CASE r.estado 
                     WHEN 'en_proceso' THEN 1
@@ -2614,7 +2624,7 @@ def empleado_reservas():
         
         reservas_asignadas = cursor.fetchall()
         
-        # Obtener estadísticas
+        # Obtener estadísticas - VERSIÓN CORREGIDA
         cursor.execute("""
             SELECT 
                 COUNT(*) as total,
@@ -2631,7 +2641,7 @@ def empleado_reservas():
         
         # Obtener información del empleado
         cursor.execute("""
-            SELECT nombre, apellido, especialidad 
+            SELECT nombre, apellido, especialidad, email, telefono 
             FROM empleados 
             WHERE id_empleado = %s
         """, (id_empleado,))
@@ -2639,8 +2649,10 @@ def empleado_reservas():
         empleado_info = cursor.fetchone()
         
     except Exception as e:
-        print(f"❌ Error obteniendo reservas: {e}")
-        flash(f'Error obteniendo reservas: {e}', 'danger')
+        print(f"❌ Error obteniendo reservas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Error obteniendo reservas: {str(e)}', 'danger')
         return redirect(url_for('dashboard'))
     finally:
         cursor.close()
