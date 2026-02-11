@@ -877,7 +877,7 @@ def registrar_corte(id):
         
 @app.route('/mascotas/crear', methods=['GET', 'POST'])
 def crear_mascota():
-    """Crear nueva mascota - CON HISTORIAL DE CORTES"""
+    """Crear nueva mascota - VERSIÓN POSTGRESQL"""
     conn = get_db_connection()
     
     if not conn:
@@ -896,7 +896,7 @@ def crear_mascota():
             fecha_nacimiento = request.form.get('fecha_nacimiento', '').strip()
             peso = request.form.get('peso', '').strip()
             color = request.form.get('color', '').strip()
-            corte = request.form.get('corte', '').strip()  # ¡IMPORTANTE: Este es el tipo de corte!
+            corte = request.form.get('corte', '').strip()
             caracteristicas = request.form.get('caracteristicas', '').strip()
             alergias = request.form.get('alergias', '').strip()
             
@@ -924,10 +924,6 @@ def crear_mascota():
                     return redirect(url_for('crear_mascota'))
             
             cursor = conn.cursor()
-            
-            # =============================================
-            # 1. CREAR LA MASCOTA
-            # =============================================
             cursor.execute("""
                 INSERT INTO mascotas (
                     id_cliente, nombre, especie, raza, tamano, 
@@ -940,33 +936,8 @@ def crear_mascota():
                 caracteristicas or None, alergias or None
             ))
             
-            # Obtener el ID de la mascota recién creada
+            # En PostgreSQL usamos RETURNING para obtener el ID
             nuevo_id_mascota = cursor.fetchone()[0]
-            print(f"✅ Mascota creada con ID: {nuevo_id_mascota}")
-            
-            # =============================================
-            # 2. REGISTRAR EL PRIMER CORTE EN EL HISTORIAL
-            # =============================================
-            if corte:  # Solo si se especificó un tipo de corte
-                # Obtener id del empleado de la sesión (si hay sistema de login)
-                id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
-                
-                descripcion = f"Corte inicial registrado al crear la mascota"
-                notas = f"Mascota nueva: {nombre} ({especie}, {raza or 'sin raza'})"
-                
-                try:
-                    cursor.execute("""
-                        INSERT INTO historial_cortes 
-                        (id_mascota, tipo_corte, descripcion, id_empleado, notas)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (nuevo_id_mascota, corte, descripcion, id_empleado, notas))
-                    print(f"✅ Primer corte registrado en historial: {corte}")
-                except Exception as e:
-                    print(f"⚠️ Error registrando primer corte en historial: {e}")
-                    # No interrumpir si falla el historial, pero informar
-                    flash(f'Mascota creada pero no se pudo registrar en historial: {e}', 'warning')
-            else:
-                print("ℹ️ No se especificó corte inicial, no se registra en historial")
             
             conn.commit()
             flash(f'Mascota {nombre} creada exitosamente.', 'success')
@@ -978,7 +949,6 @@ def crear_mascota():
             if conn:
                 conn.rollback()
             flash(f'Error creando mascota: {e}', 'danger')
-            print(f"❌ Error en crear_mascota: {e}")
             import traceback
             traceback.print_exc()
             return redirect(url_for('crear_mascota'))
@@ -989,15 +959,23 @@ def crear_mascota():
                 conn.close()
     
     # GET: Obtener clientes para el select
+    cursor = None
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
-        clientes_raw = cursor.fetchall()
+        
+        # Obtener nombres de columnas
+        column_names = [desc[0] for desc in cursor.description]
         
         # Convertir a lista de diccionarios
+        clientes_raw = cursor.fetchall()
         clientes = []
-        for cliente in clientes_raw:
-            clientes.append(dict(cliente))
+        
+        for row in clientes_raw:
+            cliente_dict = {}
+            for i, col_name in enumerate(column_names):
+                cliente_dict[col_name] = row[i]
+            clientes.append(cliente_dict)
             
     except Exception as e:
         flash(f'Error obteniendo clientes: {e}', 'danger')
@@ -1005,7 +983,8 @@ def crear_mascota():
     finally:
         if cursor:
             cursor.close()
-        conn.close()
+        if conn:
+            conn.close()
     
     return render_template('mascotas/crear.html', clientes=clientes)
 
@@ -1348,18 +1327,24 @@ def ver_mascota(id):
                          historial_cortes=historial_cortes)
 
 def obtener_historial_cortes(id_mascota):
-    """Obtener historial de cortes de una mascota - CORREGIDO"""
+    """Obtener historial de cortes de una mascota - VERSIÓN POSTGRESQL"""
     conn = get_db_connection()
     if not conn:
         return []
     
+    cursor = None
     try:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT 
-                hc.*,
-                e.nombre || ' ' || e.apellido as empleado_nombre,
-                hc.fecha_registro
+                hc.id_historial,
+                hc.id_mascota,
+                hc.tipo_corte,
+                hc.descripcion,
+                hc.id_empleado,
+                hc.notas,
+                hc.fecha_registro,
+                e.nombre || ' ' || e.apellido as empleado_nombre
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
             WHERE hc.id_mascota = %s
@@ -1367,29 +1352,42 @@ def obtener_historial_cortes(id_mascota):
             LIMIT 20
         """, (id_mascota,))
         
-        historial_raw = cursor.fetchall()
+        # Obtener nombres de columnas
+        column_names = [desc[0] for desc in cursor.description]
         
-        # Formatear fechas en Python
+        # Convertir a lista de diccionarios
+        historial_raw = cursor.fetchall()
         historial = []
-        for corte in historial_raw:
-            c = dict(corte)
-            if c.get('fecha_registro'):
-                c['fecha_formateada'] = c['fecha_registro'].strftime('%d/%m/%Y %H:%M')
-                c['fecha_simple'] = c['fecha_registro'].strftime('%Y-%m-%d')
-                c['hora'] = c['fecha_registro'].strftime('%H:%M:%S')
+        
+        for row in historial_raw:
+            row_dict = {}
+            for i, col_name in enumerate(column_names):
+                row_dict[col_name] = row[i]
+            
+            # Formatear fechas manualmente
+            if row_dict.get('fecha_registro'):
+                fecha = row_dict['fecha_registro']
+                row_dict['fecha_formateada'] = fecha.strftime('%d/%m/%Y %H:%M')
+                row_dict['fecha_simple'] = fecha.strftime('%Y-%m-%d')
+                row_dict['hora'] = fecha.strftime('%H:%M:%S')
             else:
-                c['fecha_formateada'] = 'Fecha no disponible'
-                c['fecha_simple'] = ''
-                c['hora'] = ''
-            historial.append(c)
+                row_dict['fecha_formateada'] = 'Fecha no disponible'
+                row_dict['fecha_simple'] = ''
+                row_dict['hora'] = ''
+            
+            historial.append(row_dict)
         
         return historial
     except Exception as e:
         print(f"❌ Error obteniendo historial de cortes: {e}")
+        import traceback
+        traceback.print_exc()
         return []
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def registrar_corte(id):
     """Registrar un nuevo corte en el historial - CORREGIDO PARA POSTGRESQL"""
@@ -3208,137 +3206,61 @@ def devolver_reserva(id):
         conn.close()
 
 @app.route('/api/mascota/<int:id>')
-def obtener_datos_mascota(id):
-    """Obtener datos completos de una mascota para AJAX - CORREGIDO"""
+def api_mascota(id):
+    """API para obtener datos de mascota con historial - VERSIÓN POSTGRESQL"""
     conn = get_db_connection()
     if not conn:
-        return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
+        return jsonify({'success': False, 'error': 'Sin conexión a BD'})
     
+    cursor = None
     try:
         cursor = conn.cursor()
         
-        print(f"🔍 API: Buscando mascota ID: {id}")
-        
-        # 1. Obtener datos básicos de la mascota - FORMA SEGURA
+        # Obtener datos de la mascota con información del cliente
         cursor.execute("""
             SELECT 
-                m.id_mascota,
-                m.nombre,
-                m.especie,
-                m.raza,
-                m.tamano,
-                m.fecha_nacimiento,
-                m.peso,
-                m.color,
-                m.corte,
-                m.caracteristicas,
-                m.alergias,
-                m.activo,
-                m.foto_url,
-                m.fecha_registro,
-                m.fecha_actualizacion,
-                m.id_cliente,
-                c.nombre as cliente_nombre, 
+                m.*,
+                c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                c.email as cliente_email,
-                EXTRACT(YEAR FROM AGE(CURRENT_DATE, m.fecha_nacimiento))::integer as edad_anios,
-                EXTRACT(MONTH FROM AGE(CURRENT_DATE, m.fecha_nacimiento))::integer % 12 as edad_meses
+                EXTRACT(YEAR FROM AGE(CURRENT_DATE, m.fecha_nacimiento)) as edad_anios,
+                EXTRACT(MONTH FROM AGE(CURRENT_DATE, m.fecha_nacimiento)) as edad_meses
             FROM mascotas m
-            JOIN clientes c ON m.id_cliente = c.id_cliente
+            LEFT JOIN clientes c ON m.id_cliente = c.id_cliente
             WHERE m.id_mascota = %s
         """, (id,))
         
+        # Obtener nombres de columnas
+        column_names = [desc[0] for desc in cursor.description]
         mascota_raw = cursor.fetchone()
         
         if not mascota_raw:
-            print(f"❌ Mascota {id} no encontrada")
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Mascota no encontrada'})
         
-        # Convertir a diccionario de forma segura
+        # Convertir a diccionario
         mascota = {}
-        column_names = [desc[0] for desc in cursor.description]
-        
         for i, col_name in enumerate(column_names):
             mascota[col_name] = mascota_raw[i]
         
-        print(f"✅ Mascota encontrada: {mascota.get('nombre', 'Sin nombre')}")
-        
-        # 2. Obtener historial de cortes
-        print(f"🔍 Buscando historial de cortes para mascota {id}")
-        
-        # Primero verificar si existe la tabla
-        try:
-            cursor.execute("""
-                SELECT 
-                    hc.id_historial,
-                    hc.id_mascota,
-                    hc.tipo_corte,
-                    hc.descripcion,
-                    hc.fecha_registro,
-                    hc.id_empleado,
-                    hc.notas,
-                    COALESCE(e.nombre || ' ' || e.apellido, 'No asignado') as empleado_nombre
-                FROM historial_cortes hc
-                LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
-                WHERE hc.id_mascota = %s
-                ORDER BY hc.fecha_registro DESC
-                LIMIT 5
-            """, (id,))
-            
-            historial_raw = cursor.fetchall()
-            
-            historial_cortes = []
-            if cursor.description:  # Verificar que hay columnas
-                historial_columns = [desc[0] for desc in cursor.description]
-                
-                for row in historial_raw:
-                    corte_dict = {}
-                    for i, col_name in enumerate(historial_columns):
-                        valor = row[i]
-                        # Formatear fecha si es necesario
-                        if col_name == 'fecha_registro' and valor:
-                            if isinstance(valor, datetime):
-                                corte_dict['fecha_formateada'] = valor.strftime('%d/%m/%Y %H:%M')
-                            else:
-                                corte_dict['fecha_formateada'] = str(valor)
-                        corte_dict[col_name] = valor
-                    historial_cortes.append(corte_dict)
-            
-            print(f"✅ Historial encontrado: {len(historial_cortes)} cortes")
-            
-        except Exception as hist_error:
-            print(f"⚠️ Error obteniendo historial: {hist_error}")
-            historial_cortes = []
-        
-        cursor.close()
-        conn.close()
+        # Obtener historial de cortes
+        historial_cortes = obtener_historial_cortes(id)
         
         return jsonify({
             'success': True,
             'mascota': mascota,
-            'historial_cortes': historial_cortes,
-            'debug': {
-                'mascota_id': id,
-                'historial_count': len(historial_cortes),
-                'mascota_nombre': mascota.get('nombre', 'Desconocido'),
-                'corte_actual': mascota.get('corte', 'No especificado')
-            }
+            'historial_cortes': historial_cortes
         })
         
     except Exception as e:
-        print(f"❌ Error en obtener_datos_mascota: {str(e)}")
+        print(f"❌ Error en api_mascota: {e}")
         import traceback
         traceback.print_exc()
-        
-        if 'cursor' in locals():
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if cursor:
             cursor.close()
         if conn:
             conn.close()
-            
-        return jsonify({'success': False, 'error': f'Error del servidor: {str(e)}'})
         
 @app.route('/mascotas/actualizar-datos/<int:id>', methods=['POST'])
 def actualizar_datos_mascota_reserva(id):
