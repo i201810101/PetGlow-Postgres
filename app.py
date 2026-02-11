@@ -2587,7 +2587,7 @@ def empleado_reservas():
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
-                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres,
                 SUM(s.duracion_min) as duracion_total
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
@@ -2596,9 +2596,9 @@ def empleado_reservas():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE r.id_empleado = %s
-            AND DATE(r.fecha_reserva) BETWEEN CURRENT_DATE AND DATE_ADD(CURRENT_DATE, INTERVAL 7 DAY)
+            AND r.fecha_reserva::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
-            GROUP BY r.id_reserva
+            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.nombre, e.apellido, r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones
             ORDER BY 
                 CASE r.estado 
                     WHEN 'en_proceso' THEN 1
@@ -2620,7 +2620,7 @@ def empleado_reservas():
                 SUM(CASE WHEN estado = 'en_proceso' THEN 1 ELSE 0 END) as en_proceso
             FROM reservas 
             WHERE id_empleado = %s 
-            AND DATE(fecha_reserva) >= CURRENT_DATE
+            AND fecha_reserva::date >= CURRENT_DATE
             AND estado IN ('pendiente', 'confirmada', 'en_proceso')
         """, (id_empleado,))
         
@@ -2635,7 +2635,8 @@ def empleado_reservas():
         
         empleado_info = cursor.fetchone()
         
-    except Error as e:
+    except Exception as e:
+        print(f"❌ Error obteniendo reservas: {e}")
         flash(f'Error obteniendo reservas: {e}', 'danger')
         return redirect(url_for('dashboard'))
     finally:
@@ -2646,7 +2647,7 @@ def empleado_reservas():
                          reservas=reservas_asignadas,
                          estadisticas=estadisticas,
                          empleado=empleado_info)
-
+    
 @app.route('/api/empleado/reservas/<int:id>/estado', methods=['POST'])
 @login_required
 def api_cambiar_estado_reserva_empleado(id):
@@ -2735,7 +2736,7 @@ def api_reservas_hoy_empleado():
                 c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres,
                 SUM(s.duracion_min) as duracion_total
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
@@ -2743,9 +2744,10 @@ def api_reservas_hoy_empleado():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             WHERE r.id_empleado = %s
-            AND DATE(r.fecha_reserva) = CURRENT_DATE
+            AND r.fecha_reserva::date = CURRENT_DATE
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
-            GROUP BY r.id_reserva
+            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, m.nombre, m.especie, m.raza, m.color, 
+                     c.nombre, c.apellido, c.telefono
             ORDER BY r.fecha_reserva ASC
         """, (id_empleado,))
         
@@ -2783,12 +2785,13 @@ def api_reservas_hoy_empleado():
             'hoy': datetime.now().strftime('%d/%m/%Y')
         })
         
-    except Error as e:
+    except Exception as e:
+        print(f"❌ Error en api_reservas_hoy_empleado: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
         cursor.close()
         conn.close()
-
+        
 @app.route('/empleado/monitor')
 @login_required
 def empleado_monitor():
@@ -2906,12 +2909,12 @@ def api_monitor_reservas():
         if not id_empleado:
             nombre_empleado_actual = session.get('nombre', 'Empleado')
         
-        # Obtener TODAS las reservas de hoy
+        # Obtener TODAS las reservas de hoy - CORREGIDO para PostgreSQL
         cursor.execute("""
             SELECT 
                 r.id_reserva,
                 r.codigo_reserva,
-                DATE_FORMAT(r.fecha_reserva, '%Y-%m-%dT%H:%i:%s') as fecha_reserva,
+                TO_CHAR(r.fecha_reserva, 'YYYY-MM-DD"T"HH24:MI:SS') as fecha_reserva,
                 r.estado,
                 r.id_empleado,
                 m.nombre as mascota_nombre,
@@ -2921,7 +2924,7 @@ def api_monitor_reservas():
                 c.nombre as cliente_nombre,
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres,
+                STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_asignado,
                 e.nombre as empleado_nombre,
                 e.apellido as empleado_apellido
@@ -2931,9 +2934,11 @@ def api_monitor_reservas():
             LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
             LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
             LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
-            WHERE DATE(r.fecha_reserva) = CURRENT_DATE
+            WHERE r.fecha_reserva::date = CURRENT_DATE
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso', 'completada')
-            GROUP BY r.id_reserva
+            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.id_empleado, 
+                     m.nombre, m.especie, m.raza, m.color, c.nombre, c.apellido, c.telefono,
+                     e.nombre, e.apellido
             ORDER BY 
                 CASE r.estado 
                     WHEN 'pendiente' THEN 1
@@ -2961,7 +2966,8 @@ def api_monitor_reservas():
             'nombre_empleado_actual': nombre_empleado_actual
         })
         
-    except Error as e:
+    except Exception as e:
+        print(f"❌ Error en api_monitor_reservas: {str(e)}")
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
