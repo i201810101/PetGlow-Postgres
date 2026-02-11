@@ -64,7 +64,8 @@ function cargarDatosMascota() {
             }
         })
         .catch(error => {
-            console.error('Error en fetch:', error);
+            console.error('❌ Error completo en cargarDatosMascota:', error);
+            mostrarError('Error del servidor: ' + error.message, error);
             
             // Mostrar error específico para problemas de conexión
             if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
@@ -383,11 +384,10 @@ function mostrarExito(mensaje) {
     }
 }
 
-function mostrarError(mensaje) {
-    console.error('Error mostrado al usuario:', mensaje);
-    
-    if (typeof mostrarNotificacion === 'function') {
-        mostrarNotificacion('Error', 'error', mensaje);
+function mostrarError(mensaje, errorCompleto = null) {
+    console.error('❌ Error mostrado al usuario:', mensaje);
+    if (errorCompleto) {
+        console.error('📋 Detalles del error:', errorCompleto);
     } else {
         // Crear notificación básica
         crearNotificacion('danger', mensaje);
