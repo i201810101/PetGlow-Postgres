@@ -823,7 +823,58 @@ def mascotas():
                          total_mascotas=total_mascotas,
                          total_pages=total_pages)
     
-
+@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
+def registrar_corte(id):
+    """Registrar un nuevo corte en el historial - CORREGIDO"""
+    if request.method == 'POST':
+        conn = get_db_connection()
+        if not conn:
+            flash('No hay conexión a la base de datos.', 'danger')
+            return redirect(url_for('ver_mascota', id=id))
+        
+        cursor = None
+        try:
+            # Obtener datos del formulario
+            tipo_corte = request.form.get('tipo_corte', '').strip()
+            descripcion = request.form.get('descripcion', '').strip()
+            notas = request.form.get('notas', '').strip()
+            
+            # Validar
+            if not tipo_corte:
+                flash('El tipo de corte es obligatorio.', 'danger')
+                return redirect(url_for('ver_mascota', id=id))
+            
+            cursor = conn.cursor()
+            
+            # 1. Actualizar el corte actual en la mascota
+            cursor.execute("""
+                UPDATE mascotas SET corte = %s WHERE id_mascota = %s
+            """, (tipo_corte, id))
+            
+            # 2. Registrar en el historial
+            id_empleado = session.get('id_empleado')
+            
+            cursor.execute("""
+                INSERT INTO historial_cortes 
+                (id_mascota, tipo_corte, descripcion, id_empleado, notas)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (id, tipo_corte, descripcion, id_empleado, notas))
+            
+            conn.commit()
+            flash(f'Corte "{tipo_corte}" registrado exitosamente.', 'success')
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            flash(f'Error registrando corte: {e}', 'danger')
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        
+        return redirect(url_for('ver_mascota', id=id))
+        
 @app.route('/mascotas/crear', methods=['GET', 'POST'])
 def crear_mascota():
     """Crear nueva mascota"""
@@ -909,7 +960,7 @@ def crear_mascota():
 
 @app.route('/mascotas/editar/<int:id>', methods=['GET', 'POST'])
 def editar_mascota(id):
-    """Editar mascota existente"""
+    """Editar mascota existente - CORREGIDO PARA POSTGRESQL"""
     conn = get_db_connection()
     
     if not conn:
@@ -929,7 +980,7 @@ def editar_mascota(id):
             fecha_nacimiento = request.form.get('fecha_nacimiento', '').strip()
             peso = request.form.get('peso', '').strip()
             color = request.form.get('color', '').strip()
-            corte = request.form.get('corte', '').strip()  # Asegurar captura del corte
+            corte = request.form.get('corte', '').strip()
             caracteristicas = request.form.get('caracteristicas', '').strip()
             alergias = request.form.get('alergias', '').strip()
             
@@ -938,14 +989,8 @@ def editar_mascota(id):
                 flash('Cliente y nombre de mascota son obligatorios.', 'danger')
                 return redirect(url_for('editar_mascota', id=id))
             
-            # Convertir fecha
-            fecha_nacimiento_dt = None
-            if fecha_nacimiento:
-                try:
-                    fecha_nacimiento_dt = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
-                except ValueError:
-                    flash('Formato de fecha inválido. Use YYYY-MM-DD.', 'danger')
-                    return redirect(url_for('editar_mascota', id=id))
+            # Convertir fecha - PostgreSQL acepta strings directamente
+            fecha_nacimiento_dt = fecha_nacimiento if fecha_nacimiento else None
             
             # Convertir peso
             peso_float = None
@@ -964,7 +1009,7 @@ def editar_mascota(id):
                 flash('Mascota no encontrada.', 'danger')
                 return redirect(url_for('mascotas'))
             
-            corte_anterior = mascota_actual['corte'] if mascota_actual else None
+            corte_anterior = mascota_actual['corte'] if mascota_actual['corte'] else None
             nombre_mascota = mascota_actual['nombre']
             
             # Actualizar mascota
@@ -975,32 +1020,43 @@ def editar_mascota(id):
                     caracteristicas = %s, alergias = %s
                 WHERE id_mascota = %s
             """, (
-                id_cliente, nombre, especie, raza or None, tamano or None,
-                fecha_nacimiento_dt, peso_float, color or None, corte or None,
-                caracteristicas or None, alergias or None, id
+                int(id_cliente) if id_cliente else None,
+                nombre,
+                especie,
+                raza or None,
+                tamano or None,
+                fecha_nacimiento_dt,
+                peso_float,
+                color or None,
+                corte or None,
+                caracteristicas or None,
+                alergias or None,
+                id
             ))
             
-            # Registrar en historial si el corte cambió
+            # Registrar en historial si el corte cambió - CORREGIDO
             if corte and corte != corte_anterior:
                 try:
                     # Obtener id del empleado de la sesión o usar NULL
-                    id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
+                    id_empleado = session.get('id_empleado')
                     
                     descripcion = f"Cambio de corte: {corte_anterior or 'Sin corte'} → {corte}"
                     notas = f"Actualizado al editar mascota"
                     
+                    # Verificar si la tabla existe y tiene las columnas correctas
                     cursor.execute("""
-                        INSERT INTO historial_cortes (id_mascota, tipo_corte, descripcion, id_empleado, notas)
+                        INSERT INTO historial_cortes 
+                        (id_mascota, tipo_corte, descripcion, id_empleado, notas)
                         VALUES (%s, %s, %s, %s, %s)
                     """, (id, corte, descripcion, id_empleado, notas))
                 except Exception as e:
-                    print(f"Error registrando en historial de cortes: {e}")
+                    print(f"⚠️ Error registrando en historial de cortes: {e}")
                     # No interrumpir por error en historial
             
             conn.commit()
             
             flash(f'Mascota {nombre} actualizada exitosamente.', 'success')
-            return redirect(url_for('ver_mascota', id=id))  # Redirigir a ver, no a listar
+            return redirect(url_for('ver_mascota', id=id))
         
         # GET: Obtener datos de la mascota
         cursor.execute("SELECT * FROM mascotas WHERE id_mascota = %s", (id,))
@@ -1015,6 +1071,7 @@ def editar_mascota(id):
         
         # Formatear fecha para input type="date"
         if mascota.get('fecha_nacimiento'):
+            # PostgreSQL devuelve datetime.date directamente
             mascota['fecha_nacimiento_str'] = mascota['fecha_nacimiento'].strftime('%Y-%m-%d')
         else:
             mascota['fecha_nacimiento_str'] = ''
@@ -1023,7 +1080,7 @@ def editar_mascota(id):
         mascota['raza'] = mascota.get('raza') or ''
         mascota['color'] = mascota.get('color') or ''
         mascota['corte'] = mascota.get('corte') or ''
-        mascota['peso'] = mascota.get('peso') or ''
+        mascota['peso'] = str(mascota.get('peso') or '')
         mascota['caracteristicas'] = mascota.get('caracteristicas') or ''
         mascota['alergias'] = mascota.get('alergias') or ''
         mascota['tamano'] = mascota.get('tamano') or ''
@@ -1039,13 +1096,16 @@ def editar_mascota(id):
         
     except Exception as e:
         flash(f'Error editando mascota: {e}', 'danger')
-        print(f"Error detallado en editar_mascota: {e}")
+        print(f"❌ Error detallado en editar_mascota: {e}")
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('mascotas'))
     finally:
         cursor.close()
         conn.close()
     
     return render_template('mascotas/editar.html', mascota=mascota, clientes=clientes)
+    
 @app.route('/mascotas/eliminar/<int:id>', methods=['POST'])
 def eliminar_mascota(id):
     """Eliminar mascota (soft delete)"""
@@ -1084,7 +1144,7 @@ def eliminar_mascota(id):
 
 @app.route('/mascotas/ver/<int:id>')
 def ver_mascota(id):
-    """Ver detalles de la mascota"""
+    """Ver detalles de la mascota - CORREGIDO PARA POSTGRESQL"""
     conn = get_db_connection()
     
     if not conn:
@@ -1117,15 +1177,21 @@ def ver_mascota(id):
             hoy = datetime.now()
             nacimiento = mascota['fecha_nacimiento']
             
+            # PostgreSQL puede devolver date o datetime
+            if isinstance(nacimiento, datetime):
+                nacimiento_date = nacimiento.date()
+            else:
+                nacimiento_date = nacimiento
+            
             # Calcular años
-            años = hoy.year - nacimiento.year
+            años = hoy.year - nacimiento_date.year
             # Ajustar si aún no ha pasado el cumpleaños este año
-            if (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day):
+            if (hoy.month, hoy.day) < (nacimiento_date.month, nacimiento_date.day):
                 años -= 1
             
             # Calcular meses restantes
-            meses = hoy.month - nacimiento.month
-            if hoy.day < nacimiento.day:
+            meses = hoy.month - nacimiento_date.month
+            if hoy.day < nacimiento_date.day:
                 meses -= 1
             if meses < 0:
                 meses += 12
@@ -1146,18 +1212,24 @@ def ver_mascota(id):
         mascota['cliente_telefono'] = mascota.get('cliente_telefono') or ''
         mascota['cliente_email'] = mascota.get('cliente_email') or ''
         
-        # Obtener historial de reservas
+        # Obtener historial de reservas - CORREGIDO
         try:
             cursor.execute("""
-                SELECT r.*, 
-                       e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                       string_agg(s.nombre, ', ') as servicios_nombres
+                SELECT 
+                    r.id_reserva,
+                    r.codigo_reserva,
+                    r.fecha_reserva,
+                    r.estado,
+                    r.notas,
+                    e.nombre as empleado_nombre, 
+                    e.apellido as empleado_apellido,
+                    STRING_AGG(s.nombre, ', ') as servicios_nombres
                 FROM reservas r
                 LEFT JOIN empleados e ON r.id_empleado = e.id_empleado
                 LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
                 LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
                 WHERE r.id_mascota = %s
-                GROUP BY r.id_reserva, e.id_empleado
+                GROUP BY r.id_reserva, r.codigo_reserva, r.fecha_reserva, r.estado, r.notas, e.id_empleado, e.nombre, e.apellido
                 ORDER BY r.fecha_reserva DESC
                 LIMIT 10
             """, (id,))
@@ -1171,10 +1243,10 @@ def ver_mascota(id):
                 r['servicios_nombres'] = r.get('servicios_nombres') or ''
                 reservas.append(r)
         except Exception as e:
-            print(f"Advertencia: Error obteniendo reservas: {e}")
+            print(f"⚠️ Advertencia: Error obteniendo reservas: {e}")
             reservas = []
         
-        # OBTENER HISTORIAL DE CORTES
+        # OBTENER HISTORIAL DE CORTES - CORREGIDO
         try:
             cursor.execute("""
                 SELECT 
@@ -1194,6 +1266,7 @@ def ver_mascota(id):
             for corte in historial_cortes_raw:
                 c = dict(corte)
                 if c.get('fecha_registro'):
+                    # PostgreSQL devuelve datetime
                     c['fecha_formateada'] = c['fecha_registro'].strftime('%d/%m/%Y %H:%M')
                 else:
                     c['fecha_formateada'] = 'Fecha no disponible'
@@ -1204,12 +1277,15 @@ def ver_mascota(id):
                 
                 historial_cortes.append(c)
         except Exception as e:
-            print(f"Advertencia: Error obteniendo historial de cortes: {e}")
+            print(f"⚠️ Advertencia: Error obteniendo historial de cortes: {e}")
+            print("Si la tabla 'historial_cortes' no existe, créala primero")
             historial_cortes = []
         
     except Exception as e:
         flash(f'Error obteniendo datos de la mascota: {e}', 'danger')
-        print(f"Error detallado: {e}")  # Para debugging
+        print(f"❌ Error detallado: {e}")
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('mascotas'))
     finally:
         cursor.close()
@@ -1221,7 +1297,7 @@ def ver_mascota(id):
                          historial_cortes=historial_cortes)
 
 def obtener_historial_cortes(id_mascota):
-    """Obtener historial de cortes de una mascota - CORREGIDO PARA POSTGRESQL"""
+    """Obtener historial de cortes de una mascota - CORREGIDO"""
     conn = get_db_connection()
     if not conn:
         return []
@@ -1231,7 +1307,7 @@ def obtener_historial_cortes(id_mascota):
         cursor.execute("""
             SELECT 
                 hc.*,
-                CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
+                e.nombre || ' ' || e.apellido as empleado_nombre,
                 hc.fecha_registro
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
@@ -1240,29 +1316,29 @@ def obtener_historial_cortes(id_mascota):
             LIMIT 20
         """, (id_mascota,))
         
-        historial = cursor.fetchall()
+        historial_raw = cursor.fetchall()
         
-        # Formatear fechas en Python (no usar DATE_FORMAT de MySQL)
-        for corte in historial:
-            if corte['fecha_registro']:
-                # Formato: día/mes/año hora:minutos
-                corte['fecha_formateada'] = corte['fecha_registro'].strftime('%d/%m/%Y %H:%M')
-                # Si necesitas fecha_simple y hora por separado
-                corte['fecha_simple'] = corte['fecha_registro'].strftime('%Y-%m-%d')
-                corte['hora'] = corte['fecha_registro'].strftime('%H:%M:%S')
+        # Formatear fechas en Python
+        historial = []
+        for corte in historial_raw:
+            c = dict(corte)
+            if c.get('fecha_registro'):
+                c['fecha_formateada'] = c['fecha_registro'].strftime('%d/%m/%Y %H:%M')
+                c['fecha_simple'] = c['fecha_registro'].strftime('%Y-%m-%d')
+                c['hora'] = c['fecha_registro'].strftime('%H:%M:%S')
             else:
-                corte['fecha_formateada'] = 'Fecha no disponible'
-                corte['fecha_simple'] = ''
-                corte['hora'] = ''
+                c['fecha_formateada'] = 'Fecha no disponible'
+                c['fecha_simple'] = ''
+                c['hora'] = ''
+            historial.append(c)
         
         return historial
-    except Exception as e:  # Cambia Error por Exception
-        print(f"Error obteniendo historial de cortes: {e}")
+    except Exception as e:
+        print(f"❌ Error obteniendo historial de cortes: {e}")
         return []
     finally:
         cursor.close()
         conn.close()
-@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
 
 def registrar_corte(id):
     """Registrar un nuevo corte en el historial - CORREGIDO PARA POSTGRESQL"""
@@ -3178,7 +3254,7 @@ def obtener_datos_mascota(id):
         
 @app.route('/mascotas/actualizar-datos/<int:id>', methods=['POST'])
 def actualizar_datos_mascota_reserva(id):
-    """Actualizar datos de mascota desde la reserva - CORREGIDO PARA POSTGRESQL"""
+    """Actualizar datos de mascota desde la reserva - CORREGIDO"""
     print(f"Recibiendo actualización para mascota ID: {id}")
     print(f"Datos recibidos: {request.form}")
     
@@ -3188,8 +3264,9 @@ def actualizar_datos_mascota_reserva(id):
             print("ERROR: No hay conexión a la base de datos")
             return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
         
+        cursor = None
         try:
-            # Obtener datos del formulario con valores por defecto
+            # Obtener datos del formulario
             raza = request.form.get('raza', '').strip()
             color = request.form.get('color', '').strip()
             corte = request.form.get('corte', '').strip()
@@ -3213,11 +3290,10 @@ def actualizar_datos_mascota_reserva(id):
             mascota_existente_raw = cursor.fetchone()
             
             if not mascota_existente_raw:
-                cursor.close()
-                conn.close()
+                if cursor: cursor.close()
+                if conn: conn.close()
                 return jsonify({'success': False, 'error': 'Mascota no encontrada'})
             
-            # Convertir a diccionario
             mascota_existente = dict(mascota_existente_raw)
             corte_anterior = mascota_existente.get('corte', None)
             
@@ -3239,7 +3315,6 @@ def actualizar_datos_mascota_reserva(id):
                 valores.append(corte)
             
             if tamano in ['pequeño', 'mediano', 'grande', 'gigante', 'pequeno']:
-                # Normalizar "pequeno" sin ñ
                 if tamano == 'pequeno':
                     tamano = 'pequeño'
                 campos.append("tamano = %s")
@@ -3251,7 +3326,7 @@ def actualizar_datos_mascota_reserva(id):
                     campos.append("peso = %s")
                     valores.append(peso_float)
                 except ValueError:
-                    print(f"Advertencia: Peso no válido: {peso}")
+                    print(f"⚠️ Advertencia: Peso no válido: {peso}")
             
             if caracteristicas:
                 campos.append("caracteristicas = %s")
@@ -3261,7 +3336,7 @@ def actualizar_datos_mascota_reserva(id):
                 campos.append("alergias = %s")
                 valores.append(alergias)
             
-            # Agregar ID al final para la condición WHERE
+            # Agregar ID al final
             valores.append(id)
             
             # Construir y ejecutar la consulta
@@ -3272,9 +3347,9 @@ def actualizar_datos_mascota_reserva(id):
                 
                 cursor.execute(sql, valores)
                 
-                # Registrar en historial si el corte cambió - CORREGIDO PARA POSTGRESQL
+                # Registrar en historial si el corte cambió
                 if corte and corte != corte_anterior:
-                    id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
+                    id_empleado = session.get('id_empleado')
                     
                     descripcion = f"Cambio de corte: {corte_anterior or 'Sin corte'} → {corte}"
                     notas = f"Actualizado desde el sistema de reservas"
@@ -3285,17 +3360,16 @@ def actualizar_datos_mascota_reserva(id):
                             (id_mascota, tipo_corte, descripcion, id_empleado, notas)
                             VALUES (%s, %s, %s, %s, %s)
                         """, (id, corte, descripcion, id_empleado, notas))
-                        print("Registro en historial_cortes creado")
+                        print("✅ Registro en historial_cortes creado")
                     except Exception as hist_error:
-                        print(f"Advertencia: No se pudo registrar en historial: {hist_error}")
-                        # Continuar aunque falle el historial
+                        print(f"⚠️ Advertencia: No se pudo registrar en historial: {hist_error}")
                 
                 conn.commit()
                 filas_afectadas = cursor.rowcount
-                print(f"Filas afectadas: {filas_afectadas}")
+                print(f"✅ Filas afectadas: {filas_afectadas}")
                 
-                cursor.close()
-                conn.close()
+                if cursor: cursor.close()
+                if conn: conn.close()
                 
                 if filas_afectadas > 0:
                     return jsonify({
@@ -3307,19 +3381,18 @@ def actualizar_datos_mascota_reserva(id):
                 else:
                     return jsonify({'success': False, 'error': 'No se realizaron cambios'})
             else:
-                cursor.close()
-                conn.close()
+                if cursor: cursor.close()
+                if conn: conn.close()
                 return jsonify({'success': False, 'error': 'No se proporcionaron datos para actualizar'})
             
-        except Exception as e:  # Cambia Error por Exception para PostgreSQL
-            print(f"Error de PostgreSQL: {str(e)}")
+        except Exception as e:
+            print(f"❌ Error de PostgreSQL: {str(e)}")
             import traceback
             traceback.print_exc()
-            if 'cursor' in locals() and cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+            if cursor: cursor.close()
+            if conn: conn.close()
             return jsonify({'success': False, 'error': f'Error de base de datos: {str(e)}'})
+            
 @app.route('/facturas/<int:id>')
 def ver_factura(id):
     """Ver detalles de una factura - SOLO SERVICIOS"""
