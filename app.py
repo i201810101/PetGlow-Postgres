@@ -1262,9 +1262,8 @@ def obtener_historial_cortes(id_mascota):
     finally:
         cursor.close()
         conn.close()
+@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
 
-@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
-@app.route('/mascotas/<int:id>/registrar-corte', methods=['POST'])
 def registrar_corte(id):
     """Registrar un nuevo corte en el historial - CORREGIDO PARA POSTGRESQL"""
     if request.method == 'POST':
