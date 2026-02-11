@@ -877,7 +877,7 @@ def registrar_corte(id):
         
 @app.route('/mascotas/crear', methods=['GET', 'POST'])
 def crear_mascota():
-    """Crear nueva mascota"""
+    """Crear nueva mascota - CON HISTORIAL DE CORTES"""
     conn = get_db_connection()
     
     if not conn:
@@ -885,6 +885,7 @@ def crear_mascota():
         return redirect(url_for('mascotas'))
     
     if request.method == 'POST':
+        cursor = None
         try:
             # Obtener datos del formulario
             id_cliente = request.form.get('id_cliente', '').strip()
@@ -895,7 +896,7 @@ def crear_mascota():
             fecha_nacimiento = request.form.get('fecha_nacimiento', '').strip()
             peso = request.form.get('peso', '').strip()
             color = request.form.get('color', '').strip()
-            corte = request.form.get('corte', '').strip()
+            corte = request.form.get('corte', '').strip()  # ¡IMPORTANTE: Este es el tipo de corte!
             caracteristicas = request.form.get('caracteristicas', '').strip()
             alergias = request.form.get('alergias', '').strip()
             
@@ -923,37 +924,87 @@ def crear_mascota():
                     return redirect(url_for('crear_mascota'))
             
             cursor = conn.cursor()
+            
+            # =============================================
+            # 1. CREAR LA MASCOTA
+            # =============================================
             cursor.execute("""
                 INSERT INTO mascotas (
                     id_cliente, nombre, especie, raza, tamano, 
-                    fecha_nacimiento, peso, color,corte, caracteristicas, alergias
+                    fecha_nacimiento, peso, color, corte, caracteristicas, alergias
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_mascota
             """, (
                 id_cliente, nombre, especie, raza or None, tamano or None,
                 fecha_nacimiento_dt, peso_float, color or None, corte or None,
                 caracteristicas or None, alergias or None
             ))
+            
+            # Obtener el ID de la mascota recién creada
+            nuevo_id_mascota = cursor.fetchone()[0]
+            print(f"✅ Mascota creada con ID: {nuevo_id_mascota}")
+            
+            # =============================================
+            # 2. REGISTRAR EL PRIMER CORTE EN EL HISTORIAL
+            # =============================================
+            if corte:  # Solo si se especificó un tipo de corte
+                # Obtener id del empleado de la sesión (si hay sistema de login)
+                id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
+                
+                descripcion = f"Corte inicial registrado al crear la mascota"
+                notas = f"Mascota nueva: {nombre} ({especie}, {raza or 'sin raza'})"
+                
+                try:
+                    cursor.execute("""
+                        INSERT INTO historial_cortes 
+                        (id_mascota, tipo_corte, descripcion, id_empleado, notas)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (nuevo_id_mascota, corte, descripcion, id_empleado, notas))
+                    print(f"✅ Primer corte registrado en historial: {corte}")
+                except Exception as e:
+                    print(f"⚠️ Error registrando primer corte en historial: {e}")
+                    # No interrumpir si falla el historial, pero informar
+                    flash(f'Mascota creada pero no se pudo registrar en historial: {e}', 'warning')
+            else:
+                print("ℹ️ No se especificó corte inicial, no se registra en historial")
+            
             conn.commit()
-            
             flash(f'Mascota {nombre} creada exitosamente.', 'success')
-            return redirect(url_for('mascotas'))
             
-        except Error as e:
+            # Redirigir a ver la mascota recién creada
+            return redirect(url_for('ver_mascota', id=nuevo_id_mascota))
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
             flash(f'Error creando mascota: {e}', 'danger')
+            print(f"❌ Error en crear_mascota: {e}")
+            import traceback
+            traceback.print_exc()
+            return redirect(url_for('crear_mascota'))
         finally:
-            cursor.close()
-            conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
     
     # GET: Obtener clientes para el select
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id_cliente, nombre, apellido FROM clientes ORDER BY apellido, nombre")
-        clientes = cursor.fetchall()
-        cursor.close()
-    except Error as e:
+        clientes_raw = cursor.fetchall()
+        
+        # Convertir a lista de diccionarios
+        clientes = []
+        for cliente in clientes_raw:
+            clientes.append(dict(cliente))
+            
+    except Exception as e:
         flash(f'Error obteniendo clientes: {e}', 'danger')
         clientes = []
     finally:
+        if cursor:
+            cursor.close()
         conn.close()
     
     return render_template('mascotas/crear.html', clientes=clientes)
@@ -1038,7 +1089,7 @@ def editar_mascota(id):
             if corte and corte != corte_anterior:
                 try:
                     # Obtener id del empleado de la sesión o usar NULL
-                    id_empleado = session.get('id_empleado')
+                    id_empleado = session.get('id_empleado') if 'id_empleado' in session else None
                     
                     descripcion = f"Cambio de corte: {corte_anterior or 'Sin corte'} → {corte}"
                     notas = f"Actualizado al editar mascota"
@@ -3158,7 +3209,7 @@ def devolver_reserva(id):
 
 @app.route('/api/mascota/<int:id>')
 def obtener_datos_mascota(id):
-    """Obtener datos completos de una mascota para AJAX - CORREGIDO PARA POSTGRESQL"""
+    """Obtener datos completos de una mascota para AJAX - PARA RESERVAS"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
@@ -3166,14 +3217,18 @@ def obtener_datos_mascota(id):
     try:
         cursor = conn.cursor()
         
-        # Obtener datos completos de la mascota - CORREGIDO PARA POSTGRESQL
+        print(f"🔍 API: Buscando mascota ID: {id} para reserva")
+        
+        # 1. Obtener datos básicos de la mascota
         cursor.execute("""
             SELECT 
                 m.*, 
                 c.nombre as cliente_nombre, 
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
-                c.email as cliente_email
+                c.email as cliente_email,
+                EXTRACT(YEAR FROM AGE(CURRENT_DATE, m.fecha_nacimiento)) as edad_anios,
+                EXTRACT(MONTH FROM AGE(CURRENT_DATE, m.fecha_nacimiento))::integer % 12 as edad_meses
             FROM mascotas m
             JOIN clientes c ON m.id_cliente = c.id_cliente
             WHERE m.id_mascota = %s
@@ -3184,60 +3239,35 @@ def obtener_datos_mascota(id):
         if not mascota_raw:
             return jsonify({'success': False, 'error': 'Mascota no encontrada'})
         
-        # Convertir a diccionario
         mascota = dict(mascota_raw)
         
-        # CALCULAR EDAD EN PYTHON (en lugar de TIMESTAMPDIFF de MySQL)
-        if mascota.get('fecha_nacimiento'):
-            from datetime import datetime
-            hoy = datetime.now()
-            nacimiento = mascota['fecha_nacimiento']
-            
-            años = hoy.year - nacimiento.year
-            # Ajustar si aún no ha pasado el cumpleaños este año
-            if (hoy.month, hoy.day) < (nacimiento.month, nacimiento.day):
-                años -= 1
-            
-            # Calcular meses restantes
-            meses = hoy.month - nacimiento.month
-            if hoy.day < nacimiento.day:
-                meses -= 1
-            if meses < 0:
-                meses += 12
-            
-            mascota['edad_anios'] = años
-            mascota['edad_meses'] = meses
-        else:
-            mascota['edad_anios'] = None
-            mascota['edad_meses'] = None
+        # 2. Obtener historial de cortes PARA RESERVAS
+        print(f"🔍 API: Buscando historial de cortes para mascota {id}")
         
-        # OBTENER HISTORIAL DE CORTES - ¡CORREGIDO PARA POSTGRESQL!
         cursor.execute("""
             SELECT 
-                hc.*,
-                e.nombre || ' ' || e.apellido as empleado_nombre,
-                hc.fecha_registro
+                hc.tipo_corte,
+                hc.descripcion,
+                hc.notas,
+                TO_CHAR(hc.fecha_registro, 'DD/MM/YYYY') as fecha_corte,
+                e.nombre || ' ' || e.apellido as empleado_nombre
             FROM historial_cortes hc
             LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
             WHERE hc.id_mascota = %s
             ORDER BY hc.fecha_registro DESC
-            LIMIT 10
+            LIMIT 5  -- Solo los últimos 5 para la vista de reservas
         """, (id,))
         
         historial_raw = cursor.fetchall()
-        
-        # Convertir historial a lista de diccionarios y formatear
         historial_cortes = []
+        
         for corte in historial_raw:
-            corte_dict = dict(corte)
-            
-            # Formatear fecha
-            if corte_dict.get('fecha_registro'):
-                corte_dict['fecha_formateada'] = corte_dict['fecha_registro'].strftime('%d/%m/%Y %H:%M')
-            else:
-                corte_dict['fecha_formateada'] = 'Fecha no disponible'
-            
-            historial_cortes.append(corte_dict)
+            c = dict(corte)
+            # Formatear para mostrar en la reserva
+            c['display'] = f"{c['tipo_corte']} ({c['fecha_corte']})"
+            historial_cortes.append(c)
+        
+        print(f"✅ API: Historial encontrado: {len(historial_cortes)} cortes")
         
         cursor.close()
         conn.close()
@@ -3249,9 +3279,8 @@ def obtener_datos_mascota(id):
         })
         
     except Exception as e:
-        print(f"Error al obtener datos de mascota: {str(e)}")
+        print(f"❌ Error en API mascota: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
-        
 @app.route('/mascotas/actualizar-datos/<int:id>', methods=['POST'])
 def actualizar_datos_mascota_reserva(id):
     """Actualizar datos de mascota desde la reserva - CORREGIDO"""
@@ -3351,7 +3380,7 @@ def actualizar_datos_mascota_reserva(id):
                 if corte and corte != corte_anterior:
                     id_empleado = session.get('id_empleado')
                     
-                    descripcion = f"Cambio de corte: {corte_anterior or 'Sin corte'} → {corte}"
+                    descripcion = f"Cambio de corte para reserva: {corte_anterior or 'Sin corte'} → {corte}"
                     notas = f"Actualizado desde el sistema de reservas"
                     
                     try:
