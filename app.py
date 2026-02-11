@@ -163,83 +163,127 @@ def index():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Panel de control principal"""
+    """Panel de control principal - VERSIÓN CORREGIDA PARA POSTGRESQL"""
     conn = get_db_connection()
+    
+    # Valores por defecto
     stats = {
-        'total_clientes': 15,
-        'total_mascotas': 42,
-        'reservas_hoy': 5,
-        'ventas_hoy': 850.0
+        'total_clientes': 0,
+        'total_mascotas': 0,
+        'reservas_hoy': 0,
+        'ventas_hoy': 0.0
     }
     
-    ultimas_reservas = []  # ← Añadir esta línea
+    ultimas_reservas = []
     
     if conn:
+        cursor = None
         try:
             cursor = conn.cursor()
             
-            # Verificar si las tablas existen
-            cursor.execute("SELECT to_regclass( public.clientes)")
-            if cursor.fetchone():
-                # Total clientes
-                cursor.execute("SELECT COUNT(*) as total FROM clientes")
+            # ================= TOTAL CLIENTES =================
+            try:
+                cursor.execute("SELECT COUNT(*) FROM clientes")
                 result = cursor.fetchone()
-                stats['total_clientes'] = result['total'] if result else 15
+                stats['total_clientes'] = result[0] if result and result[0] is not None else 0
+            except Exception as e:
+                print(f"⚠️  Error contando clientes: {e}")
             
-            cursor.execute("SELECT to_regclass (public.mascotas)")
-            if cursor.fetchone():
-                # Total mascotas
-                cursor.execute("SELECT COUNT(*) as total FROM mascotas")
+            # ================= TOTAL MASCOTAS =================
+            try:
+                cursor.execute("SELECT COUNT(*) FROM mascotas")
                 result = cursor.fetchone()
-                stats['total_mascotas'] = result['total'] if result else 42
+                stats['total_mascotas'] = result[0] if result and result[0] is not None else 0
+            except Exception as e:
+                print(f"⚠️  Error contando mascotas: {e}")
             
-            cursor.execute("SELECT to_regclass( public.reservas)")
-            if cursor.fetchone():
-                # Reservas de hoy
-                cursor.execute("SELECT COUNT(*) as total FROM reservas WHERE DATE(fecha_reserva) = CURRENT_DATE")
-                result = cursor.fetchone()
-                stats['reservas_hoy'] = result['total'] if result else 5
-                
-                # OBTENER ÚLTIMAS RESERVAS ← Añadir esta consulta
+            # ================= RESERVAS HOY =================
+            try:
                 cursor.execute("""
-                    SELECT r.*, 
-                           m.nombre as mascota_nombre, m.especie,
-                           c.nombre as cliente_nombre, c.apellido as cliente_apellido,
-                           e.nombre as empleado_nombre, e.apellido as empleado_apellido,
-                           string_agg(DISTINCT s.nombre SEPARATOR ', ') as servicios_nombres
+                    SELECT COUNT(*) 
+                    FROM reservas 
+                    WHERE fecha_reserva::date = CURRENT_DATE
+                """)
+                result = cursor.fetchone()
+                stats['reservas_hoy'] = result[0] if result and result[0] is not None else 0
+            except Exception as e:
+                print(f"⚠️  Error contando reservas hoy: {e}")
+            
+            # ================= VENTAS HOY =================
+            try:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(total), 0)
+                    FROM facturas 
+                    WHERE fecha_emision::date = CURRENT_DATE 
+                    AND estado = 'pagada'
+                """)
+                result = cursor.fetchone()
+                stats['ventas_hoy'] = float(result[0]) if result and result[0] is not None else 0.0
+            except Exception as e:
+                print(f"⚠️  Error sumando ventas hoy: {e}")
+            
+            # ================= ÚLTIMAS RESERVAS =================
+            try:
+                cursor.execute("""
+                    SELECT 
+                        r.id_reserva,
+                        r.fecha_reserva,
+                        r.estado,
+                        m.nombre as mascota_nombre,
+                        m.especie,
+                        c.nombre as cliente_nombre,
+                        c.apellido as cliente_apellido,
+                        e.nombre as empleado_nombre,
+                        e.apellido as empleado_apellido,
+                        STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres
                     FROM reservas r
                     JOIN mascotas m ON r.id_mascota = m.id_mascota
                     JOIN clientes c ON m.id_cliente = c.id_cliente
                     JOIN empleados e ON r.id_empleado = e.id_empleado
                     LEFT JOIN reserva_servicios rs ON r.id_reserva = rs.id_reserva
                     LEFT JOIN servicios s ON rs.id_servicio = s.id_servicio
-                    GROUP BY r.id_reserva
+                    GROUP BY r.id_reserva, r.fecha_reserva, r.estado,
+                             m.nombre, m.especie,
+                             c.nombre, c.apellido,
+                             e.nombre, e.apellido
                     ORDER BY r.fecha_reserva DESC
                     LIMIT 10
                 """)
-                ultimas_reservas = cursor.fetchall()  # ← Obtener las reservas reales
+                
+                # Obtener nombres de columnas
+                column_names = [desc[0] for desc in cursor.description]
+                
+                # Convertir resultados a diccionarios
+                reservas_raw = cursor.fetchall()
+                for row in reservas_raw:
+                    reserva_dict = {}
+                    for i, col_name in enumerate(column_names):
+                        reserva_dict[col_name] = row[i]
+                    ultimas_reservas.append(reserva_dict)
+                    
+                print(f"✅ Encontradas {len(ultimas_reservas)} reservas recientes")
+                
+            except Exception as e:
+                print(f"⚠️  Error obteniendo últimas reservas: {e}")
+                import traceback
+                traceback.print_exc()
             
-            cursor.execute("SELECT to_regclass( public.facturas)")
-            if cursor.fetchone():
-                # Ventas de hoy
-                cursor.execute("""
-                    SELECT COALESCE(SUM(total), 0) as total 
-                    FROM facturas 
-                    WHERE DATE(fecha_emision) = CURRENT_DATE AND estado = 'pagada'
-                """)
-                result = cursor.fetchone()
-                stats['ventas_hoy'] = float(result['total']) if result and result['total'] else 850.0
-            
-            cursor.close()
-            
-        except Error as e:
-            print(f"⚠️  Error obteniendo estadísticas: {e}")
-            # Mantener valores demo
+        except Exception as e:
+            print(f"❌ Error general en dashboard: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
+            if cursor:
+                cursor.close()
             conn.close()
     
-    # Pasar las últimas reservas a la plantilla
-    return render_template('dashboard.html', ultimas_reservas=ultimas_reservas, **stats)
+    # Depuración: mostrar valores reales
+    print(f"📊 Dashboard stats: {stats}")
+    print(f"📊 Total reservas: {len(ultimas_reservas)}")
+    
+    return render_template('dashboard.html', 
+                           ultimas_reservas=ultimas_reservas, 
+                           **stats)
 
 def hash_password(password):
     """Generar hash seguro para contraseñas"""   
