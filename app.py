@@ -2588,7 +2588,10 @@ def empleado_reservas():
                 c.telefono as cliente_telefono,
                 CONCAT(e.nombre, ' ', e.apellido) as empleado_nombre,
                 STRING_AGG(DISTINCT s.nombre, ', ') as servicios_nombres,
-                SUM(s.duracion_min) as duracion_total
+                SUM(s.duracion_min) as duracion_total,
+                -- Extraer hora desde fecha_reserva
+                EXTRACT(HOUR FROM r.fecha_reserva) as hora,
+                EXTRACT(MINUTE FROM r.fecha_reserva) as minuto
             FROM reservas r
             JOIN mascotas m ON r.id_mascota = m.id_mascota
             JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -2598,7 +2601,7 @@ def empleado_reservas():
             WHERE r.id_empleado = %s
             AND r.fecha_reserva::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')
             AND r.estado IN ('pendiente', 'confirmada', 'en_proceso')
-            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.nombre, e.apellido, r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones
+            GROUP BY r.id_reserva, m.id_mascota, c.id_cliente, e.nombre, e.apellido, r.fecha_reserva, r.estado, r.observaciones
             ORDER BY 
                 CASE r.estado 
                     WHEN 'en_proceso' THEN 1
@@ -2647,7 +2650,6 @@ def empleado_reservas():
                          reservas=reservas_asignadas,
                          estadisticas=estadisticas,
                          empleado=empleado_info)
-    
 @app.route('/api/empleado/reservas/<int:id>/estado', methods=['POST'])
 @login_required
 def api_cambiar_estado_reserva_empleado(id):
