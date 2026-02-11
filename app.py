@@ -3209,7 +3209,7 @@ def devolver_reserva(id):
 
 @app.route('/api/mascota/<int:id>')
 def obtener_datos_mascota(id):
-    """Obtener datos completos de una mascota para AJAX - PARA RESERVAS"""
+    """Obtener datos completos de una mascota para AJAX - CORREGIDO"""
     conn = get_db_connection()
     if not conn:
         return jsonify({'success': False, 'error': 'No hay conexión a la base de datos'})
@@ -3217,17 +3217,32 @@ def obtener_datos_mascota(id):
     try:
         cursor = conn.cursor()
         
-        print(f"🔍 API: Buscando mascota ID: {id} para reserva")
+        print(f"🔍 API: Buscando mascota ID: {id}")
         
-        # 1. Obtener datos básicos de la mascota
+        # 1. Obtener datos básicos de la mascota - FORMA SEGURA
         cursor.execute("""
             SELECT 
-                m.*, 
+                m.id_mascota,
+                m.nombre,
+                m.especie,
+                m.raza,
+                m.tamano,
+                m.fecha_nacimiento,
+                m.peso,
+                m.color,
+                m.corte,
+                m.caracteristicas,
+                m.alergias,
+                m.activo,
+                m.foto_url,
+                m.fecha_registro,
+                m.fecha_actualizacion,
+                m.id_cliente,
                 c.nombre as cliente_nombre, 
                 c.apellido as cliente_apellido,
                 c.telefono as cliente_telefono,
                 c.email as cliente_email,
-                EXTRACT(YEAR FROM AGE(CURRENT_DATE, m.fecha_nacimiento)) as edad_anios,
+                EXTRACT(YEAR FROM AGE(CURRENT_DATE, m.fecha_nacimiento))::integer as edad_anios,
                 EXTRACT(MONTH FROM AGE(CURRENT_DATE, m.fecha_nacimiento))::integer % 12 as edad_meses
             FROM mascotas m
             JOIN clientes c ON m.id_cliente = c.id_cliente
@@ -3237,37 +3252,66 @@ def obtener_datos_mascota(id):
         mascota_raw = cursor.fetchone()
         
         if not mascota_raw:
+            print(f"❌ Mascota {id} no encontrada")
+            cursor.close()
+            conn.close()
             return jsonify({'success': False, 'error': 'Mascota no encontrada'})
         
-        mascota = dict(mascota_raw)
+        # Convertir a diccionario de forma segura
+        mascota = {}
+        column_names = [desc[0] for desc in cursor.description]
         
-        # 2. Obtener historial de cortes PARA RESERVAS
-        print(f"🔍 API: Buscando historial de cortes para mascota {id}")
+        for i, col_name in enumerate(column_names):
+            mascota[col_name] = mascota_raw[i]
         
-        cursor.execute("""
-            SELECT 
-                hc.tipo_corte,
-                hc.descripcion,
-                hc.notas,
-                TO_CHAR(hc.fecha_registro, 'DD/MM/YYYY') as fecha_corte,
-                e.nombre || ' ' || e.apellido as empleado_nombre
-            FROM historial_cortes hc
-            LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
-            WHERE hc.id_mascota = %s
-            ORDER BY hc.fecha_registro DESC
-            LIMIT 5  -- Solo los últimos 5 para la vista de reservas
-        """, (id,))
+        print(f"✅ Mascota encontrada: {mascota.get('nombre', 'Sin nombre')}")
         
-        historial_raw = cursor.fetchall()
-        historial_cortes = []
+        # 2. Obtener historial de cortes
+        print(f"🔍 Buscando historial de cortes para mascota {id}")
         
-        for corte in historial_raw:
-            c = dict(corte)
-            # Formatear para mostrar en la reserva
-            c['display'] = f"{c['tipo_corte']} ({c['fecha_corte']})"
-            historial_cortes.append(c)
-        
-        print(f"✅ API: Historial encontrado: {len(historial_cortes)} cortes")
+        # Primero verificar si existe la tabla
+        try:
+            cursor.execute("""
+                SELECT 
+                    hc.id_historial,
+                    hc.id_mascota,
+                    hc.tipo_corte,
+                    hc.descripcion,
+                    hc.fecha_registro,
+                    hc.id_empleado,
+                    hc.notas,
+                    COALESCE(e.nombre || ' ' || e.apellido, 'No asignado') as empleado_nombre
+                FROM historial_cortes hc
+                LEFT JOIN empleados e ON hc.id_empleado = e.id_empleado
+                WHERE hc.id_mascota = %s
+                ORDER BY hc.fecha_registro DESC
+                LIMIT 5
+            """, (id,))
+            
+            historial_raw = cursor.fetchall()
+            
+            historial_cortes = []
+            if cursor.description:  # Verificar que hay columnas
+                historial_columns = [desc[0] for desc in cursor.description]
+                
+                for row in historial_raw:
+                    corte_dict = {}
+                    for i, col_name in enumerate(historial_columns):
+                        valor = row[i]
+                        # Formatear fecha si es necesario
+                        if col_name == 'fecha_registro' and valor:
+                            if isinstance(valor, datetime):
+                                corte_dict['fecha_formateada'] = valor.strftime('%d/%m/%Y %H:%M')
+                            else:
+                                corte_dict['fecha_formateada'] = str(valor)
+                        corte_dict[col_name] = valor
+                    historial_cortes.append(corte_dict)
+            
+            print(f"✅ Historial encontrado: {len(historial_cortes)} cortes")
+            
+        except Exception as hist_error:
+            print(f"⚠️ Error obteniendo historial: {hist_error}")
+            historial_cortes = []
         
         cursor.close()
         conn.close()
@@ -3275,12 +3319,27 @@ def obtener_datos_mascota(id):
         return jsonify({
             'success': True,
             'mascota': mascota,
-            'historial_cortes': historial_cortes
+            'historial_cortes': historial_cortes,
+            'debug': {
+                'mascota_id': id,
+                'historial_count': len(historial_cortes),
+                'mascota_nombre': mascota.get('nombre', 'Desconocido'),
+                'corte_actual': mascota.get('corte', 'No especificado')
+            }
         })
         
     except Exception as e:
-        print(f"❌ Error en API mascota: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"❌ Error en obtener_datos_mascota: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        if 'cursor' in locals():
+            cursor.close()
+        if conn:
+            conn.close()
+            
+        return jsonify({'success': False, 'error': f'Error del servidor: {str(e)}'})
+        
 @app.route('/mascotas/actualizar-datos/<int:id>', methods=['POST'])
 def actualizar_datos_mascota_reserva(id):
     """Actualizar datos de mascota desde la reserva - CORREGIDO"""
